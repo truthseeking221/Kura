@@ -981,3 +981,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-list::-webkit-scrollbar-track { background: transparent; }
 .patient-list::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 3px; }
 .patient-list::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }
+
+@keyframes scanLine {
+  0% { top: 14px; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: calc(100% - 16px); opacity: 0; }
+}
