@@ -41,6 +41,7 @@ export default function App() {
   const [activeId, setActiveId] = useState("p1");
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("reception");
+  const [uiLang, setUiLang] = useState("English");
 
   const [sending, setSending] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
@@ -162,6 +163,8 @@ export default function App() {
         onToggle={() => setCollapsed(c => !c)}
         active={activeNav}
         onNavigate={setActiveNav}
+        lang={uiLang}
+        onLangChange={setUiLang}
       />
       <div className="main">
         <Topbar onNewWalkIn={() => setWalkInOpen(true)} notifications={3} />

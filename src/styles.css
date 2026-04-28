@@ -128,11 +128,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 /* === Sidebar === */
 .sidebar {
   width: 232px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   transition: width 0.22s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
 }
 .sidebar.collapsed { width: 64px; }
 .brand {
@@ -198,6 +202,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   transition: background 0.15s;
 }
 .collapse-btn:hover { background: var(--ink-50); }
+.sidebar-lang {
+  display: flex; align-items: center; gap: 8px;
+  height: 36px;
+  margin: 0 12px 4px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  color: var(--ink-600);
+  font-size: 12.5px;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.sidebar-lang:hover { background: var(--ink-50); }
+.sidebar.collapsed .sidebar-lang { justify-content: center; padding: 0; }
 
 /* === Main column === */
 .main {

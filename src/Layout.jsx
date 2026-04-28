@@ -1,7 +1,9 @@
 // === Sidebar + Topbar + GoalBar ===
 import { I } from "./icons";
 
-export function Sidebar({ collapsed, onToggle, active, onNavigate }) {
+const LANGUAGES = ["English", "Khmer", "Vietnamese", "Thai", "French", "Korean"];
+
+export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange }) {
   const items = [
     { id: "reception", label: "Reception", icon: "Home" },
     { id: "queue",     label: "Queue",     icon: "Users" },
@@ -36,6 +38,31 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate }) {
           );
         })}
       </nav>
+
+      {/* Language switcher */}
+      <div className="sidebar-lang" title={collapsed ? "Language" : ""}>
+        <I.Globe size={15} style={{ flexShrink: 0, color: "var(--ink-500)" }} />
+        {!collapsed && (
+          <select
+            value={lang}
+            onChange={e => onLangChange(e.target.value)}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: "var(--ink-700)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {LANGUAGES.map(l => <option key={l}>{l}</option>)}
+          </select>
+        )}
+      </div>
+
       <button className="collapse-btn" onClick={onToggle}>
         <I.ChevronsLeft size={14} style={{ transform: collapsed ? "rotate(180deg)" : "" }} />
         {!collapsed && <span>Collapse</span>}
