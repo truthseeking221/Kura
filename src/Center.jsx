@@ -176,14 +176,13 @@ function CommMethodSelector({ value, onChange, error }) {
   const t = useLang();
   const opts = [
     { id: "sms",      labelKey: "comm.sms",      icon: I.MessageSquare },
-    { id: "email",    labelKey: "comm.email",    icon: I.Mail },
     { id: "telegram", labelKey: "comm.telegram", icon: I.Send },
   ];
   return (
     <div className="field">
       <label className="label">{t("checkin.preferredComm")} <span className="req">*</span></label>
       <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0,
+        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0,
         background: "var(--surface-2)", border: "1px solid var(--border)",
         borderRadius: 7, padding: 3, height: "var(--field-h)",
       }}>
@@ -379,10 +378,9 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
   };
 
   const idScanned = !!patient.idScanned;
-  const commMethod = patient.commMethod || "sms";
+  const commMethod = patient.commMethod === "telegram" ? "telegram" : "sms";
 
   const [otpState, setOtpState] = useState({ status: "idle" });
-  const phoneVerified = otpState.status === "verified";
 
   const onIdScan = () => {
     onUpdate({
@@ -597,21 +595,6 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
               </div>
             </div>
 
-            {/* Conditional: Email field */}
-            {commMethod === "email" && (
-              <div className="field" style={{ marginBottom: 14 }}>
-                <label className="label">{t("checkin.email.label")} <span className="req">*</span></label>
-                <input
-                  className={"input" + (errors.email ? " invalid" : "")}
-                  value={patient.email || ""}
-                  onChange={e => update("email", e.target.value)}
-                  placeholder={t("checkin.email.placeholder")}
-                  type="email"
-                />
-                {errors.email && <div className="help error">{errors.email}</div>}
-              </div>
-            )}
-
             {/* Conditional: Telegram QR inline scanner */}
             {commMethod === "telegram" && (
               <TelegramQRInline patient={patient} onUpdate={onUpdate} />
@@ -620,17 +603,6 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
         )}
       </div>
 
-      {/* CTA moved to Order Cart per Round 9 #1 */}
-      {!phoneVerified && phoneNumber && phoneNumber.replace(/\D/g, "").length >= 8 && (
-        <div className="card-pad" style={{ paddingTop: 8 }}>
-          <div className="help" style={{
-            color: "var(--ink-500)", display: "inline-flex", alignItems: "center", gap: 5,
-            fontSize: 11.5, justifyContent: "center", width: "100%",
-          }}>
-            <I.AlertCircle size={11} /> {t("checkin.phoneUnverified")}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

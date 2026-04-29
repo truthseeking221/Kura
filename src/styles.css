@@ -1,16 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;650;700&display=swap');
+
 /* === Kura Reception — Design Tokens === */
 :root {
-  /* Brand */
-  --brand-50:  #eef4ff;
-  --brand-100: #dbe6ff;
-  --brand-200: #bdd0ff;
-  --brand-300: #8fb0ff;
-  --brand-400: #5a83fb;
-  --brand-500: #2b5cf3;
-  --brand-600: #1f47d6;
-  --brand-700: #1a39ad;
-  --brand-800: #1a3088;
-  --brand-900: #1a2c6b;
+  /* Brand — anchored on #268CFF (primary) */
+  --brand-50:  #e9f3ff;
+  --brand-100: #d4e8ff;
+  --brand-200: #a8d1ff;
+  --brand-300: #7dbaff;
+  --brand-400: #51a3ff;
+  --brand-500: #268cff;
+  --brand-600: #1e70cc;
+  --brand-700: #175499;
+  --brand-800: #0f3866;
+  --brand-900: #081c33;
+  --brand-rgb: 38, 140, 255;       /* for rgba() shadows / overlays */
+
+  /* Secondary · Deep — anchored on #10069F */
+  --secondary-deep-50:  #e7e6f5;
+  --secondary-deep-100: #cfcdeb;
+  --secondary-deep-200: #9f9cd9;
+  --secondary-deep-300: #706ac6;
+  --secondary-deep-400: #4038b2;
+  --secondary-deep-500: #10069f;
+  --secondary-deep-600: #0d057f;
+  --secondary-deep-700: #0a045f;
+  --secondary-deep-800: #060240;
+  --secondary-deep-900: #030120;
+
+  /* Secondary · Light — anchored on #60CDFF */
+  --secondary-light-50:  #effaff;
+  --secondary-light-100: #dff5ff;
+  --secondary-light-200: #bfebff;
+  --secondary-light-300: #9fe1ff;
+  --secondary-light-400: #80d7ff;
+  --secondary-light-500: #60cdff;
+  --secondary-light-600: #4da4cc;
+  --secondary-light-700: #3a7b99;
+  --secondary-light-800: #265266;
+  --secondary-light-900: #132933;
 
   /* Neutrals */
   --ink-900: #0b1424;
@@ -31,18 +58,18 @@
   --success-500: #1aa163;
   --success-600: #128a52;
 
-  --warn-50:  #fff5e6;
-  --warn-100: #ffe7c2;
-  --warn-500: #f59e0b;
-  --warn-600: #b8770a;
+  --warn-50:  #fff8e6;
+  --warn-100: #fdecc8;
+  --warn-500: #d97706;
+  --warn-600: #8a5600;
 
   --danger-50:  #fdecec;
   --danger-100: #fbd7d7;
   --danger-500: #d83a3a;
   --danger-600: #b22929;
 
-  --info-50:  #e6f3ff;
-  --info-500: #2188ff;
+  --info-50:  #e6f9fd;
+  --info-500: #0e7490;
 
   --purple-50: #f0eafd;
   --purple-500: #7a45ec;
@@ -73,7 +100,7 @@
   --shadow-sm: 0 1px 2px rgba(15,23,42,0.06), 0 1px 1px rgba(15,23,42,0.04);
   --shadow-md: 0 6px 16px -6px rgba(15,23,42,0.12), 0 2px 4px rgba(15,23,42,0.06);
   --shadow-lg: 0 18px 48px -12px rgba(15,23,42,0.22), 0 4px 12px rgba(15,23,42,0.08);
-  --shadow-focus: 0 0 0 3px rgba(43,92,243,0.18);
+  --shadow-focus: 0 0 0 3px rgba(var(--brand-rgb), 0.18);
 }
 
 /* density variants */
@@ -107,7 +134,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: 'Inter', 'Noto Sans Khmer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Noto Sans', 'Noto Sans Khmer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: var(--font-body);
   color: var(--ink-800);
   background: var(--bg);
@@ -153,7 +180,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   display: grid; place-items: center;
   font-weight: 700; font-size: 16px;
   letter-spacing: -0.02em;
-  box-shadow: 0 4px 10px -2px rgba(43,92,243,0.5);
+  box-shadow: 0 4px 10px -2px rgba(var(--brand-rgb), 0.42);
   flex-shrink: 0;
 }
 .brand-text {
@@ -513,7 +540,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-card.active {
   background: var(--brand-50);
   border-color: var(--brand-300);
-  box-shadow: 0 0 0 2px rgba(43,92,243,0.05);
+  box-shadow: 0 0 0 2px rgba(var(--brand-rgb), 0.05);
 }
 .patient-card .avatar { width: 36px; height: 36px; font-size: 12.5px; }
 .patient-info { flex: 1; min-width: 0; }
@@ -615,7 +642,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .payer-card.active {
   border-color: var(--brand-500);
   background: var(--brand-50);
-  box-shadow: 0 0 0 3px rgba(43,92,243,0.08);
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.08);
 }
 .payer-icon {
   width: 28px; height: 28px; color: var(--ink-500);
@@ -693,7 +720,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .handoff-step.active .h-icon {
   background: var(--brand-500);
   color: white;
-  box-shadow: 0 0 0 4px rgba(43,92,243,0.15);
+  box-shadow: 0 0 0 4px rgba(var(--brand-rgb), 0.15);
 }
 .handoff-step .h-num {
   position: absolute; top: -4px; right: -4px;
@@ -801,7 +828,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   cursor: pointer;
   transition: background 0.12s;
 }
-.chip-x:hover { background: rgba(43,92,243,0.12); color: var(--brand-700); }
+.chip-x:hover { background: rgba(var(--brand-rgb), 0.12); color: var(--brand-700); }
 
 .order-table {
   width: 100%;
@@ -1028,7 +1055,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .divider { height: 1px; background: var(--border); margin: 12px 0; }
 
 /* Avatar tints */
-.av-blue { background: linear-gradient(135deg, #5a83fb, #2b5cf3); }
+.av-blue { background: linear-gradient(135deg, var(--brand-400), var(--brand-500)); }
 .av-green { background: linear-gradient(135deg, #34c98a, #128a52); }
 .av-amber { background: linear-gradient(135deg, #f5b440, #d97706); }
 .av-pink { background: linear-gradient(135deg, #ec5a8e, #c8276a); }
@@ -1571,7 +1598,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 @keyframes pulseDotAnim {
   0%, 100% { opacity: 0.5; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 0 4px rgba(43,92,243,0.15); }
+  50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 0 4px rgba(var(--brand-rgb), 0.15); }
 }
 
 /* KHQR card */

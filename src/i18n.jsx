@@ -43,8 +43,6 @@ const en = {
   "checkin.mobile": "Mobile",
   "checkin.preferredComm": "Preferred Comm.",
   "checkin.language": "Language",
-  "checkin.email.label": "Email",
-  "checkin.email.placeholder": "patient@example.com",
   "checkin.visitReason": "Visit reason",
   "checkin.visitReason.placeholder": "Search and select reasons…",
   "checkin.cta": "Check In Patient",
@@ -68,7 +66,6 @@ const en = {
 
   // Comm method
   "comm.sms": "SMS",
-  "comm.email": "Email",
   "comm.telegram": "Telegram",
 
   // Telegram inline
@@ -406,6 +403,7 @@ const en = {
   "cart.pay.tendered": "Tendered",
   "cart.pay.change": "Change",
   "cart.pay.confirmCash": "Confirm cash",
+  "cart.pay.markReceived": "Mark received",
   "cart.pay.confirmed": "Payment confirmed",
   "cart.pay.print": "Print receipt",
   "cart.pay.sendPhone": "Send to phone",
@@ -496,8 +494,6 @@ const km = {
   "checkin.mobile": "ទូរស័ព្ទ",
   "checkin.preferredComm": "វិធីទំនាក់ទំនង",
   "checkin.language": "ភាសា",
-  "checkin.email.label": "អ៊ីមែល",
-  "checkin.email.placeholder": "patient@example.com",
   "checkin.visitReason": "មូលហេតុចូលរក",
   "checkin.visitReason.placeholder": "ស្វែងរក និងជ្រើសរើស…",
   "checkin.cta": "ចុះឈ្មោះអ្នកជំងឺ",
@@ -521,7 +517,6 @@ const km = {
 
   // Comm method
   "comm.sms": "SMS",
-  "comm.email": "អ៊ីមែល",
   "comm.telegram": "Telegram",
 
   // Telegram inline
@@ -859,6 +854,7 @@ const km = {
   "cart.pay.tendered": "ប្រាក់​ផ្តល់",
   "cart.pay.change": "ប្រាក់​អាប់",
   "cart.pay.confirmCash": "បញ្ជាក់​សាច់​ប្រាក់",
+  "cart.pay.markReceived": "សម្គាល់​ថា​ទទួលបាន",
   "cart.pay.confirmed": "បាន​បញ្ជាក់​ការ​ទូទាត់",
   "cart.pay.print": "បោះពុម្ពបង្កាន់ដៃ",
   "cart.pay.sendPhone": "ផ្ញើ​ទៅ​ទូរស័ព្ទ",

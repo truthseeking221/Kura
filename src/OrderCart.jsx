@@ -618,7 +618,7 @@ function CartLine({ item, onRemove, isLast, ccy, t }) {
 }
 
 // === Payment Area ===
-function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, change, cashOk, tenderedNum, itemCount, t }) {
+function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t }) {
   const ccy = cart.ccy || "USD";
   const status = cart.payment.status;
   const method = cart.payment.method;
@@ -725,6 +725,9 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
           <div style={{ fontSize: 10, color: "var(--ink-400)", textAlign: "center", maxWidth: 200 }}>
             {t("cart.pay.bakongHint")}
           </div>
+          <button className="btn btn-primary" onClick={onConfirmKhqr} style={{ height: 34, marginTop: 2 }}>
+            <I.Check size={14} /> {t("cart.pay.markReceived")}
+          </button>
         </div>
       </div>
     );
@@ -858,21 +861,18 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const setCcy = (ccy) => setCart({ ...cart, ccy });
   const setMethod = (m) => setCart({ ...cart, payment: { ...cart.payment, method: m, status: m === "khqr" ? "waiting" : "idle" } });
 
-  useEffect(() => {
-    if (cart.payment.method !== "khqr" || cart.payment.status !== "waiting") return;
-    const tid = setTimeout(() => {
-      setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
-      onPushToast?.(t("cart.pay.khqrReceived"));
-    }, 4000);
-    return () => clearTimeout(tid);
-  }, [cart.payment.method, cart.payment.status]);
-
   const tenderedNum = parseFloat(tendered) || 0;
   const change = tenderedNum - totals.patientDue;
   const cashOk = tenderedNum >= totals.patientDue && totals.patientDue > 0;
 
+  const confirmKhqr = () => {
+    setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", method: "khqr", receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
+    onPushToast?.(t("cart.pay.khqrReceived"));
+  };
+
   const confirmCash = () => {
-    setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", method: "cash", tendered, change, receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
+    const tenderedInUSD = (cart.ccy || "USD") === "KHR" ? tenderedNum / KHR_RATE : tenderedNum;
+    setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", method: "cash", tendered, change: tenderedInUSD - totals.patientDue, receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
     onPushToast?.(t("cart.pay.cashRecorded"));
   };
 
@@ -1053,6 +1053,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             onMethod={setMethod}
             onCcyToggle={setCcy}
             onConfirmCash={confirmCash}
+            onConfirmKhqr={confirmKhqr}
             change={change}
             cashOk={cashOk}
             tenderedNum={tenderedNum}

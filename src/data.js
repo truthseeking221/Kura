@@ -38,6 +38,19 @@ export const initialPatients = [
       { name: "Vitamin D",      payer: "Direct Pay", status: "draft", amount: 25 },
       { name: "X-ray Chest",    payer: "Direct Pay", status: "draft", amount: 15 },
     ],
+    cart: {
+      items: [
+        { id: "visit-gp", kind: "visit", name: "GP consultation (visit fee)", price: 15, qty: 1, payer: "direct", status: "pending", auto: true },
+        { id: "cbc", kind: "lab", name: "Complete Blood Count (CBC)", price: 8, qty: 1, payer: "direct", status: "pending" },
+        { id: "glucose", kind: "lab", name: "Blood Glucose (Fasting)", price: 5, qty: 1, payer: "direct", status: "pending", fasting: true },
+        { id: "xray-chest", kind: "imaging", name: "X-ray — Chest", price: 15, qty: 1, payer: "direct", status: "pending" },
+      ],
+      promos: {},
+      splits: null,
+      ccy: "USD",
+      payment: { method: null, status: "idle", tendered: "" },
+      pregnancyConsent: null,
+    },
     visitDetails: {
       chiefComplaint: "Headache and mild fever for 3 days",
       medicalHistory: "Hypertension (controlled), no surgeries",
