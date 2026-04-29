@@ -284,19 +284,37 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
     // Close
     if (k === "Escape") { e.preventDefault(); onClose(); return; }
 
-    // Navigation
+    // Navigation — first ↓ from the search input HANDS focus to the list
+    // (so subsequent Space toggles the row instead of inserting a literal space).
+    // ↑ from the first row hands focus BACK to the search input (so the nurse
+    // can keep typing without reaching for the mouse or pressing "/").
     if (k === "ArrowDown") {
       e.preventDefault();
-      setHighlight(h => Math.min(h + 1, Math.max(0, filtered.length - 1)));
+      if (inSearch) {
+        searchRef.current?.blur();
+        // Highlight is already at 0 (reset on every q/kind change). Don't move it
+        // — the visual ring on row 0 *is* the feedback that focus left the input.
+      } else {
+        setHighlight(h => Math.min(h + 1, Math.max(0, filtered.length - 1)));
+      }
       return;
     }
     if (k === "ArrowUp") {
       e.preventDefault();
-      setHighlight(h => Math.max(h - 1, 0));
+      if (inSearch) {
+        // ↑ from search just blurs into the list (no movement).
+        searchRef.current?.blur();
+      } else if (highlight === 0) {
+        // ↑ from the top of the list returns to search.
+        searchRef.current?.focus();
+      } else {
+        setHighlight(h => Math.max(h - 1, 0));
+      }
       return;
     }
 
-    // Space → toggle highlighted row (only outside search input)
+    // Space → toggle highlighted row. Skipped while in the search input (so the
+    // nurse can type space-containing test names like "Blood Glucose").
     if (k === " " && !inSearch) {
       const c = filtered[highlight];
       if (c && !existingIds.has(c.id)) { e.preventDefault(); toggle(c.id); }
@@ -339,8 +357,9 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
       return;
     }
 
-    // Number keys 1..6 → jump category tab (only when search is empty + not modifier)
-    if (!mod && !e.shiftKey && /^[1-6]$/.test(k) && q === "") {
+    // Number keys 1..6 → jump category tab. Only fires when the search input is
+    // NOT focused (so "1" inside a query like "vit-b12" doesn't switch tabs).
+    if (!mod && !e.shiftKey && /^[1-6]$/.test(k) && !inSearch) {
       const idx = parseInt(k, 10) - 1;
       if (KIND_ORDER[idx]) { e.preventDefault(); setKind(KIND_ORDER[idx]); }
       return;
@@ -471,6 +490,8 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
             <span><Kbd>↵</Kbd> {t("hint.add")}</span>
             <span className="kbd-strip-sep">·</span>
             <span><Kbd>⇧</Kbd><Kbd>↵</Kbd> {t("hint.addNext")}</span>
+            <span className="kbd-strip-sep">·</span>
+            <span><Kbd>/</Kbd> {t("hint.search")}</span>
             <span className="kbd-strip-sep">·</span>
             <span><Kbd>Esc</Kbd> {t("hint.close")}</span>
           </div>
