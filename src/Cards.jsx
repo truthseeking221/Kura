@@ -12,27 +12,27 @@ import {
 import { VisitReasonPills, VISIT_REASONS, AuthorBadge, fuzzyNameScore, playDrawerDing } from "./shared";
 
 // ============================================================
-// VISIT DETAILS — visit reason + clinical intake
+// VISIT DETAILS — Round 10 #4 Figma rebuild (185:14415)
+//   Hero "Patient intake form" card + Intake progress (5 sections)
+//   Receptionist can either (a) send PWA link to patient or
+//   (b) fill on behalf of patient inline.
 // ============================================================
 export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
   const t = useLang();
   const otpVerified = !!patient.otpVerified;
   const tgVerified = !!patient.telegramHandle;
   const channelReady = otpVerified || tgVerified;
-  const channelLabel = tgVerified && patient.commMethod === "telegram"
-    ? "Telegram"
-    : otpVerified ? "SMS" : (tgVerified ? "Telegram" : "—");
+  const channel = tgVerified && patient.commMethod === "telegram"
+    ? { label: "Telegram", target: patient.telegramHandle }
+    : otpVerified
+      ? { label: t("vd.channel.mobile"), target: patient.mobile || `${patient.countryCode || ""} ${patient.phoneNumber || ""}`.trim() }
+      : { label: "—", target: "—" };
 
   const sentAt = patient.pwaSentAt;
-  const pwaActive = !!sentAt;
+  const pwaSent = !!sentAt;
 
   const fields = patient.visitDetails || {
-    visitReason: [],
-    chiefComplaint: "",
-    medicalHistory: "",
-    medications: "",
-    allergies: "",
-    notes: "",
+    chiefComplaint: "", medicalHistory: "", medications: "", allergies: "", notes: "",
   };
   const authors = patient.visitDetailsAuthors || {};
 
@@ -43,218 +43,356 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
     ? fields.visitReason
     : reasonsLegacy;
 
-  // any edit by the receptionist attributes the field to "nurse"
-  const set = (k, v) => onUpdate({
+  // Receptionist-edit attribution
+  const setField = (k, v) => onUpdate({
     ...patient,
     visitDetails: { ...fields, visitReason, [k]: v },
     visitDetailsAuthors: { ...authors, [k]: "nurse" },
   });
 
-  const [editing, setEditing] = useState(false);
+  const [filling, setFilling] = useState(false); // "Fill on behalf of patient" mode
+  const [refreshing, setRefreshing] = useState(false);
 
-  const reasonsValid = visitReason.length > 0;
-  const sendEnabled = channelReady && reasonsValid;
-  const sendDisabledReason = !channelReady
-    ? t("vd.lockNoChannel")
-    : !reasonsValid
-      ? t("vd.lockNoReason")
-      : "";
-
-  // === Field metadata: which are nurse-required, which are patient-supplied ===
-  // Visit reason = NURSE captures (it gates the order). Everything else = PATIENT.
-  const fieldDefs = [
-    { key: "chiefComplaint", labelKey: "vd.chiefComplaint", placeholderKey: "vd.chiefComplaint.placeholder", multiline: true,  source: "patient", missingTone: "warn" },
-    { key: "medicalHistory", labelKey: "vd.medicalHistory", placeholderKey: "vd.medicalHistory.placeholder", multiline: true,  source: "patient", missingTone: "muted" },
-    { key: "medications",    labelKey: "vd.medications",    placeholderKey: "vd.medications.placeholder",    multiline: false, source: "patient", missingTone: "muted" },
-    { key: "allergies",      labelKey: "vd.allergies",      placeholderKey: "vd.allergies.placeholder",      multiline: false, source: "patient", missingTone: "warn" }, // empty allergies is risky → highlight
-    { key: "notes",          labelKey: "vd.notes",          placeholderKey: "vd.notes.placeholder",          multiline: true,  source: "nurse",   missingTone: "muted" },
+  // === 5 patient-intake sections ===
+  const sections = [
+    {
+      key: "visitReason",
+      labelKey: "vd.visitReason",
+      icon: I.AlertCircle,
+      filled: visitReason.length > 0,
+      preview: visitReason.join(" · "),
+    },
+    {
+      key: "chiefComplaint",
+      labelKey: "vd.chiefComplaint",
+      icon: I.User,
+      filled: !!(fields.chiefComplaint || "").trim(),
+      preview: fields.chiefComplaint,
+    },
+    {
+      key: "medicalHistory",
+      labelKey: "vd.medicalHistory",
+      icon: I.FileText,
+      filled: !!(fields.medicalHistory || "").trim(),
+      preview: fields.medicalHistory,
+    },
+    {
+      key: "medications",
+      labelKey: "vd.medications",
+      icon: I.FlaskConical,
+      filled: !!(fields.medications || "").trim(),
+      preview: fields.medications,
+    },
+    {
+      key: "allergies",
+      labelKey: "vd.allergies",
+      icon: I.Sparkles,
+      filled: !!(fields.allergies || "").trim(),
+      preview: fields.allergies,
+    },
   ];
+  const filledCount = sections.filter(s => s.filled).length;
+  const totalCount = sections.length;
+  const allComplete = filledCount === totalCount;
 
-  // Counts for hierarchy
-  const filledCount   = fieldDefs.filter(f => (fields[f.key] || "").trim()).length;
-  const totalCount    = fieldDefs.length;
-  const attentionCount = fieldDefs.filter(f => f.missingTone === "warn" && !(fields[f.key] || "").trim()).length;
+  // === Header status pill (Figma: orange "Waiting for patient") ===
+  const status = allComplete
+    ? { tone: "success", labelKey: "vd.status.complete", Ico: I.CheckCircle }
+    : filling
+      ? { tone: "info", labelKey: "vd.status.filling", Ico: I.Edit }
+      : pwaSent
+        ? (filledCount > 0
+            ? { tone: "warn", labelKey: "vd.status.inProgress", Ico: I.Clock }
+            : { tone: "warn", labelKey: "vd.status.waiting", Ico: I.Clock })
+        : { tone: "muted", labelKey: "vd.status.notStarted", Ico: I.Clock };
+  const StatusIco = status.Ico;
+
+  const refreshStatus = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 700);
+  };
+
+  const headerSubKey = filling
+    ? "vd.subFilling"
+    : allComplete
+      ? "vd.subComplete"
+      : "vd.subPatientCompletes";
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
+    <div className="card vd-card">
+      {/* === Header === */}
+      <div className="card-head vd-head">
+        <div className="vd-head-left">
           <h2>{t("vd.title")}</h2>
-          <div className="sub" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>{t("vd.completion", { filled: filledCount, total: totalCount })}</span>
-            {pwaActive && (
-              <span className="vd-sent-badge" style={{ marginLeft: 0 }}>
-                <I.Send size={10} /> {t("vd.sent")} {sentAt}
-              </span>
-            )}
+          <div className="vd-head-sub">
+            <span>{t(headerSubKey)}</span>
+            <span className={"vd-status-pill vd-status-" + status.tone}>
+              <StatusIco size={10} /> {t(status.labelKey)}
+            </span>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {pwaActive && (
+        <div className="vd-head-actions">
+          {!filling && !allComplete && (
             <button
-              className="btn btn-ghost btn-sm"
+              className="btn btn-primary btn-sm"
               onClick={onSendToPhone}
-              title={t("vd.resend")}
-              style={{ color: "var(--ink-500)" }}
+              disabled={!channelReady}
+              title={!channelReady ? t("vd.lockNoChannel") : (pwaSent ? t("vd.resend") : t("vd.sendIntakeLink"))}
             >
-              <I.RefreshCw size={11} /> {t("vd.resend")}
+              <I.Paperclip size={12} /> {pwaSent ? t("vd.resend") : t("vd.sendIntakeLink")}
             </button>
           )}
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => setEditing(e => !e)}
-            style={{ color: editing ? "var(--brand-700)" : "var(--ink-500)" }}
-          >
-            <I.Edit size={12} /> {editing ? t("vd.done") : t("vd.edit")}
-          </button>
-        </div>
-      </div>
-
-      <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 0 }}>
-        {/* === NURSE SECTION — primary, visible weight === */}
-        <div className="vd-section vd-section-nurse">
-          <div className="vd-section-head">
-            <span className="vd-section-tag vd-tag-nurse">
-              <I.User size={10} /> {t("vd.section.nurse")}
-            </span>
-            <span className="vd-section-hint">{t("vd.section.nurseHint")}</span>
-          </div>
-          <div className="vd-reason-row">
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-800)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                {t("vd.visitReason")}
-              </span>
-              <span style={{ color: "var(--danger-500)", fontSize: 11.5 }}>*</span>
-            </div>
-            {visitReason.length > 0 ? (
-              <div className="vd-reason-display">
-                {visitReason.map((r, i) => (
-                  <span key={i} className="vd-reason-chip">{r}</span>
-                ))}
-                {editing && (
-                  <span className="vd-reason-edit-hint">
-                    <I.Edit size={9} /> {t("vd.editingBelow")}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="vd-reason-empty">
-                <I.AlertTriangle size={11} /> {t("vd.lockNoReason")}
-              </div>
-            )}
-            {editing && (
-              <div style={{ marginTop: 8 }}>
-                <VisitReasonPills
-                  value={visitReason}
-                  onChange={v => set("visitReason", v)}
-                  options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
-                  placeholder={t("checkin.visitReason.placeholder")}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* === PATIENT SECTION — secondary, lighter weight === */}
-        <div className="vd-section vd-section-patient">
-          <div className="vd-section-head">
-            <span className="vd-section-tag vd-tag-patient">
-              <I.Smartphone size={10} /> {t("vd.section.patient")}
-            </span>
-            <span className="vd-section-hint">
-              {pwaActive ? t("vd.pwaActive") : t("vd.pwaIdle")}
-              {attentionCount > 0 && (
-                <span className="vd-attn-pill">
-                  <I.AlertTriangle size={9} /> {t("vd.attentionN", { n: attentionCount })}
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="vd-grid">
-            {fieldDefs.filter(f => f.source === "patient").map(f => (
-              <VDField
-                key={f.key}
-                label={t(f.labelKey)}
-                value={fields[f.key]}
-                author={authors[f.key]}
-                onChange={v => set(f.key, v)}
-                editing={editing}
-                placeholder={t(f.placeholderKey)}
-                multiline={f.multiline}
-                attention={f.missingTone === "warn" && !(fields[f.key] || "").trim()}
-                t={t}
-              />
-            ))}
-          </div>
-          {/* Nurse-only notes — quiet, last */}
-          {(editing || (fields.notes || "").trim()) && (
-            <div style={{ marginTop: 10 }}>
-              <VDField
-                label={t("vd.notes")}
-                value={fields.notes}
-                author={authors.notes}
-                onChange={v => set("notes", v)}
-                editing={editing}
-                placeholder={t("vd.notes.placeholder")}
-                multiline
-                t={t}
-              />
-            </div>
+          {!filling && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setFilling(true)}
+              title={t("vd.fillForPatient")}
+            >
+              <I.User size={12} /> {allComplete ? t("vd.editFields") : t("vd.fillForPatient")}
+            </button>
+          )}
+          {filling && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setFilling(false)}
+            >
+              <I.Check size={12} /> {t("vd.done")}
+            </button>
+          )}
+          {!filling && (
+            <button
+              className="icon-btn vd-kebab"
+              title={t("vd.more")}
+              type="button"
+              onClick={() => {/* hook for future menu */}}
+            >
+              <I.MoreHorizontal size={14} />
+            </button>
           )}
         </div>
       </div>
 
-      <div style={{ margin: "12px var(--card-pad) 0" }}>
-        {!pwaActive && (
-          <button
-            className="btn btn-secondary"
-            onClick={onSendToPhone}
-            disabled={!sendEnabled}
-            style={{
-              width: "100%", justifyContent: "center", height: 38,
-              fontSize: 13, fontWeight: 600,
-              ...(sentFlash ? { background: "var(--success-50)", borderColor: "var(--success-500)", color: "var(--success-700)" } : {}),
-            }}
-            title={sendDisabledReason}
-          >
-            {sentFlash
-              ? (<><I.Check size={14} /> {t("vd.sentShort")}</>)
-              : sendEnabled
-                ? (<><I.Smartphone size={14} /> {t("vd.sendToPhone")} · {t("vd.via")} {channelLabel}</>)
-                : (<><I.Lock size={14} /> {sendDisabledReason}</>)}
-          </button>
-        )}
+      {/* === Hero card — only when intake hasn't been completed/filled === */}
+      {!filling && !allComplete && (
+        <div className="card-pad vd-pad">
+          <div className="vd-hero">
+            <div className="vd-hero-illust" aria-hidden="true">
+              <PhoneIntakeIllustration />
+            </div>
+            <div className="vd-hero-copy">
+              <div className="vd-hero-title">{t("vd.heroTitle")}</div>
+              <div className="vd-hero-body">{t("vd.heroBody")}</div>
+              <div className="vd-hero-aside">{t("vd.heroAside")}</div>
+            </div>
+            <div className="vd-hero-divider" aria-hidden="true" />
+            <div className="vd-hero-cta">
+              <div className="vd-hero-ready">{pwaSent ? t("vd.heroSentTo") : t("vd.heroReady")}</div>
+              <div className="vd-hero-channel">
+                {channelReady ? (
+                  <>
+                    <I.CheckCircle size={13} style={{ color: "var(--success-500)" }} />
+                    <span className="vd-hero-channel-label">{channel.label}</span>
+                    <span className="vd-hero-channel-target">{channel.target}</span>
+                    <span className="vd-hero-channel-verified">
+                      <span className="vd-hero-dot" /> {t("vd.verified")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <I.AlertCircle size={13} style={{ color: "var(--warn-500)" }} />
+                    <span style={{ color: "var(--warn-600)", fontWeight: 600 }}>{t("vd.channelMissing")}</span>
+                  </>
+                )}
+              </div>
+              <button
+                className="btn btn-primary vd-hero-send"
+                onClick={onSendToPhone}
+                disabled={!channelReady}
+                title={!channelReady ? t("vd.lockNoChannel") : ""}
+              >
+                {sentFlash
+                  ? (<><I.Check size={14} /> {t("vd.sentShort")}</>)
+                  : (<><I.Send size={14} /> {pwaSent ? t("vd.heroResend") : t("vd.heroSendCta")}</>)}
+              </button>
+              <div className="vd-hero-or"><span>{t("vd.or")}</span></div>
+              <button
+                type="button"
+                className="vd-hero-fillonbehalf"
+                onClick={() => setFilling(true)}
+              >
+                <I.User size={12} /> {t("vd.fillOnBehalf")}
+              </button>
+            </div>
+          </div>
+
+          {/* Soft info banner */}
+          <div className="vd-info-banner">
+            <I.Info size={13} />
+            <span>
+              {t("vd.banner.before")}
+              {" "}
+              <button type="button" className="vd-info-link" onClick={() => setFilling(true)}>
+                {t("vd.banner.link")}
+              </button>
+              {" "}
+              {t("vd.banner.after")}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* === FILLING (nurse fills on behalf) — inline editable form === */}
+      {filling && (
+        <div className="card-pad vd-pad">
+          <div className="vd-fill-banner">
+            <I.User size={13} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="vd-fill-banner-title">{t("vd.fillBannerTitle")}</div>
+              <div className="vd-fill-banner-body">{t("vd.fillBannerBody")}</div>
+            </div>
+          </div>
+
+          <div className="vd-fill-grid">
+            {/* Visit reason — multi-pill picker */}
+            <div className="vd-fill-field">
+              <label className="vd-fill-label">
+                {t("vd.visitReason")} <span className="req">*</span>
+              </label>
+              <VisitReasonPills
+                value={visitReason}
+                onChange={v => setField("visitReason", v)}
+                options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
+                placeholder={t("checkin.visitReason.placeholder")}
+              />
+            </div>
+            {[
+              { key: "chiefComplaint", labelKey: "vd.chiefComplaint", placeholderKey: "vd.chiefComplaint.placeholder", multiline: true },
+              { key: "medicalHistory", labelKey: "vd.medicalHistory", placeholderKey: "vd.medicalHistory.placeholder", multiline: true },
+              { key: "medications",    labelKey: "vd.medications",    placeholderKey: "vd.medications.placeholder",    multiline: false },
+              { key: "allergies",      labelKey: "vd.allergies",      placeholderKey: "vd.allergies.placeholder",      multiline: false },
+            ].map(f => (
+              <div key={f.key} className="vd-fill-field">
+                <label className="vd-fill-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {t(f.labelKey)}
+                  {authors[f.key] && (fields[f.key] || "").trim() && <AuthorBadge who={authors[f.key]} t={t} />}
+                </label>
+                {f.multiline ? (
+                  <textarea
+                    className="input"
+                    value={fields[f.key] || ""}
+                    onChange={e => setField(f.key, e.target.value)}
+                    placeholder={t(f.placeholderKey)}
+                    rows={2}
+                    style={{ resize: "vertical", minHeight: 56, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.4, height: "auto" }}
+                  />
+                ) : (
+                  <input
+                    className="input"
+                    value={fields[f.key] || ""}
+                    onChange={e => setField(f.key, e.target.value)}
+                    placeholder={t(f.placeholderKey)}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* === Intake progress === */}
+      <div className="card-pad vd-pad" style={{ paddingTop: 0 }}>
+        <div className="vd-progress-card">
+          <div className="vd-progress-head">
+            <div className="vd-progress-head-left">
+              <div className="vd-progress-ico"><I.ClipboardList size={16} /></div>
+              <div>
+                <div className="vd-progress-title">{t("vd.progress.title")}</div>
+                <div className="vd-progress-sub">
+                  {t("vd.progress.count", { filled: filledCount, total: totalCount })}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm vd-progress-refresh"
+              onClick={refreshStatus}
+              disabled={refreshing}
+              title={t("vd.progress.refresh")}
+            >
+              <I.RefreshCw size={11} className={refreshing ? "vd-spinning" : ""} />
+              {t("vd.progress.refresh")}
+            </button>
+          </div>
+          <ul className="vd-progress-list">
+            {sections.map(s => {
+              const Ico = s.icon;
+              return (
+                <li key={s.key} className={"vd-progress-row" + (s.filled ? " filled" : "")}>
+                  <div className="vd-progress-row-ico"><Ico size={14} /></div>
+                  <div className="vd-progress-row-main">
+                    <div className="vd-progress-row-label">{t(s.labelKey)}</div>
+                    {s.filled && s.preview && (
+                      <div className="vd-progress-row-preview">{s.preview}</div>
+                    )}
+                  </div>
+                  <span className={"vd-progress-pill " + (s.filled ? "vd-progress-pill-done" : "vd-progress-pill-pending")}>
+                    {s.filled
+                      ? (<><I.Check size={9} strokeWidth={3} /> {t("vd.progress.received")}</>)
+                      : (<><I.Clock size={9} /> {t("vd.progress.pending")}</>)}
+                  </span>
+                  <I.ChevronRight size={13} className="vd-progress-row-chev" />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
-      <div style={{ height: "var(--card-pad)" }} />
+
+      <div className="vd-foot">
+        <I.Lock size={11} /> <span>{t("vd.foot.secure")}</span>
+      </div>
     </div>
   );
 }
 
-function VDField({ label, value, author, onChange, editing, placeholder, multiline, attention, t }) {
-  const filled = !!(value && value.trim());
+// === Phone-with-paper-plane illustration (matches Figma 185:14415) ===
+function PhoneIntakeIllustration() {
   return (
-    <div className={"vd-field" + (attention && !filled ? " vd-field-attn" : "")}>
-      <div className="vd-label-row">
-        <span className="vd-label-text">{label}</span>
-        {filled && author && <AuthorBadge who={author} t={t} />}
-        {!filled && attention && (
-          <span className="vd-attn-mark"><I.AlertTriangle size={9} /> {t("vd.needs")}</span>
-        )}
-      </div>
-      {editing ? (
-        multiline ? (
-          <textarea className="input" value={value || ""} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-            rows={2}
-            style={{ resize: "vertical", minHeight: 56, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.4, height: "auto" }} />
-        ) : (
-          <input className="input" value={value || ""} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-        )
-      ) : (
-        <div className={"vd-readonly" + (filled ? " filled" : " empty")}>
-          {filled ? value : t("vd.awaitingPatient")}
-        </div>
-      )}
-    </div>
+    <svg
+      width="96"
+      height="96"
+      viewBox="0 0 96 96"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Patient intake form"
+    >
+      {/* Sparkles */}
+      <g stroke="var(--brand-300, #b0d4ff)" strokeWidth="1.4" strokeLinecap="round">
+        <path d="M14 22 l3 0 M15.5 20.5 l0 3" />
+        <path d="M82 18 l2.4 0 M83.2 16.8 l0 2.4" />
+        <path d="M76 78 l2.6 0 M77.3 76.7 l0 2.6" />
+        <path d="M22 76 l2 0 M23 75 l0 2" />
+      </g>
+      {/* Phone */}
+      <rect x="20" y="14" width="32" height="62" rx="6" stroke="var(--brand-500, #2087d6)" strokeWidth="1.6" fill="white" />
+      <rect x="24" y="22" width="24" height="42" rx="3" stroke="var(--brand-200, #c6e2ff)" strokeWidth="1" fill="var(--brand-50, #f1f7ff)" />
+      <circle cx="36" cy="71" r="2" stroke="var(--brand-500, #2087d6)" strokeWidth="1.4" fill="white" />
+      {/* Inner circle (loading mark) */}
+      <circle cx="36" cy="40" r="6.5" stroke="var(--brand-500, #2087d6)" strokeWidth="1.6" />
+      <circle cx="36" cy="40" r="1.6" fill="var(--brand-500, #2087d6)" />
+      {/* Paper plane */}
+      <g transform="translate(50 38) rotate(-12)">
+        <path
+          d="M0 14 L34 0 L24 16 L14 11 L24 16 L20 28 Z"
+          fill="var(--brand-500, #2087d6)"
+          stroke="var(--brand-600, #1567b1)"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        <path d="M14 11 L24 16" stroke="var(--brand-200, #c6e2ff)" strokeWidth="1" />
+      </g>
+    </svg>
   );
 }
 
@@ -746,6 +884,7 @@ function InsuranceForm({ initial, patient, onSave, onCancel, t }) {
 
 // ============================================================
 // PRIOR RESULTS — gated reorder (sensitive results require fresh OTP)
+// Round 10 #1 — checkbox multi-select + bulk add
 // ============================================================
 export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
   const t = useLang();
@@ -756,6 +895,7 @@ export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
   const [wrong, setWrong] = useState(false);
   const [unlockExpiresAt, setUnlockExpiresAt] = useState(null);
   const [tick, setTick] = useState(0);
+  const [picked, setPicked] = useState(() => new Set());
 
   // 5-minute expiry on unlock
   useEffect(() => {
@@ -803,6 +943,32 @@ export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
 
   const lastVisit = results.reduce((acc, r) => (r.visitDate > acc ? r.visitDate : acc), "");
 
+  // === Selectable rows = those visible to the user ===
+  const selectableIds = results.filter(r => unlocked || !r.sensitive).map(r => r.id);
+  const allChecked = selectableIds.length > 0 && selectableIds.every(id => picked.has(id));
+  const noneChecked = picked.size === 0;
+
+  const toggle = (id) => {
+    setPicked(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    if (allChecked) {
+      setPicked(new Set());
+    } else {
+      setPicked(new Set(selectableIds));
+    }
+  };
+  const addSelected = () => {
+    if (picked.size === 0) return;
+    const chosen = results.filter(r => picked.has(r.id));
+    onAddToOrder?.(chosen, { bulk: true });
+    setPicked(new Set());
+  };
+
   return (
     <div className="card">
       <div className="card-head">
@@ -810,22 +976,31 @@ export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
           <h2>{t("reorder.title")}</h2>
           <p className="sub">{t("reorder.sub", { date: lastVisit })}</p>
         </div>
-        {unlocked && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", borderRadius: 5,
-              background: "var(--success-50)", color: "var(--success-600)",
-              border: "1px solid var(--success-500)",
-              fontSize: 11, fontWeight: 600,
-            }}>
-              <I.Unlock size={11} /> {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}
-            </span>
-            <button className="btn btn-ghost btn-sm" onClick={reset}>
-              <I.Lock size={11} /> {t("reorder.locked")}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          {selectableIds.length > 0 && (
+            <button
+              type="button"
+              className="reorder-selectall"
+              onClick={toggleAll}
+              title={allChecked ? t("reorder.deselectAll") : t("reorder.selectAll")}
+            >
+              <span className={"reorder-checkbox" + (allChecked ? " checked" : "")}>
+                {allChecked && <I.Check size={10} strokeWidth={3.5} />}
+              </span>
+              {allChecked ? t("reorder.deselectAll") : t("reorder.selectAll")}
             </button>
-          </div>
-        )}
+          )}
+          {unlocked && (
+            <>
+              <span className="reorder-unlock-pill">
+                <I.Unlock size={11} /> {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}
+              </span>
+              <button className="btn btn-ghost btn-sm" onClick={reset}>
+                <I.Lock size={11} /> {t("reorder.locked")}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {!unlocked && sensitive && (
@@ -887,29 +1062,36 @@ export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
       )}
 
       <div className="card-pad" style={{ paddingTop: unlocked || !sensitive ? 4 : 12, paddingBottom: 0 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="reorder-list">
           {results.map(r => {
             const showSensitive = unlocked || !r.sensitive;
+            const isPicked = picked.has(r.id);
             return (
-              <div key={r.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 7,
-                border: "1px solid var(--border)",
-                background: showSensitive ? "var(--surface)" : "var(--surface-2)",
-              }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: 6,
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => showSensitive && toggle(r.id)}
+                disabled={!showSensitive}
+                className={"reorder-row" + (isPicked ? " picked" : "") + (!showSensitive ? " locked" : "")}
+              >
+                <span className={"reorder-checkbox" + (isPicked ? " checked" : "") + (!showSensitive ? " disabled" : "")}>
+                  {isPicked && <I.Check size={10} strokeWidth={3.5} />}
+                  {!showSensitive && <I.Lock size={9} />}
+                </span>
+                <div className="reorder-row-ico" style={{
                   background: showSensitive ? "var(--brand-50)" : "var(--ink-100)",
                   color: showSensitive ? "var(--brand-600)" : "var(--ink-400)",
-                  display: "grid", placeItems: "center", flexShrink: 0,
                 }}>
-                  {showSensitive ? <I.FlaskConical size={13} /> : <I.Lock size={13} />}
+                  <I.FlaskConical size={13} />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-900)", filter: showSensitive ? "none" : "blur(4px)", userSelect: showSensitive ? "auto" : "none" }}>
+                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <div className="reorder-row-name" style={{
+                    filter: showSensitive ? "none" : "blur(4px)",
+                    userSelect: showSensitive ? "auto" : "none",
+                  }}>
                     {r.testName}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 1 }}>
+                  <div className="reorder-row-meta">
                     {r.visitDate} · ${r.price.toFixed(2)}
                     {r.sensitive && (
                       <span style={{ marginLeft: 6, color: showSensitive ? "var(--success-600)" : "var(--warn-600)", fontWeight: 600 }}>
@@ -918,19 +1100,22 @@ export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
                     )}
                   </div>
                 </div>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  disabled={!showSensitive}
-                  onClick={() => onAddToOrder?.(r)}
-                  style={{ flexShrink: 0, color: showSensitive ? "var(--brand-600)" : "var(--ink-400)" }}
-                  title={showSensitive ? t("reorder.add") : t("reorder.locked")}
-                >
-                  <I.Plus size={11} /> {t("reorder.add")}
-                </button>
-              </div>
+              </button>
             );
           })}
         </div>
+
+        {/* Bulk-add CTA — disabled until at least 1 selected */}
+        <button
+          type="button"
+          className="reorder-add-cta"
+          onClick={addSelected}
+          disabled={noneChecked}
+          aria-disabled={noneChecked}
+        >
+          <I.Plus size={13} />
+          {t("reorder.addSelected", { n: picked.size })}
+        </button>
       </div>
       <div style={{ height: "var(--card-pad)" }} />
     </div>

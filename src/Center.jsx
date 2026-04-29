@@ -7,6 +7,181 @@ import {
 } from "./shared";
 import { useLang } from "./i18n";
 
+// === Cambodia address taxonomy (mock subset for demo) ===
+// Province → District (Khan) → Commune (Sangkat). Not exhaustive — covers
+// Phnom Penh's khans + a handful of major provinces so the cascading dropdown
+// behaves believably. Production would wire this to a service/lookup table.
+const KH_ADDRESS = {
+  "Phnom Penh": {
+    "Chamkar Mon": ["Boeung Keng Kang 1", "Boeung Keng Kang 2", "Boeung Keng Kang 3", "Tonle Bassac", "Tumnup Tuek", "Olympic"],
+    "Daun Penh": ["Chey Chumneah", "Chakto Mukh", "Phsar Chas", "Phsar Thmei 1", "Phsar Thmei 2", "Phsar Thmei 3", "Srah Chak", "Voat Phnum"],
+    "7 Makara": ["Boeung Prolit", "Mittapheap", "Ou Ruessei 1", "Ou Ruessei 2", "Ou Ruessei 3", "Ou Ruessei 4", "Veal Vong"],
+    "Tuol Kouk": ["Boeng Kak 1", "Boeng Kak 2", "Boeng Salang", "Phsar Daeum Kor", "Phsar Daeum Thkov", "Tuek L'ak 1", "Tuek L'ak 2", "Tuek L'ak 3"],
+    "Mean Chey": ["Chak Angre Krom", "Chak Angre Leu", "Stueng Mean Chey", "Boeung Tumpun"],
+    "Russey Keo": ["Chrang Chamres 1", "Chrang Chamres 2", "Kilometre 6", "Russey Keo", "Tuol Sangke"],
+    "Sen Sok": ["Phnom Penh Thmei", "Tuek Thla", "Khmuonh", "Kakab", "Oubek K'am"],
+    "Por Sen Chey": ["Chaom Chau", "Kakab", "Kantaok", "Krang Pongro", "Krang Thnong", "Phleung Chheh Roteh", "Samraong Kraom", "Trapeang Krasang"],
+    "Chbar Ampov": ["Chbar Ampov 1", "Chbar Ampov 2", "Nirouth", "Preaek Aeng", "Preaek Pra", "Preaek Thmei", "Veal Sbov"],
+    "Dangkao": ["Cheung Aek", "Dangkao", "Kong Noy", "Krang Pongro", "Pong Tuek", "Pong Tuek 2", "Prek Kampoes", "Prey Veaeng", "Roluos", "Sak Sampov", "Spean Thma", "Tien"],
+    "Chroy Changvar": ["Chroy Changvar", "Bak Kaeng", "Praek Lieb", "Praek Tasaek"],
+  },
+  "Siem Reap": {
+    "Siem Reap": ["Slor Kram", "Svay Dangkum", "Sala Kamraeuk", "Nokor Thum", "Sambour", "Chreav"],
+    "Banteay Srei": ["Khnar Sanday", "Preak Dak", "Run Ta Aek"],
+    "Sotr Nikum": ["Dam Daek", "Popel", "Samraong"],
+  },
+  "Battambang": {
+    "Battambang": ["Svay Por", "Chamkar Samraong", "Tuol Ta Ek", "Voat Kor"],
+    "Banan": ["Bay Damram", "Chheu Teal", "Phnom Sampov"],
+  },
+  "Preah Sihanouk": {
+    "Sihanoukville": ["Buon", "Bei", "Pir", "Muoy"],
+    "Prey Nob": ["Andoung Thma", "Bit Traang", "Ou Bak Roteh"],
+  },
+  "Kampot": {
+    "Kampot": ["Andoung Khmer", "Kampong Bay", "Kampong Kandal", "Krang Ampil"],
+    "Chhuk": ["Chhuk", "Chumpu Voan", "Lbaeuk"],
+  },
+  "Kandal": {
+    "Ta Khmau": ["Ta Khmau", "Doeum Mien", "Kampong Samnanh", "Preaek Aeng"],
+    "Kien Svay": ["Kbal Koh", "Banteay Daek", "Kokir"],
+  },
+};
+const KH_PROVINCES = Object.keys(KH_ADDRESS);
+
+// === Address section (Round 10 #5) — collapsed by default, structured + free text ===
+function AddressFields({ patient, onUpdate, t }) {
+  const addr = patient.address || {};
+  const [open, setOpen] = useState(!!(addr.province || addr.district || addr.street));
+  const set = (k, v) => onUpdate({ ...patient, address: { ...addr, [k]: v } });
+
+  const districts = addr.province ? Object.keys(KH_ADDRESS[addr.province] || {}) : [];
+  const communes = addr.province && addr.district ? (KH_ADDRESS[addr.province]?.[addr.district] || []) : [];
+
+  const setProvince = (v) => {
+    onUpdate({ ...patient, address: { ...addr, province: v, district: "", commune: "" } });
+  };
+  const setDistrict = (v) => {
+    onUpdate({ ...patient, address: { ...addr, district: v, commune: "" } });
+  };
+
+  // Soft completeness — used for the "address complete" pill on the header
+  const minOk = !!(addr.province && addr.district);
+  const preciseOk = minOk && !!(addr.street || "").trim();
+
+  return (
+    <div className={"address-section" + (open ? " open" : "")}>
+      <button
+        type="button"
+        className="address-head"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className="address-head-left">
+          <I.Home size={13} className="address-head-ico" />
+          <span className="address-head-title">{t("addr.title")}</span>
+          <span className="address-head-optional">· {t("addr.optional")}</span>
+          {minOk && (
+            <span className={"address-head-pill " + (preciseOk ? "complete" : "partial")}>
+              {preciseOk ? t("addr.summaryPrecise") : t("addr.summaryZone")}
+            </span>
+          )}
+        </span>
+        {open ? <I.ChevronUp size={14} /> : <I.ChevronDown size={14} />}
+      </button>
+
+      {open && (
+        <div className="address-grid">
+          <div className="field">
+            <label className="label">{t("addr.province")} <span className="req">*</span></label>
+            <div className="input-wrap">
+              <select
+                className="select"
+                value={addr.province || ""}
+                onChange={e => setProvince(e.target.value)}
+                style={{ paddingRight: 32, appearance: "none" }}
+              >
+                <option value="">{t("addr.selectProvince")}</option>
+                {KH_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <I.ChevronDown size={14} className="rico" />
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="label">{t("addr.district")} <span className="req">*</span></label>
+            <div className="input-wrap">
+              <select
+                className="select"
+                value={addr.district || ""}
+                onChange={e => setDistrict(e.target.value)}
+                disabled={!addr.province}
+                style={{ paddingRight: 32, appearance: "none" }}
+              >
+                <option value="">{addr.province ? t("addr.selectDistrict") : t("addr.pickProvinceFirst")}</option>
+                {districts.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <I.ChevronDown size={14} className="rico" />
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="label">{t("addr.commune")}</label>
+            <div className="input-wrap">
+              <select
+                className="select"
+                value={addr.commune || ""}
+                onChange={e => set("commune", e.target.value)}
+                disabled={!addr.district}
+                style={{ paddingRight: 32, appearance: "none" }}
+              >
+                <option value="">{addr.district ? t("addr.selectCommune") : t("addr.pickDistrictFirst")}</option>
+                {communes.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <I.ChevronDown size={14} className="rico" />
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="label">{t("addr.village")}</label>
+            <input
+              className="input"
+              value={addr.village || ""}
+              onChange={e => set("village", e.target.value)}
+              placeholder={t("addr.villagePlaceholder")}
+            />
+          </div>
+
+          <div className="field address-grid-span2">
+            <label className="label">{t("addr.street")}</label>
+            <input
+              className="input"
+              value={addr.street || ""}
+              onChange={e => set("street", e.target.value)}
+              placeholder={t("addr.streetPlaceholder")}
+            />
+          </div>
+
+          <div className="field address-grid-span2">
+            <label className="label">{t("addr.notes")}</label>
+            <input
+              className="input"
+              value={addr.notes || ""}
+              onChange={e => set("notes", e.target.value)}
+              placeholder={t("addr.notesPlaceholder")}
+            />
+          </div>
+
+          <div className="address-help">
+            <I.Info size={11} />
+            <span>{t(preciseOk ? "addr.helpPrecise" : minOk ? "addr.helpZone" : "addr.helpEmpty")}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // === Scanned ID card — structured "premium" presentation of auto-filled fields ===
 function ScannedIdCard({ patient, onRescan, t }) {
   const fields = [
@@ -771,7 +946,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
             </div>
 
             {/* Row 3 — Preferred Comm (Telegram-locked unless verified) | Language (Khmer default) */}
-            <div className="field-row" style={{ gridTemplateColumns: "1.3fr 1fr", marginBottom: 0 }}>
+            <div className="field-row" style={{ gridTemplateColumns: "1.3fr 1fr", marginBottom: 14 }}>
               <CommMethodSelector
                 value={commMethod}
                 onChange={v => update("commMethod", v)}
@@ -799,6 +974,9 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 </div>
               </div>
             </div>
+
+            {/* Round 10 #5 — Optional Address (cascading dropdowns + free text) */}
+            <AddressFields patient={patient} onUpdate={onUpdate} t={t} />
           </>
         )}
       </div>

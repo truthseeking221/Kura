@@ -6,7 +6,7 @@ import { Sidebar, Topbar, GoalBar } from "./Layout";
 import { FastCheckIn } from "./Center";
 import { VisitDetails, Insurance, PriorResults } from "./Cards";
 import { OrderCart } from "./OrderCart";
-import { TatTimeline, TeleconsultCard } from "./shared";
+import { TatCompact, TeleconsultCard } from "./shared";
 import {
   NewWalkInModal,
   AddServiceModal,
@@ -45,7 +45,7 @@ export default function App() {
   const [activeId, setActiveId] = useState("p1");
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("reception");
-  const [uiLang, setUiLang] = useState("Khmer");
+  const [uiLang, setUiLang] = useState("English");
 
   const [sending, setSending] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
@@ -253,7 +253,6 @@ export default function App() {
                 onSkip={handleSkipException}
               />
             )}
-            <TatTimeline patient={active} />
             <VisitDetails
               patient={active}
               onUpdate={updatePatient}
@@ -270,18 +269,31 @@ export default function App() {
               patient={active}
               onUpdate={updatePatient}
               onPushToast={pushToast}
-              onAddToOrder={(r) => {
+              onAddToOrder={(rOrArr, opts) => {
                 const cart = active.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" }, pregnancyConsent: null };
-                if (cart.items.find(i => i.id === r.testId)) {
+                const rows = Array.isArray(rOrArr) ? rOrArr : [rOrArr];
+                const existingIds = new Set(cart.items.map(i => i.id));
+                const fresh = rows.filter(r => !existingIds.has(r.testId));
+                const dupes = rows.length - fresh.length;
+                if (fresh.length === 0) {
                   pushToast("Already in cart", "error");
                   return;
                 }
-                const newItem = {
+                const additions = fresh.map(r => ({
                   id: r.testId, kind: "lab", name: r.testName, price: r.price, qty: 1,
                   payer: active.payer || "direct", status: "pending",
-                };
-                updatePatient({ ...active, cart: { ...cart, items: [...cart.items, newItem] } });
-                pushToast(`Reordered: ${r.testName}`, "success");
+                }));
+                updatePatient({ ...active, cart: { ...cart, items: [...cart.items, ...additions] } });
+                if (opts?.bulk) {
+                  if (fresh.length === 1 && dupes === 0) {
+                    pushToast(`Reordered: ${fresh[0].testName}`, "success");
+                  } else {
+                    const tail = dupes > 0 ? ` · ${dupes} already in cart` : "";
+                    pushToast(`${fresh.length} test${fresh.length > 1 ? "s" : ""} added to order${tail}`, "success");
+                  }
+                } else {
+                  pushToast(`Reordered: ${fresh[0].testName}`, "success");
+                }
               }}
             />
           </div>
@@ -293,6 +305,8 @@ export default function App() {
               onCheckIn={() => pushToast(`${active.name} checked in · ${active.queueNumber}`, "success")}
               identityComplete={!!(active.name && active.dob && (active.phoneNumber || active.mobile))}
             />
+            {/* Round 10 #3 — TAT lives BELOW the cart (it's a cart-level summary) */}
+            <TatCompact patient={active} />
           </div>
         </div>
         <GoalBar onLearnMore={handleLearnMore} />
