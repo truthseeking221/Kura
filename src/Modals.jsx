@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { I } from "./icons";
 import { CountryCodeSelect, MultiSelectSearch, VISIT_REASONS } from "./shared";
+import { useLang, VISIT_REASON_KEYS } from "./i18n";
 
 export function NewWalkInModal({ open, onClose, onCreate }) {
+  const t = useLang();
   const blank = { name: "", countryCode: "+855", phoneNumber: "", dob: "", visitReason: [], language: "Khmer", sexAtBirth: "" };
   const [form, setForm] = useState(blank);
   const [errors, setErrors] = useState({});
@@ -12,11 +14,11 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
   const phoneEmpty = !form.phoneNumber || form.phoneNumber.trim().length < 6;
   const submit = () => {
     const e = {};
-    if (!form.name) e.name = "Required";
-    if (phoneEmpty) e.phone = "Invalid";
-    if (!form.dob) e.dob = "Required";
-    if (!form.sexAtBirth) e.sex = "Required";
-    if (!form.visitReason || form.visitReason.length === 0) e.visitReason = "Select at least one";
+    if (!form.name) e.name = t("err.required");
+    if (phoneEmpty) e.phone = t("err.invalidPhone");
+    if (!form.dob) e.dob = t("err.required");
+    if (!form.sexAtBirth) e.sex = t("err.required");
+    if (!form.visitReason || form.visitReason.length === 0) e.visitReason = t("err.selectOne");
     setErrors(e);
     if (Object.keys(e).length === 0) onCreate(form);
   };
@@ -27,8 +29,8 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
         <div className="modal-head">
           <div className="between">
             <div>
-              <h2>New Walk-in</h2>
-              <p>Capture the minimum to issue a queue number, then send the intake link.</p>
+              <h2>{t("modal.newWalkin.title")}</h2>
+              <p>{t("modal.newWalkin.sub")}</p>
             </div>
             <button className="icon-btn" onClick={onClose} style={{ width: 30, height: 30 }}><I.X size={14} /></button>
           </div>
@@ -36,12 +38,12 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
         <div className="modal-body">
           <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
             <div className="field">
-              <label className="label">Full name <span className="req">*</span></label>
-              <input className={"input" + (errors.name ? " invalid" : "")} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Patient full name" />
+              <label className="label">{t("checkin.fullName")} <span className="req">*</span></label>
+              <input className={"input" + (errors.name ? " invalid" : "")} value={form.name} onChange={e => set("name", e.target.value)} placeholder={t("checkin.fullName.placeholder")} />
               {errors.name && <div className="help error">{errors.name}</div>}
             </div>
             <div className="field">
-              <label className="label">Mobile <span className="req">*</span></label>
+              <label className="label">{t("checkin.mobile")} <span className="req">*</span></label>
               <div style={{ display: "flex" }}>
                 <CountryCodeSelect value={form.countryCode} onChange={v => set("countryCode", v)} />
                 <input
@@ -57,18 +59,18 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
           </div>
           <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
             <div className="field">
-              <label className="label">DOB <span className="req">*</span></label>
+              <label className="label">{t("checkin.dob")} <span className="req">*</span></label>
               <div className="input-wrap">
-                <input className={"input" + (errors.dob ? " invalid" : "")} value={form.dob} onChange={e => set("dob", e.target.value)} placeholder="YYYY-MM-DD" style={{ paddingRight: 32 }} />
+                <input className={"input" + (errors.dob ? " invalid" : "")} value={form.dob} onChange={e => set("dob", e.target.value)} placeholder={t("checkin.dob.placeholder")} style={{ paddingRight: 32 }} />
                 <I.Calendar size={16} className="rico" />
               </div>
               {errors.dob && <div className="help error">{errors.dob}</div>}
             </div>
             <div className="field">
-              <label className="label">Sex at birth <span className="req">*</span></label>
+              <label className="label">{t("checkin.sexAtBirth")} <span className="req">*</span></label>
               <div className="input-wrap">
                 <select className={"select" + (errors.sex ? " invalid" : "")} value={form.sexAtBirth} onChange={e => set("sexAtBirth", e.target.value)} style={{ paddingRight: 32, appearance: "none" }}>
-                  <option value="">Select…</option>
+                  <option value="">{t("checkin.sex.select")}</option>
                   <option>Female</option><option>Male</option><option>Intersex</option><option>Prefer not to say</option>
                 </select>
                 <I.ChevronDown size={14} className="rico" />
@@ -78,19 +80,19 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
           </div>
           <div className="field-row" style={{ gridTemplateColumns: "1fr", marginBottom: 14 }}>
             <div className="field">
-              <label className="label">Visit reason <span className="req">*</span></label>
+              <label className="label">{t("checkin.visitReason")} <span className="req">*</span></label>
               <MultiSelectSearch
                 value={form.visitReason}
                 onChange={v => set("visitReason", v)}
-                options={VISIT_REASONS}
-                placeholder="Search and select reasons…"
+                options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key) }))}
+                placeholder={t("checkin.visitReason.placeholder")}
                 invalid={!!errors.visitReason}
               />
               {errors.visitReason && <div className="help error">{errors.visitReason}</div>}
             </div>
           </div>
           <div className="field" style={{ marginBottom: 8 }}>
-            <label className="label">Language</label>
+            <label className="label">{t("checkin.language")}</label>
             <div className="input-wrap">
               <select className="select" value={form.language} onChange={e => set("language", e.target.value)} style={{ paddingRight: 32, appearance: "none" }}>
                 <option>Khmer</option><option>English</option><option>Vietnamese</option><option>Thai</option><option>French</option><option>Korean</option>
@@ -100,9 +102,9 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
           </div>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={submit} disabled={phoneEmpty} title={phoneEmpty ? "Phone required" : ""}>
-            <I.Send size={15} /> Create & Send Link
+          <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")}</button>
+          <button className="btn btn-primary" onClick={submit} disabled={phoneEmpty} title={phoneEmpty ? t("checkin.phoneRequired") : ""}>
+            <I.Send size={15} /> {t("modal.newWalkin.cta")}
           </button>
         </div>
       </div>
@@ -111,6 +113,7 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
 }
 
 export function AddServiceModal({ open, onClose, onAdd }) {
+  const t = useLang();
   const catalog = [
     { cat: "Blood",   items: [{ name: "CBC", price: 6 }, { name: "Glucose Fasting", price: 3 }, { name: "HbA1c", price: 8 }, { name: "Lipid Panel", price: 12 }, { name: "TSH", price: 9 }] },
     { cat: "Imaging", items: [{ name: "X-ray Chest", price: 15 }, { name: "X-ray Lumbar", price: 18 }, { name: "Ultrasound Abdomen", price: 32 }] },
@@ -131,8 +134,8 @@ export function AddServiceModal({ open, onClose, onAdd }) {
         <div className="modal-head">
           <div className="between">
             <div>
-              <h2>Add services</h2>
-              <p>Search the catalog and select services to add to the order draft.</p>
+              <h2>{t("modal.addService.title")}</h2>
+              <p>{t("modal.addService.sub")}</p>
             </div>
             <button className="icon-btn" onClick={onClose} style={{ width: 30, height: 30 }}><I.X size={14} /></button>
           </div>
@@ -141,12 +144,12 @@ export function AddServiceModal({ open, onClose, onAdd }) {
           <div style={{ padding: "14px 24px", borderBottom: "1px solid var(--border)" }}>
             <div className="search" style={{ height: 38 }}>
               <I.Search size={15} />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search service" />
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("modal.addService.search")} />
             </div>
           </div>
           <div style={{ maxHeight: 320, overflowY: "auto", padding: "4px 12px 12px" }}>
             {flat.length === 0 ? (
-              <div className="empty"><div className="empty-ico"><I.Search size={20} /></div><h3>No matches</h3><p>Try a different keyword.</p></div>
+              <div className="empty"><div className="empty-ico"><I.Search size={20} /></div><h3>{t("modal.addService.noMatch")}</h3><p>{t("modal.addService.noMatchSub")}</p></div>
             ) : flat.map((it, i) => {
               const picked = picks.find(p => p.name === it.name);
               return (
@@ -165,10 +168,10 @@ export function AddServiceModal({ open, onClose, onAdd }) {
           </div>
         </div>
         <div className="modal-foot">
-          <span style={{ fontSize: 12.5, color: "var(--ink-500)", marginRight: "auto" }}>{picks.length} selected</span>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <span style={{ fontSize: 12.5, color: "var(--ink-500)", marginRight: "auto" }}>{picks.length} {t("modal.addService.selected")}</span>
+          <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")}</button>
           <button className="btn btn-primary" disabled={picks.length === 0} onClick={() => onAdd(picks)}>
-            <I.Plus size={15} /> Add to order
+            <I.Plus size={15} /> {t("modal.addService.cta")}
           </button>
         </div>
       </div>
@@ -177,6 +180,7 @@ export function AddServiceModal({ open, onClose, onAdd }) {
 }
 
 export function ConfirmConsentModal({ open, onClose, onConfirm, patient }) {
+  const t = useLang();
   if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -186,22 +190,22 @@ export function ConfirmConsentModal({ open, onClose, onConfirm, patient }) {
             <span style={{ width: 32, height: 32, borderRadius: 8, background: "var(--warn-50)", color: "var(--warn-600)", display: "grid", placeItems: "center" }}>
               <I.AlertTriangle size={18} />
             </span>
-            Counter-sign consent
+            {t("modal.consent.title")}
           </h2>
-          <p>{patient?.name} declined the digital consent. Confirm in-person signature on paper to unblock.</p>
+          <p>{patient?.name} {t("modal.consent.body")}</p>
         </div>
         <div className="modal-body">
           <div style={{ padding: 14, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12.5, color: "var(--ink-700)", lineHeight: 1.5 }}>
-            By confirming, you attest that the patient signed the printed consent form. The exception clears and the order proceeds to nurse handoff.
+            {t("modal.consent.notice")}
           </div>
           <label className="row" style={{ marginTop: 14, fontSize: 12.5, color: "var(--ink-700)" }}>
-            <input type="checkbox" /> Patient signed in my presence
+            <input type="checkbox" /> {t("modal.consent.checkbox")}
           </label>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")}</button>
           <button className="btn btn-primary" onClick={onConfirm}>
-            <I.Check size={15} /> Confirm & Unblock
+            <I.Check size={15} /> {t("modal.consent.cta")}
           </button>
         </div>
       </div>

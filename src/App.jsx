@@ -1,18 +1,21 @@
 // === Kura Reception — App ===
 import React, { useState, useRef } from "react";
 import { I } from "./icons";
-import { initialPatients, payerOptions } from "./data";
+import { initialPatients, payerOptions, initialNotifications } from "./data";
 import { Sidebar, Topbar, GoalBar } from "./Layout";
-import { FastCheckIn, PatientStub, OrderDraft } from "./Center";
-import { PayerModel, RequiredDocuments, PatientPWA, Handoff } from "./RightRail";
+import { FastCheckIn } from "./Center";
+import { VisitDetails, Insurance } from "./Cards";
+import { OrderCart } from "./OrderCart";
 import {
   NewWalkInModal,
   AddServiceModal,
   ConfirmConsentModal,
   ToastStack,
 } from "./Modals";
+import { LangProvider, useLang } from "./i18n";
 
-function ExceptionBanner({ patient, onResolve }) {
+function ExceptionBanner({ patient, onResolve, onSkip }) {
+  const t = useLang();
   return (
     <div className="card" style={{ borderColor: "var(--danger-100)", background: "linear-gradient(0deg, rgba(216,58,58,0.04), rgba(216,58,58,0.04)), white" }}>
       <div className="card-pad" style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -20,16 +23,16 @@ function ExceptionBanner({ patient, onResolve }) {
           <I.AlertTriangle size={20} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--ink-900)" }}>Exception — consent declined on PWA</div>
+          <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("exception.title")}</div>
           <div style={{ fontSize: 12.5, color: "var(--ink-600)", marginTop: 2 }}>
-            {patient.name} declined the digital consent step. Counter-sign on paper to unblock the handoff.
+            {patient.name} {t("exception.body")}
           </div>
         </div>
-        <button className="btn btn-ghost" style={{ borderColor: "var(--danger-100)", color: "var(--danger-600)" }}>
-          Skip for now
+        <button className="btn btn-ghost" style={{ borderColor: "var(--danger-100)", color: "var(--danger-600)" }} onClick={onSkip}>
+          {t("exception.skip")}
         </button>
         <button className="btn btn-primary" style={{ background: "var(--danger-500)" }} onClick={onResolve}>
-          <I.Check size={15} /> Resolve
+          <I.Check size={15} /> {t("exception.resolve")}
         </button>
       </div>
     </div>
@@ -49,6 +52,10 @@ export default function App() {
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
+
+  const [station, setStation] = useState("PSC-01");
+  const [shift, setShift] = useState("morning");
+  const [notifs, setNotifs] = useState(initialNotifications);
 
   const [toasts, setToasts] = useState([]);
   const toastIdRef = useRef(1);
@@ -156,18 +163,79 @@ export default function App() {
 
   const editStub = () => pushToast("Edit Stub — open form to fix identity & details");
 
+  const handleStationChange = (id) => {
+    setStation(id);
+    pushToast(`Station switched to ${id}`);
+  };
+  const handleShiftChange = (id) => {
+    setShift(id);
+    const labels = { morning: "Morning", afternoon: "Afternoon", night: "Night" };
+    pushToast(`Shift set to ${labels[id]}`);
+  };
+  const handleMarkAllRead = () => {
+    setNotifs(ns => ns.map(n => ({ ...n, read: true })));
+    pushToast("All notifications marked as read");
+  };
+  const handleNotifAction = (n) => {
+    setNotifs(ns => ns.map(x => x.id === n.id ? { ...x, read: true } : x));
+    if (n.patientId) {
+      setActiveId(n.patientId);
+      pushToast(`Opened patient ${patients.find(p => p.id === n.patientId)?.name || n.patientId}`);
+    } else {
+      pushToast(`Opening: ${n.titleKey.replace("notif.", "").replace(".", " ")}`);
+    }
+  };
+  const handleNotifClick = (n) => {
+    setNotifs(ns => ns.map(x => x.id === n.id ? { ...x, read: true } : x));
+    if (n.patientId) setActiveId(n.patientId);
+  };
+  const handleUserAction = (id) => {
+    if (id === "signout") pushToast("Signed out (mock)", "error");
+    else if (id === "profile") pushToast("Open profile drawer");
+    else if (id === "preferences") pushToast("Open preferences");
+    else if (id === "help") pushToast("Open help & shortcuts (⌘ /)");
+  };
+  const handleSearch = (id) => {
+    setActiveId(id);
+    const p = patients.find(x => x.id === id);
+    if (p) pushToast(`Opened ${p.name} · ${p.queueNumber}`);
+  };
+  const handleSkipException = () => pushToast("Exception skipped — handoff stays blocked", "error");
+  const handleViewDocs = () => pushToast("Opening documents drawer");
+  const handleViewTimeline = () => pushToast("Opening full handoff timeline");
+  const handleLearnMore = () => pushToast("Open product tour");
+  const handleNavigate = (id) => {
+    setActiveNav(id);
+    if (id !== "reception") pushToast(`${id.charAt(0).toUpperCase() + id.slice(1)} screen — coming soon`);
+  };
+
   return (
+    <LangProvider lang={uiLang}>
     <div className="app" data-screen-label="Reception">
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed(c => !c)}
         active={activeNav}
-        onNavigate={setActiveNav}
+        onNavigate={handleNavigate}
         lang={uiLang}
         onLangChange={setUiLang}
       />
       <div className="main">
-        <Topbar onNewWalkIn={() => setWalkInOpen(true)} notifications={3} />
+        <Topbar
+          onNewWalkIn={() => setWalkInOpen(true)}
+          notifications={notifs.filter(n => !n.read).length}
+          station={station}
+          onStationChange={handleStationChange}
+          shift={shift}
+          onShiftChange={handleShiftChange}
+          notifs={notifs}
+          onMarkAllRead={handleMarkAllRead}
+          onNotifAction={handleNotifAction}
+          onNotifClick={handleNotifClick}
+          onUserAction={handleUserAction}
+          patients={patients}
+          onSearch={handleSearch}
+        />
         <div className="workspace no-queue">
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
             <FastCheckIn
@@ -177,32 +245,38 @@ export default function App() {
               sending={sending}
               sentFlash={sentFlash}
             />
-            <PatientStub patient={active} onEdit={editStub} />
-            <OrderDraft
-              patient={active}
-              onRemove={removeService}
-              onAddService={() => setServiceOpen(true)}
-            />
             {active.exception === "consent" && active.documents.consent !== "ok" && (
               <ExceptionBanner
                 patient={active}
                 onResolve={() => setConsentOpen(true)}
+                onSkip={handleSkipException}
               />
             )}
+            <VisitDetails
+              patient={active}
+              onUpdate={updatePatient}
+              onSendToPhone={sendIntakeLink}
+              sentFlash={sentFlash}
+            />
+            <Insurance patient={active} onUpdate={updatePatient} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
-            <PayerModel patient={active} onSelect={setPayer} />
-            <RequiredDocuments patient={active} onView={() => pushToast("Open documents drawer")} />
-            <PatientPWA patient={active} />
-            <Handoff patient={active} />
+            <OrderCart
+              patient={active}
+              onUpdate={updatePatient}
+              onPushToast={pushToast}
+              onCheckIn={() => pushToast(`${active.name} checked in · ${active.queueNumber}`, "success")}
+              identityComplete={!!(active.name && active.dob && (active.phoneNumber || active.mobile))}
+            />
           </div>
         </div>
-        <GoalBar />
+        <GoalBar onLearnMore={handleLearnMore} />
       </div>
       <NewWalkInModal open={walkInOpen} onClose={() => setWalkInOpen(false)} onCreate={handleCreateWalkIn} />
       <AddServiceModal open={serviceOpen} onClose={() => setServiceOpen(false)} onAdd={handleAddServices} />
       <ConfirmConsentModal open={consentOpen} onClose={() => setConsentOpen(false)} onConfirm={unblockConsent} patient={active} />
       <ToastStack toasts={toasts} onClose={closeToast} />
     </div>
+    </LangProvider>
   );
 }

@@ -248,21 +248,28 @@ export function TelegramScanCard({ patient, onUpdate }) {
 }
 
 // === Multi-select with search (visit reasons) ===
+// options: string[] OR { value: string, label: string }[]
 export function MultiSelectSearch({ value, onChange, options, placeholder, invalid }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef(null);
   const sel = Array.isArray(value) ? value : (value ? [value] : []);
+
+  // Normalise options to { value, label } internally
+  const normalised = options.map(o => typeof o === "string" ? { value: o, label: o } : o);
+  // Build label lookup for chips
+  const labelOf = (v) => normalised.find(o => o.value === v)?.label ?? v;
+
   useEffect(() => {
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
-  const toggle = (opt) => {
-    onChange(sel.includes(opt) ? sel.filter(x => x !== opt) : [...sel, opt]);
+  const toggle = (val) => {
+    onChange(sel.includes(val) ? sel.filter(x => x !== val) : [...sel, val]);
   };
-  const remove = (opt, e) => { e.stopPropagation(); onChange(sel.filter(x => x !== opt)); };
-  const filtered = options.filter(o => o.toLowerCase().includes(q.toLowerCase()));
+  const remove = (val, e) => { e.stopPropagation(); onChange(sel.filter(x => x !== val)); };
+  const filtered = normalised.filter(o => o.label.toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <div
@@ -284,7 +291,7 @@ export function MultiSelectSearch({ value, onChange, options, placeholder, inval
             border: "1px solid var(--brand-100)",
             fontSize: 11.5, fontWeight: 550,
           }}>
-            {s}
+            {labelOf(s)}
             <button onClick={(e) => remove(s, e)} style={{
               background: "transparent", border: "none", padding: 0, cursor: "pointer",
               width: 14, height: 14, display: "grid", placeItems: "center",
@@ -314,7 +321,7 @@ export function MultiSelectSearch({ value, onChange, options, placeholder, inval
               autoFocus
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Search reason…"
+              placeholder="Search…"
             />
           </div>
           <div style={{ overflowY: "auto", maxHeight: 220 }}>
@@ -323,9 +330,9 @@ export function MultiSelectSearch({ value, onChange, options, placeholder, inval
                 No matches
               </div>
             ) : filtered.map(opt => {
-              const checked = sel.includes(opt);
+              const checked = sel.includes(opt.value);
               return (
-                <div key={opt} onClick={() => toggle(opt)} style={{
+                <div key={opt.value} onClick={() => toggle(opt.value)} style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "7px 10px", borderRadius: 6, cursor: "pointer",
                   background: checked ? "var(--brand-50)" : "transparent",
@@ -341,7 +348,7 @@ export function MultiSelectSearch({ value, onChange, options, placeholder, inval
                   }}>
                     {checked && <I.Check size={10} strokeWidth={3} />}
                   </div>
-                  {opt}
+                  {opt.label}
                 </div>
               );
             })}

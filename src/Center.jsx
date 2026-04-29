@@ -7,10 +7,11 @@ import {
   CountryCodeSelect,
   VISIT_REASONS,
 } from "./shared";
+import { useLang, VISIT_REASON_KEYS } from "./i18n";
 
 // === Mobile field with OTP verification ===
 function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, otpState, setOtpState }) {
-  // otpState: { status: 'idle'|'sending'|'sent'|'verified'|'wrong'|'expired' }
+  const t = useLang();
   const [code, setCode] = React.useState("");
   const [countdown, setCountdown] = React.useState(0);
   const status = otpState.status;
@@ -60,7 +61,7 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
 
   return (
     <div className="field">
-      <label className="label">Mobile <span className="req">*</span></label>
+      <label className="label">{t("checkin.mobile")} <span className="req">*</span></label>
       <div style={{ display: "flex", position: "relative" }}>
         <CountryCodeSelect value={countryCode} onChange={setCountry} disabled={status === "verified"} />
         <input
@@ -88,7 +89,7 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
                 borderRadius: 4, padding: "2px 8px",
                 fontSize: 11, fontWeight: 600,
               }}>
-                <I.Check size={11} strokeWidth={3} /> Verified
+                <I.Check size={11} strokeWidth={3} /> {t("otp.verified")}
               </span>
               <button type="button" onClick={resetToIdle} title="Edit number" style={{
                 background: "transparent", border: "none", padding: 4, cursor: "pointer",
@@ -113,8 +114,8 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
               }}
             >
               {status === "sending"
-                ? (<><span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> Sending…</>)
-                : "Send OTP"}
+                ? (<><span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t("otp.sending")}</>)
+                : t("otp.send")}
             </button>
           ) : (
             <button
@@ -130,7 +131,7 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
                 cursor: countdown > 0 ? "not-allowed" : "pointer",
               }}
             >
-              Resend
+              {t("otp.resend")}
             </button>
           )}
         </div>
@@ -138,7 +139,7 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
       {error && <div className="help error">{error}</div>}
       {status !== "verified" && phoneValid && status === "idle" && (
         <div className="help" style={{ color: "var(--warn-600, #b45309)", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-          <I.AlertCircle size={11} /> Number not verified — verification optional
+          <I.AlertCircle size={11} /> {t("otp.unverified")}
         </div>
       )}
 
@@ -150,19 +151,19 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
               className={"input" + (status === "wrong" ? " invalid" : "")}
               value={code}
               onChange={e => handleVerify(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="Enter 6-digit code"
+              placeholder={t("otp.enter")}
               autoFocus
               style={{ letterSpacing: "0.15em", fontFamily: "'SF Mono', ui-monospace, monospace" }}
             />
             {status === "wrong" && (
-              <div className="help error">Incorrect code. Try again.</div>
+              <div className="help error">{t("otp.incorrect")}</div>
             )}
           </div>
           <div style={{
             fontSize: 11.5, color: status === "expired" ? "var(--danger-600)" : "var(--ink-500)",
             paddingTop: 10, fontWeight: 550, whiteSpace: "nowrap",
           }}>
-            {status === "expired" ? "Code expired" : `Resend in ${timerLabel}`}
+            {status === "expired" ? t("otp.expired") : `${t("otp.resendIn")} ${timerLabel}`}
           </div>
         </div>
       )}
@@ -172,14 +173,15 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
 
 // === Preferred Communication Method segmented selector ===
 function CommMethodSelector({ value, onChange, error }) {
+  const t = useLang();
   const opts = [
-    { id: "sms",      label: "SMS",      icon: I.MessageSquare },
-    { id: "email",    label: "Email",    icon: I.Mail },
-    { id: "telegram", label: "Telegram", icon: I.Send },
+    { id: "sms",      labelKey: "comm.sms",      icon: I.MessageSquare },
+    { id: "email",    labelKey: "comm.email",    icon: I.Mail },
+    { id: "telegram", labelKey: "comm.telegram", icon: I.Send },
   ];
   return (
     <div className="field">
-      <label className="label">Preferred Comm. <span className="req">*</span></label>
+      <label className="label">{t("checkin.preferredComm")} <span className="req">*</span></label>
       <div style={{
         display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0,
         background: "var(--surface-2)", border: "1px solid var(--border)",
@@ -203,7 +205,7 @@ function CommMethodSelector({ value, onChange, error }) {
                 padding: 0,
               }}
             >
-              <Ico size={12} /> {o.label}
+              <Ico size={12} /> {t(o.labelKey)}
             </button>
           );
         })}
@@ -215,6 +217,7 @@ function CommMethodSelector({ value, onChange, error }) {
 
 // === Inline Telegram QR scanner widget (when Telegram comm method chosen) ===
 function TelegramQRInline({ patient, onUpdate }) {
+  const t = useLang();
   const [scanning, setScanning] = React.useState(false);
   const username = patient.telegramHandle || "";
   const captured = !!username;
@@ -249,7 +252,7 @@ function TelegramQRInline({ patient, onUpdate }) {
             <I.Check size={14} strokeWidth={3} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)" }}>Telegram captured</span>
+            <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("telegram.captured")}</span>
             <span style={{ fontSize: 11.5, color: "var(--ink-700)", fontFamily: "'SF Mono', ui-monospace, monospace" }}>{username}</span>
           </div>
         </div>
@@ -258,7 +261,7 @@ function TelegramQRInline({ patient, onUpdate }) {
           color: "var(--brand-600)", fontSize: 11.5, fontWeight: 600,
           display: "inline-flex", alignItems: "center", gap: 3,
         }}>
-          <I.Edit size={11} /> Rescan
+          <I.Edit size={11} /> {t("telegram.rescan")}
         </button>
       </div>
     );
@@ -313,13 +316,13 @@ function TelegramQRInline({ patient, onUpdate }) {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)", marginBottom: 3 }}>
-          Scan patient's Telegram QR
+          {t("telegram.title")}
         </div>
         <div style={{
           fontSize: 11.5, color: "var(--ink-600)", lineHeight: 1.45,
           fontStyle: "italic", marginBottom: 10,
         }}>
-          Telegram → Settings → QR (top left)
+          {t("telegram.hint")}
         </div>
         <button
           type="button"
@@ -329,8 +332,8 @@ function TelegramQRInline({ patient, onUpdate }) {
           style={{ height: 30 }}
         >
           {scanning
-            ? (<><span className="spinner" /> Scanning…</>)
-            : (<><I.Camera size={13} /> Start scan</>)}
+            ? (<><span className="spinner" /> {t("telegram.scanning")}</>)
+            : (<><I.Camera size={13} /> {t("telegram.start")}</>)}
         </button>
       </div>
     </div>
@@ -338,6 +341,7 @@ function TelegramQRInline({ patient, onUpdate }) {
 }
 
 export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash }) {
+  const t = useLang();
   const [errors, setErrors] = useState({});
   const [step2Open, setStep2Open] = useState(false);
 
@@ -397,8 +401,8 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
   return (
     <div className="card">
       <div className="card-head" style={{ flexDirection: "column", alignItems: "flex-start", gap: 0, paddingBottom: 4 }}>
-        <h2>Fast Check-in</h2>
-        <p className="sub">Scan the patient's National ID to auto-fill, or capture details manually. Patient finishes the rest on their phone.</p>
+        <h2>{t("checkin.title")}</h2>
+        <p className="sub">{t("checkin.sub")}</p>
       </div>
 
       {/* === STEP 1 · SCAN === */}
@@ -406,7 +410,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
         <div style={{
           fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
           fontWeight: 650, color: "var(--ink-500)", marginBottom: 8,
-        }}>Step 1 · Scan</div>
+        }}>{t("checkin.step1")}</div>
 
         <div style={{
           border: "1.5px solid " + (idScanned ? "var(--success-500)" : "var(--border-strong)"),
@@ -426,9 +430,9 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
               {idScanned ? <I.Check size={18} strokeWidth={2.5} /> : <I.Lock size={18} />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--ink-900)" }}>National ID</div>
+              <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("checkin.nationalId")}</div>
               <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>
-                {idScanned ? "Scanned · auto-filled name, DOB, sex" : "Auto-fills name, DOB, sex"}
+                {idScanned ? t("checkin.nationalId.scanned") : t("checkin.nationalId.sub")}
               </div>
             </div>
             {idScanned && (
@@ -437,7 +441,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 className="btn btn-ghost btn-sm"
                 style={{ height: 28 }}
               >
-                <I.RefreshCw size={12} /> Rescan
+                <I.RefreshCw size={12} /> {t("checkin.rescan")}
               </button>
             )}
           </div>
@@ -473,7 +477,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                   onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"}
                   onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}
                 >
-                  Can't scan? Enter details manually <I.ChevronRight size={12} />
+                  {t("checkin.manualEntry")} <I.ChevronRight size={12} />
                 </button>
               )}
             </>
@@ -497,14 +501,14 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
           <div style={{
             fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
             fontWeight: 650, color: "var(--ink-500)",
-          }}>Step 2 · Confirm details</div>
+          }}>{t("checkin.step2")}</div>
           <span style={{
             fontSize: 11.5, color: "var(--ink-500)", fontWeight: 550,
             display: "inline-flex", alignItems: "center", gap: 3,
           }}>
             {step2Visible
-              ? (<><I.ChevronUp size={13} /> Collapse</>)
-              : (<><I.ChevronDown size={13} /> Expand</>)}
+              ? (<><I.ChevronUp size={13} /> {t("checkin.collapse")}</>)
+              : (<><I.ChevronDown size={13} /> {t("checkin.expand")}</>)}
           </span>
         </button>
 
@@ -513,23 +517,23 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
             {/* Row 1: Full name | DOB | Sex at birth */}
             <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 14 }}>
               <div className="field">
-                <label className="label">Full name <span className="req">*</span></label>
+                <label className="label">{t("checkin.fullName")} <span className="req">*</span></label>
                 <input
                   className={"input" + (errors.name ? " invalid" : "")}
                   value={patient.name || ""}
                   onChange={e => update("name", e.target.value)}
-                  placeholder="Patient full name"
+                  placeholder={t("checkin.fullName.placeholder")}
                 />
                 {errors.name && <div className="help error">{errors.name}</div>}
               </div>
               <div className="field">
-                <label className="label">DOB <span className="req">*</span></label>
+                <label className="label">{t("checkin.dob")} <span className="req">*</span></label>
                 <div className="input-wrap">
                   <input
                     className={"input" + (errors.dob ? " invalid" : "")}
                     value={patient.dob || ""}
                     onChange={e => update("dob", e.target.value)}
-                    placeholder="YYYY-MM-DD"
+                    placeholder={t("checkin.dob.placeholder")}
                     style={{ paddingRight: 32 }}
                   />
                   <I.Calendar size={16} className="rico" />
@@ -537,7 +541,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 {errors.dob && <div className="help error">{errors.dob}</div>}
               </div>
               <div className="field">
-                <label className="label">Sex at birth <span className="req">*</span></label>
+                <label className="label">{t("checkin.sexAtBirth")} <span className="req">*</span></label>
                 <div className="input-wrap">
                   <select
                     className={"select" + (errors.sex ? " invalid" : "")}
@@ -545,10 +549,10 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                     onChange={e => update("sexAtBirth", e.target.value)}
                     style={{ paddingRight: 32, appearance: "none" }}
                   >
-                    <option value="">Select…</option>
-                    <option>Female</option>
-                    <option>Male</option>
-                    <option>Other</option>
+                    <option value="">{t("checkin.sex.select")}</option>
+                    <option value="Female">{t("checkin.sex.female")}</option>
+                    <option value="Male">{t("checkin.sex.male")}</option>
+                    <option value="Other">{t("checkin.sex.other")}</option>
                   </select>
                   <I.ChevronDown size={14} className="rico" />
                 </div>
@@ -573,7 +577,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 error={errors.commMethod}
               />
               <div className="field">
-                <label className="label">Language</label>
+                <label className="label">{t("checkin.language")}</label>
                 <div className="input-wrap">
                   <select
                     className="select"
@@ -596,12 +600,12 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
             {/* Conditional: Email field */}
             {commMethod === "email" && (
               <div className="field" style={{ marginBottom: 14 }}>
-                <label className="label">Email <span className="req">*</span></label>
+                <label className="label">{t("checkin.email.label")} <span className="req">*</span></label>
                 <input
                   className={"input" + (errors.email ? " invalid" : "")}
                   value={patient.email || ""}
                   onChange={e => update("email", e.target.value)}
-                  placeholder="patient@example.com"
+                  placeholder={t("checkin.email.placeholder")}
                   type="email"
                 />
                 {errors.email && <div className="help error">{errors.email}</div>}
@@ -616,52 +620,23 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
         )}
       </div>
 
-      {/* === STEP 3 · VISIT REASON === */}
-      <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 4 }}>
-        <div style={{
-          fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
-          fontWeight: 650, color: "var(--ink-500)", marginBottom: 8,
-        }}>Step 3 · Visit reason</div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <MultiSelectSearch
-            value={reasons}
-            onChange={v => update("visitReason", v)}
-            options={VISIT_REASONS}
-            placeholder="Search and select reasons…"
-            invalid={!!errors.visitReason}
-          />
-          {errors.visitReason && <div className="help error">{errors.visitReason}</div>}
-        </div>
-      </div>
-
-      {/* === Primary CTA === */}
-      <div className="card-pad" style={{ paddingTop: 14 }}>
-        <button
-          className={"btn btn-primary" + (sentFlash ? " sent-pulse" : "")}
-          onClick={handleSend}
-          disabled={sending}
-          style={{ width: "100%", justifyContent: "center", height: 44, fontSize: 14, fontWeight: 650 }}
-        >
-          {sending
-            ? (<><span className="spinner" /> Checking in…</>)
-            : sentFlash
-            ? (<><I.Check size={16} /> Patient checked in</>)
-            : (<><I.CheckCircle size={16} /> Check In Patient</>)}
-        </button>
-        {!phoneVerified && phoneNumber && phoneNumber.replace(/\D/g, "").length >= 8 && (
+      {/* CTA moved to Order Cart per Round 9 #1 */}
+      {!phoneVerified && phoneNumber && phoneNumber.replace(/\D/g, "").length >= 8 && (
+        <div className="card-pad" style={{ paddingTop: 8 }}>
           <div className="help" style={{
             color: "var(--ink-500)", display: "inline-flex", alignItems: "center", gap: 5,
-            marginTop: 6, fontSize: 11.5, justifyContent: "center", width: "100%",
+            fontSize: 11.5, justifyContent: "center", width: "100%",
           }}>
-            <I.AlertCircle size={11} /> Phone not verified — you can still check in
+            <I.AlertCircle size={11} /> {t("checkin.phoneUnverified")}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export function PatientStub({ patient, onEdit }) {
+  const t = useLang();
   const idVerified = patient.identity.verified;
   const reasons = Array.isArray(patient.visitReason)
     ? patient.visitReason.join(", ")
@@ -669,51 +644,51 @@ export function PatientStub({ patient, onEdit }) {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Patient Stub</h2>
+        <h2>{t("stub.title")}</h2>
         <button className="btn btn-ghost btn-sm" onClick={onEdit}>
-          <I.Edit size={13} /> Edit
+          <I.Edit size={13} /> {t("stub.edit")}
         </button>
       </div>
       <div className="stub-grid">
         <div className="stub-cell">
-          <div className="lab">Identity</div>
+          <div className="lab">{t("stub.identity")}</div>
           <div className="val">
             {idVerified ? (
-              <><I.CheckCircle size={16} style={{ color: "var(--success-500)" }} /> <span>Verified</span></>
+              <><I.CheckCircle size={16} style={{ color: "var(--success-500)" }} /> <span>{t("stub.verified")}</span></>
             ) : (
-              <><I.AlertCircle size={16} style={{ color: "var(--warn-500)" }} /> <span style={{ color: "var(--warn-600)" }}>Not verified</span></>
+              <><I.AlertCircle size={16} style={{ color: "var(--warn-500)" }} /> <span style={{ color: "var(--warn-600)" }}>{t("stub.notVerified")}</span></>
             )}
           </div>
         </div>
         <div className="stub-cell">
-          <div className="lab">PWA Intake</div>
+          <div className="lab">{t("stub.pwaIntake")}</div>
           <div className="val" style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}>
-            <span style={{ fontSize: 12, color: "var(--ink-500)", fontWeight: 500 }}>{patient.pwaProgress}% complete</span>
+            <span style={{ fontSize: 12, color: "var(--ink-500)", fontWeight: 500 }}>{patient.pwaProgress}{t("stub.complete")}</span>
             <div className="progress" style={{ marginTop: 8 }}>
               <div style={{ width: patient.pwaProgress + "%" }} />
             </div>
           </div>
         </div>
         <div className="stub-cell">
-          <div className="lab">Queue Number</div>
+          <div className="lab">{t("stub.queueNumber")}</div>
           <div className="queue-num"><span className="q">Q -</span> {patient.queueNumber.replace("Q-", "")}</div>
         </div>
       </div>
       <div className="stub-grid" style={{ borderTop: "1px solid var(--border)", gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
         <div className="stub-cell">
-          <div className="lab">Mobile</div>
+          <div className="lab">{t("stub.mobile")}</div>
           <div className="val" style={{ fontSize: 12.5, fontWeight: 550, color: "var(--ink-800)" }}>{patient.mobile}</div>
         </div>
         <div className="stub-cell">
-          <div className="lab">DOB</div>
+          <div className="lab">{t("stub.dob")}</div>
           <div className="val" style={{ fontSize: 12.5, fontWeight: 550, color: "var(--ink-800)" }}>{patient.dob}</div>
         </div>
         <div className="stub-cell">
-          <div className="lab">Sex at birth</div>
+          <div className="lab">{t("stub.sexAtBirth")}</div>
           <div className="val" style={{ fontSize: 12.5, fontWeight: 550, color: "var(--ink-800)" }}>{patient.sexAtBirth || patient.gender}</div>
         </div>
         <div className="stub-cell">
-          <div className="lab">Created</div>
+          <div className="lab">{t("stub.created")}</div>
           <div className="val" style={{ fontSize: 12.5, fontWeight: 550, color: "var(--ink-800)" }}>{patient.arrivedRaw}</div>
         </div>
       </div>
@@ -722,13 +697,14 @@ export function PatientStub({ patient, onEdit }) {
 }
 
 export function OrderDraft({ patient, onRemove, onAddService }) {
+  const t = useLang();
   const total = patient.services.reduce((s, x) => s + x.amount, 0);
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Order Draft</h2>
+        <h2>{t("order.title")}</h2>
         <button className="btn btn-ghost btn-sm" onClick={onAddService} style={{ color: "var(--brand-600)", borderColor: "transparent" }}>
-          <I.Plus size={13} /> Add service
+          <I.Plus size={13} /> {t("order.addService")}
         </button>
       </div>
       <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 0 }}>
@@ -740,7 +716,7 @@ export function OrderDraft({ patient, onRemove, onAddService }) {
             </span>
           ))}
           {patient.services.length === 0 && (
-            <span style={{ fontSize: 12.5, color: "var(--ink-500)" }}>No services yet — click Add service.</span>
+            <span style={{ fontSize: 12.5, color: "var(--ink-500)" }}>{t("order.noServices")}</span>
           )}
         </div>
       </div>
@@ -749,10 +725,10 @@ export function OrderDraft({ patient, onRemove, onAddService }) {
           <table className="order-table" style={{ marginLeft: "var(--card-pad)", marginRight: "var(--card-pad)", width: "calc(100% - 2*var(--card-pad))" }}>
             <thead>
               <tr>
-                <th>Service</th>
-                <th>Payer</th>
-                <th>Status</th>
-                <th>Amount</th>
+                <th>{t("order.service")}</th>
+                <th>{t("order.payer")}</th>
+                <th>{t("order.status")}</th>
+                <th>{t("order.amount")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -768,7 +744,7 @@ export function OrderDraft({ patient, onRemove, onAddService }) {
                            : s.status === "blocked"  ? "var(--danger-500)"
                            : "var(--ink-600)"
                     }}>
-                      <span className="dot" /> {s.status[0].toUpperCase() + s.status.slice(1)}
+                      <span className="dot" /> {t("status." + s.status) || s.status}
                     </span>
                   </td>
                   <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 550 }}>${s.amount.toFixed(2)}</td>
@@ -778,7 +754,7 @@ export function OrderDraft({ patient, onRemove, onAddService }) {
             </tbody>
           </table>
           <div className="estimated">
-            <span className="muted">Estimated total</span>
+            <span className="muted">{t("order.estimatedTotal")}</span>
             <span className="total">${total.toFixed(2)}</span>
           </div>
         </>

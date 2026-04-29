@@ -1,12 +1,22 @@
-// === Right rail: Payer Model, Required Documents, Patient PWA log, Handoff ===
+// === Right rail: PayerModel + combined VisitStatusCard ===
 import React from "react";
 import { I } from "./icons";
 import { payerOptions } from "./data";
+import { useLang } from "./i18n";
 
 export function PayerModel({ patient, onSelect }) {
+  const t = useLang();
+  const payerNameKeys = {
+    direct: "payer.direct", insurance: "payer.insurance",
+    corporate: "payer.corporate", referral: "payer.referral",
+  };
+  const payerCaptionKeys = {
+    direct: "payer.direct.caption", insurance: "payer.insurance.caption",
+    corporate: "payer.corporate.caption", referral: "payer.referral.caption",
+  };
   return (
     <div className="card card-pad">
-      <h2 style={{ margin: 0, fontSize: "var(--font-lg)", fontWeight: 650, color: "var(--ink-900)", letterSpacing: "-0.01em", marginBottom: 12 }}>Payer Model</h2>
+      <h2 style={{ margin: 0, fontSize: "var(--font-lg)", fontWeight: 650, color: "var(--ink-900)", letterSpacing: "-0.01em", marginBottom: 12 }}>{t("payer.title")}</h2>
       <div className="payer-grid">
         {payerOptions.map(p => {
           const Ico = I[p.icon];
@@ -19,120 +29,138 @@ export function PayerModel({ patient, onSelect }) {
               type="button"
             >
               <Ico size={22} className="payer-icon" />
-              <span className="payer-name">{p.name}</span>
+              <span className="payer-name">{t(payerNameKeys[p.id])}</span>
             </button>
           );
         })}
       </div>
       <div className="payer-foot">
-        {payerOptions.find(o => o.id === patient.payer)?.caption}
+        {t(payerCaptionKeys[patient.payer])}
       </div>
     </div>
   );
 }
 
-export function RequiredDocuments({ patient, onView }) {
+// ============================================================
+// VISIT STATUS — combined Documents · PWA · Handoff card
+// ============================================================
+export function VisitStatusCard({ patient, onViewDocs, onViewTimeline }) {
+  const t = useLang();
+
   const docs = [
-    { key: "id",        name: "ID verified",    state: patient.documents.id },
-    { key: "consent",   name: "Consent",        state: patient.documents.consent },
-    { key: "insurance", name: "Insurance photo",state: patient.documents.insurance },
-    { key: "receipt",   name: "Receipt",        state: patient.documents.receipt },
+    { key: "id",        nameKey: "docs.id",        state: patient.documents.id },
+    { key: "consent",   nameKey: "docs.consent",   state: patient.documents.consent },
+    { key: "insurance", nameKey: "docs.insurance", state: patient.documents.insurance },
+    { key: "receipt",   nameKey: "docs.receipt",   state: patient.documents.receipt },
   ];
-  return (
-    <div className="card card-pad">
-      <h2 style={{ margin: 0, fontSize: "var(--font-lg)", fontWeight: 650, color: "var(--ink-900)", letterSpacing: "-0.01em", marginBottom: 4 }}>Required Documents</h2>
-      <div className="doc-list">
-        {docs.map(d => {
-          const ok = d.state === "ok";
-          return (
-            <div key={d.key} className="doc-row">
-              <div className={"doc-check " + (ok ? "ok" : "pending")}>
-                {ok ? <I.Check size={11} strokeWidth={2.5} /> : <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--ink-300)" }} />}
-              </div>
-              <div className="doc-name">{d.name}</div>
-              <div className={"doc-status " + (ok ? "ok" : "pending")}>
-                {ok ? "" : "Pending"}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <button className="row" onClick={onView} style={{ marginTop: 12, color: "var(--brand-600)", fontSize: 12.5, fontWeight: 550, background: "transparent", border: "none", padding: 0, justifyContent: "space-between", width: "100%" }}>
-        <span>View all documents</span>
-        <I.ChevronRight size={14} />
-      </button>
-    </div>
-  );
-}
+  const docsOk = docs.filter(d => d.state === "ok").length;
+  const docsTotal = docs.length;
 
-export function PatientPWA({ patient }) {
+  const handoffSteps = [
+    { labelKey: "handoff.reception",  icon: "User" },
+    { labelKey: "handoff.patientPwa", icon: "Headset" },
+    { labelKey: "handoff.nurse",      icon: "Stethoscope" },
+    { labelKey: "handoff.lab",        icon: "Flask" },
+  ];
+  const stateLabel = (state, i) => {
+    if (state === "done")        return t("handoff.done");
+    if (state === "in-progress") return t("handoff.inProgress");
+    if (state === "blocked")     return t("handoff.blocked");
+    return i === 0 ? t("handoff.new") : t("handoff.pending");
+  };
+
   const iconFor = (state) =>
-    state === "ok" ? <I.CheckCircle size={16} style={{ color: "var(--success-500)" }} /> :
-    state === "warn" ? <I.AlertCircle size={16} style={{ color: "var(--warn-500)" }} /> :
-    state === "danger" ? <I.XCircle size={16} style={{ color: "var(--danger-500)" }} /> :
-    <I.Clock size={16} style={{ color: "var(--ink-400)" }} />;
+    state === "ok" ? <I.CheckCircle size={14} style={{ color: "var(--success-500)" }} /> :
+    state === "warn" ? <I.AlertCircle size={14} style={{ color: "var(--warn-500)" }} /> :
+    state === "danger" ? <I.XCircle size={14} style={{ color: "var(--danger-500)" }} /> :
+    <I.Clock size={14} style={{ color: "var(--ink-400)" }} />;
+
   return (
-    <div className="card card-pad">
-      <div className="between" style={{ marginBottom: 4 }}>
-        <h2 style={{ margin: 0, fontSize: "var(--font-lg)", fontWeight: 650, color: "var(--ink-900)", letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>Patient PWA</h2>
-        <span style={{ fontSize: 11, color: "var(--ink-500)", display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <I.Smartphone size={13} /> Live
+    <div className="card visit-status">
+      <div className="card-head">
+        <div>
+          <h2>{t("vs.title")}</h2>
+          <div className="sub">{t("vs.subtitle")}</div>
+        </div>
+        <span className="vs-live">
+          <I.Smartphone size={12} /> {t("pwa.live")}
         </span>
       </div>
-      <div className="pwa-log">
-        {patient.pwaLog.map((l, i) => (
-          <div key={i} className="log-row">
-            {iconFor(l.state)}
-            <div className="log-text">{l.text}</div>
-            <div className="log-time">{l.time}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-export function Handoff({ patient }) {
-  const steps = [
-    { label: "Reception",   icon: "User",       sub: ["New", "Done", "Done", "Done"] },
-    { label: "Patient PWA", icon: "Headset",    sub: ["Pending", "In progress", "Done", "Done"] },
-    { label: "Nurse",       icon: "Stethoscope",sub: ["Pending", "Pending", "In progress", "Done"] },
-    { label: "Lab",         icon: "Flask",      sub: ["Pending", "Pending", "Pending", "In progress"] },
-  ];
-  return (
-    <div className="card card-pad">
-      <h2 style={{ margin: 0, fontSize: "var(--font-lg)", fontWeight: 650, color: "var(--ink-900)", letterSpacing: "-0.01em", marginBottom: 4 }}>Handoff</h2>
-      <div className="handoff">
-        {steps.map((s, i) => {
-          const Ico = I[s.icon];
-          const state = patient.handoffStates[i] || "pending";
-          const cls = state === "done" ? "done" : state === "in-progress" ? "active" : state === "blocked" ? "blocked" : "";
-          return (
-            <React.Fragment key={i}>
-              <div className={"handoff-step " + cls}>
-                <div className="h-icon">
-                  <Ico size={18} />
-                  {patient.handoff === i && <span className="h-num">{i + 1}</span>}
+      <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 0 }}>
+        {/* Section 1: Handoff (most important — shows current step) */}
+        <div className="vs-section">
+          <div className="vs-section-head">
+            <div className="vs-section-title">{t("handoff.title")}</div>
+            <button className="vs-link-btn" onClick={onViewTimeline}>
+              {t("handoff.viewTimeline")} <I.ChevronRight size={12} />
+            </button>
+          </div>
+          <div className="handoff handoff-compact">
+            {handoffSteps.map((s, i) => {
+              const Ico = I[s.icon];
+              const state = patient.handoffStates[i] || "pending";
+              const cls = state === "done" ? "done" : state === "in-progress" ? "active" : state === "blocked" ? "blocked" : "";
+              return (
+                <React.Fragment key={i}>
+                  <div className={"handoff-step " + cls}>
+                    <div className="h-icon">
+                      <Ico size={16} />
+                      {patient.handoff === i && <span className="h-num">{i + 1}</span>}
+                    </div>
+                    <div className="h-label">{t(s.labelKey)}</div>
+                    <div className="h-state">{stateLabel(state, i)}</div>
+                  </div>
+                  {i < handoffSteps.length - 1 && <I.ArrowRight size={12} className="handoff-arrow" />}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Section 2: Required Documents */}
+        <div className="vs-section">
+          <div className="vs-section-head">
+            <div className="vs-section-title">{t("docs.title")}</div>
+            <span className="vs-count">{docsOk}/{docsTotal}</span>
+          </div>
+          <div className="doc-list compact">
+            {docs.map(d => {
+              const ok = d.state === "ok";
+              return (
+                <div key={d.key} className="doc-row">
+                  <div className={"doc-check " + (ok ? "ok" : "pending")}>
+                    {ok ? <I.Check size={10} strokeWidth={2.5} /> : <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--ink-300)" }} />}
+                  </div>
+                  <div className="doc-name">{t(d.nameKey)}</div>
+                  <div className={"doc-status " + (ok ? "ok" : "pending")}>{ok ? "" : t("docs.pending")}</div>
                 </div>
-                <div className="h-label">{s.label}</div>
-                <div className="h-state">
-                  {state === "done" ? "Done"
-                    : state === "in-progress" ? "In progress"
-                    : state === "blocked" ? "Blocked"
-                    : i === 0 ? "New" : "Pending"}
-                </div>
+              );
+            })}
+          </div>
+          <button className="vs-link-btn vs-link-block" onClick={onViewDocs}>
+            <span>{t("docs.viewAll")}</span>
+            <I.ChevronRight size={12} />
+          </button>
+        </div>
+
+        {/* Section 3: Patient PWA log (least important — collapsed style) */}
+        <div className="vs-section">
+          <div className="vs-section-head">
+            <div className="vs-section-title">{t("pwa.title")}</div>
+          </div>
+          <div className="pwa-log compact">
+            {patient.pwaLog.slice(0, 3).map((l, i) => (
+              <div key={i} className="log-row">
+                {iconFor(l.state)}
+                <div className="log-text">{l.text}</div>
+                <div className="log-time">{l.time}</div>
               </div>
-              {i < steps.length - 1 && (
-                <I.ArrowRight size={14} className="handoff-arrow" />
-              )}
-            </React.Fragment>
-          );
-        })}
+            ))}
+          </div>
+        </div>
       </div>
-      <button className="row" style={{ marginTop: 16, color: "var(--brand-600)", fontSize: 12.5, fontWeight: 550, background: "transparent", border: "none", padding: 0, justifyContent: "space-between", width: "100%" }}>
-        <span>View full timeline</span>
-        <I.ChevronRight size={14} />
-      </button>
+      <div style={{ height: "var(--card-pad)" }} />
     </div>
   );
 }
