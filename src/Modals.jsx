@@ -1,7 +1,7 @@
 // === Modals + Toasts ===
 import React, { useState, useEffect } from "react";
 import { I } from "./icons";
-import { CountryCodeSelect, VisitReasonPills, VISIT_REASONS } from "./shared";
+import { CountryCodeSelect, VisitReasonPills, VISIT_REASONS, Kbd, MOD_LABEL } from "./shared";
 import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
 
 export function NewWalkInModal({ open, onClose, onCreate }) {
@@ -207,6 +207,72 @@ export function ConfirmConsentModal({ open, onClose, onConfirm, patient }) {
           <button className="btn btn-primary" onClick={onConfirm}>
             <I.Check size={15} /> {t("modal.consent.cta")}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// === HotkeyCheatsheetModal ===
+// Press "?" anywhere (when not typing) to open. Lists every shortcut grouped
+// by layer (Anywhere / Inside Add Test). Esc closes.
+export function HotkeyCheatsheetModal({ open, onClose }) {
+  const t = useLang();
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+
+  const Row = ({ keys, label }) => (
+    <div className="cheatsheet-row">
+      <div className="cheatsheet-keys">
+        {keys.map((k, i) => (
+          <React.Fragment key={i}>
+            {k === "+" ? <span className="cheatsheet-plus">+</span> : <Kbd>{k}</Kbd>}
+          </React.Fragment>
+        ))}
+      </div>
+      <div className="cheatsheet-label">{label}</div>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 560, padding: 0 }} role="dialog" aria-modal="true" aria-label={t("hotkey.cheatsheet.title")}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              <I.KeyRound size={16} /> {t("hotkey.cheatsheet.title")}
+            </h3>
+            <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>{t("hotkey.cheatsheet.sub")}</div>
+          </div>
+          <button onClick={onClose} className="icon-btn"><I.X size={16} /></button>
+        </div>
+        <div style={{ padding: "16px 20px", maxHeight: "70vh", overflowY: "auto" }}>
+          <div className="cheatsheet-section-title">{t("hotkey.section.global")}</div>
+          <Row keys={["T"]} label={t("hotkey.action.openAdd")} />
+          <Row keys={["Alt", "+", "T"]} label={t("hotkey.action.openAddAlt")} />
+          <Row keys={[MOD_LABEL, "+", "K"]} label={t("hotkey.action.focusSearch")} />
+          <Row keys={["?"]} label={t("hotkey.action.cheatsheet")} />
+          <Row keys={["Esc"]} label={t("hotkey.action.closeModal")} />
+
+          <div className="cheatsheet-section-title" style={{ marginTop: 18 }}>{t("hotkey.section.modal")}</div>
+          <Row keys={["↑", "↓"]} label={t("hotkey.action.navigate")} />
+          <Row keys={["Space"]} label={t("hotkey.action.toggleSelect")} />
+          <Row keys={["↵"]} label={t("hotkey.action.commit")} />
+          <Row keys={["⇧", "+", "↵"]} label={t("hotkey.action.markNext")} />
+          <Row keys={["1", "–", "6"]} label={t("hotkey.action.tab")} />
+          <Row keys={[MOD_LABEL, "+", "A"]} label={t("hotkey.action.selectAll")} />
+          <Row keys={["/"]} label={t("hotkey.action.focusModalSearch")} />
+        </div>
+        <div style={{ padding: "10px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+          <div style={{ flex: 1, fontSize: 11.5, color: "var(--ink-500)" }}>
+            {t("hotkey.cheatsheet.foot")}
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")} <Kbd>Esc</Kbd></button>
         </div>
       </div>
     </div>

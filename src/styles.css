@@ -3046,3 +3046,139 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     padding-top: 2px;
   }
 }
+
+/* ============================================================
+   Hotkeys (Round 11) — <Kbd> chips, footer hint strip,
+   highlighted rows in Add Test modal, cheatsheet styling.
+   ============================================================ */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin: 0 2px;
+  font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-700);
+  background: var(--surface-2, #f5f6f8);
+  border: 1px solid var(--border, #e2e4e9);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+}
+/* Tone-down kbd inside ghost buttons so it doesn't dominate the label */
+.btn .kbd {
+  margin-left: 6px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 10.5px;
+  height: 16px;
+  min-width: 16px;
+}
+.btn-primary .kbd {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Tab-number badge on the kind tabs in Add Test modal */
+.kbd-tab-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  font-family: "SF Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink-500);
+  background: var(--surface-2, #f5f6f8);
+  border: 1px solid var(--border, #e2e4e9);
+  border-radius: 3px;
+  line-height: 1;
+}
+
+/* Footer hint strip */
+.kbd-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: 0 0 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed var(--border, #e2e4e9);
+  font-size: 11.5px;
+  color: var(--ink-500);
+}
+.kbd-strip > span {
+  display: inline-flex;
+  align-items: center;
+}
+.kbd-strip-sep {
+  color: var(--ink-300);
+  margin: 0 2px;
+}
+
+/* Add Test modal footer needs a vertical layout to fit the kbd strip */
+.add-modal-foot { display: flex; flex-direction: column; gap: 4px; }
+.add-modal-foot-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Highlighted row inside Add Test modal */
+.add-modal-row {
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.add-modal-row.is-highlight {
+  box-shadow: 0 0 0 1px var(--brand-200) inset;
+}
+
+/* Cheatsheet modal */
+.cheatsheet-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  margin-bottom: 6px;
+}
+.cheatsheet-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border, #f1f2f5);
+}
+.cheatsheet-row:last-child { border-bottom: none; }
+.cheatsheet-keys {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.cheatsheet-plus {
+  margin: 0 2px;
+  font-size: 11px;
+  color: var(--ink-400);
+}
+.cheatsheet-label {
+  font-size: 12.5px;
+  color: var(--ink-700);
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .kbd-strip { font-size: 10.5px; }
+  .cheatsheet-row { grid-template-columns: 110px 1fr; }
+  .add-modal-foot-row { flex-direction: column; align-items: stretch; gap: 8px; }
+}

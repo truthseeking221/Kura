@@ -1,9 +1,9 @@
 // === OrderCart — sticky right rail (v4+v5 Round 9) ===
 // Single component: cart line items, promo (multi non-colliding), bill split,
 // payment (KHQR + Cash), pregnancy consent gate, primary CTA "Check in & confirm order"
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
-import { QRGlyph, mockInsurerDecide, playDrawerDing } from "./shared";
+import { QRGlyph, mockInsurerDecide, playDrawerDing, Kbd, useKeydown, isTypingTarget } from "./shared";
 import { useLang } from "./i18n";
 
 const KHR_RATE = 4100;
@@ -242,20 +242,122 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
   const [kind, setKind] = useState("lab");
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState(new Set());
-  useEffect(() => { if (open) { setPicked(new Set()); setQ(""); setKind("lab"); } }, [open]);
-  if (!open) return null;
+  const [highlight, setHighlight] = useState(0);
+  const searchRef = useRef(null);
+  const listRef = useRef(null);
+
+  useEffect(() => { if (open) { setPicked(new Set()); setQ(""); setKind("lab"); setHighlight(0); } }, [open]);
+  // Reset highlight whenever the visible list changes
+  useEffect(() => { setHighlight(0); }, [kind, q]);
+
+  // Compute filtered list (must be before hotkey effect that closes over it)
   const filtered = ORDER_CATALOG.filter(c =>
     c.kind === kind && (!q || c.name.toLowerCase().includes(q.toLowerCase()))
   );
+  // Selectable = visible AND not already in cart
+  const selectable = filtered.filter(c => !existingIds.has(c.id));
+
   const toggle = (id) => {
-    const next = new Set(picked);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setPicked(next);
+    setPicked(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
+
   const handleAdd = () => onAdd(ORDER_CATALOG.filter(c => picked.has(c.id)));
+
+  // Scroll the highlighted row into view whenever it changes
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current?.querySelector(`[data-row-idx="${highlight}"]`);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [highlight, open, kind, q]);
+
+  // Modal-scoped keyboard handler
+  useKeydown((e) => {
+    if (!open) return;
+    const k = e.key;
+    const mod = e.metaKey || e.ctrlKey;
+    const inSearch = document.activeElement === searchRef.current;
+
+    // Close
+    if (k === "Escape") { e.preventDefault(); onClose(); return; }
+
+    // Navigation
+    if (k === "ArrowDown") {
+      e.preventDefault();
+      setHighlight(h => Math.min(h + 1, Math.max(0, filtered.length - 1)));
+      return;
+    }
+    if (k === "ArrowUp") {
+      e.preventDefault();
+      setHighlight(h => Math.max(h - 1, 0));
+      return;
+    }
+
+    // Space → toggle highlighted row (only outside search input)
+    if (k === " " && !inSearch) {
+      const c = filtered[highlight];
+      if (c && !existingIds.has(c.id)) { e.preventDefault(); toggle(c.id); }
+      return;
+    }
+
+    // Enter → commit picks (or highlighted row if no picks); Shift+Enter → mark & continue
+    if (k === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Mark highlighted, clear search, refocus, keep modal open
+        const c = filtered[highlight];
+        if (c && !existingIds.has(c.id)) {
+          toggle(c.id);
+          setQ("");
+          setTimeout(() => searchRef.current?.focus(), 0);
+        }
+        return;
+      }
+      // Plain Enter
+      if (picked.size > 0) {
+        handleAdd();
+      } else {
+        const c = filtered[highlight];
+        if (c && !existingIds.has(c.id)) onAdd([c]);
+      }
+      return;
+    }
+
+    // ⌘/Ctrl+A → select all visible (selectable) rows
+    if (mod && (k === "a" || k === "A")) {
+      e.preventDefault();
+      setPicked(prev => {
+        const next = new Set(prev);
+        const allSelected = selectable.length > 0 && selectable.every(c => next.has(c.id));
+        if (allSelected) selectable.forEach(c => next.delete(c.id));
+        else selectable.forEach(c => next.add(c.id));
+        return next;
+      });
+      return;
+    }
+
+    // Number keys 1..6 → jump category tab (only when search is empty + not modifier)
+    if (!mod && !e.shiftKey && /^[1-6]$/.test(k) && q === "") {
+      const idx = parseInt(k, 10) - 1;
+      if (KIND_ORDER[idx]) { e.preventDefault(); setKind(KIND_ORDER[idx]); }
+      return;
+    }
+
+    // "/" → focus search (when not already focused)
+    if (k === "/" && !inSearch && !mod) {
+      e.preventDefault();
+      searchRef.current?.focus();
+      return;
+    }
+  }, [open, filtered, highlight, picked, q, kind, existingIds]);
+
+  if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 720, maxHeight: "82vh", display: "flex", flexDirection: "column", padding: 0 }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 720, maxHeight: "82vh", display: "flex", flexDirection: "column", padding: 0 }} role="dialog" aria-modal="true" aria-label={t("cart.addModal.title")}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{t("cart.addModal.title")}</h3>
@@ -264,12 +366,13 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
           <button onClick={onClose} className="icon-btn"><I.X size={16} /></button>
         </div>
         <div style={{ display: "flex", gap: 4, padding: "10px 20px", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
-          {KIND_ORDER.map(k => {
+          {KIND_ORDER.map((k, i) => {
             const m = KIND_META[k];
             const Ico = I[m.icon];
             const active = kind === k;
             return (
               <button key={k} type="button" onClick={() => setKind(k)}
+                title={t("hotkey.tip.tabKey", { n: i + 1 })}
                 style={{
                   background: active ? "var(--brand-50)" : "transparent",
                   color: active ? "var(--brand-700)" : "var(--ink-600)",
@@ -280,6 +383,7 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
                   whiteSpace: "nowrap",
                 }}>
                 <Ico size={13} /> {t(m.labelKey)}
+                <span className="kbd-tab-num" aria-hidden="true">{i + 1}</span>
               </button>
             );
           })}
@@ -287,28 +391,44 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
         <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)" }}>
           <div className="search" style={{ height: 36 }}>
             <I.Search size={14} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cart.addModal.search", { kind: t(KIND_META[kind].labelKey).toLowerCase() })} autoFocus />
+            <input
+              ref={searchRef}
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder={t("cart.addModal.search", { kind: t(KIND_META[kind].labelKey).toLowerCase() })}
+              autoFocus
+              aria-keyshortcuts="ArrowDown ArrowUp Enter Shift+Enter Escape"
+            />
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 240 }}>
+        <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 240 }}>
           {filtered.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "var(--ink-500)", fontSize: 13 }}>
               {t("cart.addModal.noMatch", { kind: t(KIND_META[kind].labelKey) })}
             </div>
-          ) : filtered.map(c => {
+          ) : filtered.map((c, idx) => {
             const inCart = existingIds.has(c.id);
             const isPicked = picked.has(c.id);
+            const isHighlight = idx === highlight;
             const tags = preAnalyticReqs(c);
             return (
-              <button key={c.id} type="button" onClick={() => !inCart && toggle(c.id)} disabled={inCart}
+              <button
+                key={c.id}
+                type="button"
+                data-row-idx={idx}
+                onClick={() => { setHighlight(idx); if (!inCart) toggle(c.id); }}
+                onMouseEnter={() => setHighlight(idx)}
+                disabled={inCart}
+                className={"add-modal-row" + (isHighlight ? " is-highlight" : "")}
                 style={{
                   width: "100%",
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 12px",
-                  background: isPicked ? "var(--brand-50)" : "transparent",
-                  border: "1px solid " + (isPicked ? "var(--brand-200)" : "transparent"),
+                  background: isPicked ? "var(--brand-50)" : (isHighlight ? "var(--surface-2)" : "transparent"),
+                  border: "1px solid " + (isPicked ? "var(--brand-200)" : (isHighlight ? "var(--brand-200)" : "transparent")),
                   borderRadius: 7, cursor: inCart ? "default" : "pointer",
                   opacity: inCart ? 0.55 : 1, textAlign: "left", marginBottom: 2,
+                  outline: "none",
                 }}>
                 <div style={{
                   width: 18, height: 18, borderRadius: 4,
@@ -342,15 +462,28 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
             );
           })}
         </div>
-        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
-            {picked.size === 0 ? t("cart.addModal.noneSelected") : t("cart.addModal.selectedCount", { n: picked.size })}
+        <div className="add-modal-foot" style={{ padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
+          <div className="kbd-strip" aria-hidden="true">
+            <span><Kbd>↑</Kbd><Kbd>↓</Kbd> {t("hint.navigate")}</span>
+            <span className="kbd-strip-sep">·</span>
+            <span><Kbd>Space</Kbd> {t("hint.select")}</span>
+            <span className="kbd-strip-sep">·</span>
+            <span><Kbd>↵</Kbd> {t("hint.add")}</span>
+            <span className="kbd-strip-sep">·</span>
+            <span><Kbd>⇧</Kbd><Kbd>↵</Kbd> {t("hint.addNext")}</span>
+            <span className="kbd-strip-sep">·</span>
+            <span><Kbd>Esc</Kbd> {t("hint.close")}</span>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")}</button>
-            <button className="btn btn-primary" onClick={handleAdd} disabled={picked.size === 0}>
-              <I.Plus size={14} /> {t("cart.addModal.addToCart")}
-            </button>
+          <div className="add-modal-foot-row">
+            <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
+              {picked.size === 0 ? t("cart.addModal.noneSelected") : t("cart.addModal.selectedCount", { n: picked.size })}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")} <Kbd>Esc</Kbd></button>
+              <button className="btn btn-primary" onClick={handleAdd} disabled={picked.size === 0}>
+                <I.Plus size={14} /> {t("cart.addModal.addToCart")} <Kbd>↵</Kbd>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -890,6 +1023,26 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
 
   const setCart = (next) => persistCart(patient, onUpdate, next);
 
+  // Open the Add Test modal from anywhere via keyboard.
+  // We deliberately AVOID Cmd/Ctrl+T (the browser owns that for "new tab" — preventDefault
+  // can't reclaim it on most platforms). Two options that ARE free:
+  //   • Plain "t"   when no text field is focused (Linear / GitHub-style single-key)
+  //   • Alt+T       always — works even while typing, never conflicts with the browser
+  useKeydown((e) => {
+    if (addOpen) return;
+    const overlays = document.querySelectorAll(".modal-overlay");
+    if (overlays.length > 0) return;
+
+    const altT = e.altKey && (e.key === "t" || e.key === "T" || e.code === "KeyT");
+    const plainT = !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey
+                   && (e.key === "t" || e.key === "T")
+                   && !isTypingTarget();
+    if (altT || plainT) {
+      e.preventDefault();
+      setAddOpen(true);
+    }
+  }, [addOpen]);
+
   const itemCount = cart.items.length;
   const grouped = {};
   cart.items.forEach(i => { (grouped[i.kind] = grouped[i.kind] || []).push(i); });
@@ -1109,8 +1262,10 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               );
             })}
             <button className="btn btn-ghost" onClick={() => setAddOpen(true)}
+              title={t("hotkey.tip.openAdd")}
               style={{ width: "100%", marginTop: 10, marginBottom: 10, borderStyle: "dashed", height: 34, fontSize: 12, fontWeight: 600, color: "var(--brand-600)" }}>
               <I.Plus size={13} /> {t("cart.addTests")}
+              <Kbd>T</Kbd>
             </button>
           </div>
 

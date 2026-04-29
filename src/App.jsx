@@ -6,11 +6,12 @@ import { Sidebar, Topbar, GoalBar } from "./Layout";
 import { FastCheckIn } from "./Center";
 import { VisitDetails, Insurance, PriorResults } from "./Cards";
 import { OrderCart } from "./OrderCart";
-import { TatCompact, TeleconsultCard } from "./shared";
+import { TatCompact, TeleconsultCard, useKeydown, isTypingTarget } from "./shared";
 import {
   NewWalkInModal,
   AddServiceModal,
   ConfirmConsentModal,
+  HotkeyCheatsheetModal,
   ToastStack,
 } from "./Modals";
 import { LangProvider, useLang } from "./i18n";
@@ -53,6 +54,7 @@ export default function App() {
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
 
   const [station, setStation] = useState("PSC-01");
   const [shift, setShift] = useState("morning");
@@ -66,6 +68,19 @@ export default function App() {
   const updatePatient = (next) => {
     setPatients(ps => ps.map(p => p.id === next.id ? next : p));
   };
+
+  // Global hotkey: "?" → open the keyboard-shortcuts cheatsheet.
+  // Skipped while typing (Khmer IME / search inputs).
+  useKeydown((e) => {
+    if (e.key !== "?") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (isTypingTarget()) return;
+    // Don't open over another modal (Esc that one first).
+    const overlays = document.querySelectorAll(".modal-overlay");
+    if (overlays.length > 0) return;
+    e.preventDefault();
+    setCheatsheetOpen(true);
+  }, []);
 
   const pushToast = (text, tone = "success") => {
     const id = toastIdRef.current++;
@@ -314,6 +329,7 @@ export default function App() {
       <NewWalkInModal open={walkInOpen} onClose={() => setWalkInOpen(false)} onCreate={handleCreateWalkIn} />
       <AddServiceModal open={serviceOpen} onClose={() => setServiceOpen(false)} onAdd={handleAddServices} />
       <ConfirmConsentModal open={consentOpen} onClose={() => setConsentOpen(false)} onConfirm={unblockConsent} patient={active} />
+      <HotkeyCheatsheetModal open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
       <ToastStack toasts={toasts} onClose={closeToast} />
 
       {/* === Blank-state tester === */}

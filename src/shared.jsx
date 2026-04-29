@@ -3,6 +3,46 @@ import React, { useState, useEffect, useRef } from "react";
 import { I } from "./icons";
 import { useLang } from "./i18n";
 
+// === Platform helper (Mac vs PC) ===
+export const IS_MAC = typeof navigator !== "undefined" &&
+  /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent || "");
+export const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+
+// === Keyboard primitives ===
+// <Kbd>⌘T</Kbd> — small chip used in hint strips, buttons, cheatsheet.
+export function Kbd({ children }) {
+  return <kbd className="kbd">{children}</kbd>;
+}
+
+// useKeydown(handler, deps)
+//  - handler runs on every window keydown
+//  - IME composition (Khmer / Vietnamese) is silently swallowed so
+//    in-flight character composition never fires a hotkey by accident
+//  - caller is responsible for checking if document.activeElement is an input
+//    when they want to skip while typing
+export function useKeydown(handler, deps = []) {
+  useEffect(() => {
+    const wrapped = (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      handler(e);
+    };
+    window.addEventListener("keydown", wrapped);
+    return () => window.removeEventListener("keydown", wrapped);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+// Helper — true when the user is typing into a real text field.
+// Use to gate single-letter shortcuts so they don't fire mid-search.
+export function isTypingTarget(el) {
+  if (!el) el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
+
 // === Fuzzy name match (Dice's coefficient on bigrams) ===
 // Returns a similarity score 0..1.
 export function fuzzyNameScore(a, b) {
