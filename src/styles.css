@@ -3182,3 +3182,302 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .cheatsheet-row { grid-template-columns: 110px 1fr; }
   .add-modal-foot-row { flex-direction: column; align-items: stretch; gap: 8px; }
 }
+
+/* =============================================================
+   Round 12 — Cart compact rows + collapsible category headers
+   ============================================================= */
+
+/* Make the kind-tab num-badge readable in light/dark backgrounds */
+.cart-group {
+  margin-bottom: 6px;
+}
+/* Header is now a button (full-row hit target) */
+.cart-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  user-select: none;
+  transition: background 80ms ease;
+}
+.cart-group-head:hover {
+  background: var(--surface-2, #f5f6f8);
+}
+.cart-group-head:focus-visible {
+  outline: 2px solid var(--brand-300, #93c5fd);
+  outline-offset: 1px;
+}
+.cart-group-chev {
+  flex-shrink: 0;
+  transition: transform 140ms ease;
+}
+.cart-group-chev.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Always-compact row (~36px) */
+.cart-line.cart-line-compact {
+  padding: 0;
+}
+.cart-line-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto 22px;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 4px 0 6px;
+}
+.cart-line-ico {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.cart-line-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.cart-line-name-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-900);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cart-line-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+.cart-line-badge-warn    { color: var(--warn-600,    #b45309); background: var(--warn-50);    border-color: var(--warn-500); }
+.cart-line-badge-danger  { color: var(--danger-600);          background: var(--danger-50);  border-color: var(--danger-500); }
+.cart-line-badge-success { color: var(--success-600);         background: var(--success-50); border-color: var(--success-500); }
+.cart-line-badge-info    { color: var(--brand-700);           background: var(--brand-50);   border-color: var(--brand-200); }
+
+.cart-line-price {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* The remove [×] is always visible in the row layout (per v7 spec).
+   Idle: subtle gray. Hover: red destructive tone. */
+.cart-line-row .cart-line-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-400);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 80ms ease, background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+.cart-line-row:hover .cart-line-remove,
+.cart-line-row:focus-within .cart-line-remove {
+  opacity: 1;
+}
+.cart-line-row .cart-line-remove:hover {
+  background: var(--danger-50);
+  color: var(--danger-600);
+  border-color: var(--danger-500);
+  opacity: 1;
+}
+.cart-line-row .cart-line-remove.disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+/* Inline expanded panels for validation / policy info */
+.cart-line-expand {
+  margin: 2px 6px 6px 30px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--ink-700);
+  line-height: 1.4;
+}
+.cart-line-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: 1px dashed var(--brand-200);
+  color: var(--brand-700);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cart-line-action-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+.cart-line-action-info.success { color: var(--success-600); }
+
+/* Collapsed group → hide body (already controlled by JSX) but keep header readable */
+.cart-group.is-collapsed .cart-group-head {
+  background: transparent;
+}
+
+/* =============================================================
+   Round 12 #2 — DisabledTooltip
+   ============================================================= */
+.disabled-tip-wrap {
+  position: relative;
+}
+.disabled-tip-wrap.is-disabled > * {
+  pointer-events: auto; /* keep hover on the underlying child */
+}
+.disabled-tip {
+  position: absolute;
+  z-index: 50;
+  background: #1F2937;
+  color: white;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  max-width: 240px;
+  width: max-content;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  pointer-events: none;
+  animation: disabled-tip-fade 120ms ease-out;
+}
+@keyframes disabled-tip-fade {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.disabled-tip-top {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.disabled-tip-bottom {
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.disabled-tip-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: white;
+}
+.disabled-tip-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+  color: rgba(255, 255, 255, 0.92);
+}
+.disabled-tip-list li { margin: 2px 0; }
+.disabled-tip-hint {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+.disabled-tip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+}
+.disabled-tip-arrow-top {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: #1F2937;
+}
+.disabled-tip-arrow-bottom {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: #1F2937;
+}
+
+/* =============================================================
+   Round 12 #3 — Mobile field: via-Telegram label + conflict prompt
+   ============================================================= */
+.mobile-via {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-500);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mobile-conflict {
+  margin-top: 8px;
+  border: 1px solid var(--warn-500);
+  background: var(--warn-50);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--ink-800);
+}
+.mobile-conflict-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: var(--warn-700, #92400e);
+  margin-bottom: 6px;
+}
+.mobile-conflict-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 1px 0;
+}
+.mobile-conflict-label {
+  color: var(--ink-600);
+  font-weight: 500;
+}
+.mobile-conflict-val {
+  font-family: "SF Mono", ui-monospace, monospace;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.mobile-conflict-q {
+  margin-top: 6px;
+  font-weight: 600;
+  color: var(--ink-800);
+}
+.mobile-conflict-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

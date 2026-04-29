@@ -226,12 +226,18 @@ function ScannedIdCard({ patient, onRescan, t }) {
 }
 
 // === Mobile field with OTP verification ===
-function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, otpState, setOtpState }) {
+// Round 12 #3 — accepts `patient`/`onUpdate` so it can render the
+// "via Telegram" badge when verification came from the bot, the [✎] Edit
+// button (which clears Telegram source), and the inline conflict prompt
+// when the bot returned a different number than the nurse typed.
+function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, otpState, setOtpState, patient, onUpdate }) {
   const t = useLang();
   const [code, setCode] = React.useState("");
   const [countdown, setCountdown] = React.useState(0);
   const status = otpState.status;
   const phoneValid = phoneNumber.replace(/\D/g, "").length >= 8;
+  const verifiedViaTelegram = patient?.mobileVerifiedVia === "telegram_bot";
+  const conflict = patient?.mobileConflict;
 
   React.useEffect(() => {
     if (status !== "sent") return;
@@ -269,6 +275,32 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
     setOtpState({ status: "idle" });
     setCode("");
     setCountdown(0);
+    // Round 12 #3 — clicking [✎] returns the field to "Send OTP" unverified.
+    // Drop any Telegram-source verification so the badge doesn't linger.
+    if (patient && onUpdate && (verifiedViaTelegram || patient.otpVerified)) {
+      onUpdate({ ...patient, otpVerified: false, mobileVerifiedVia: null });
+    }
+  };
+
+  // Conflict resolutions
+  const useTelegramNumber = () => {
+    const c = patient?.mobileConflict;
+    if (!c) return;
+    onUpdate({
+      ...patient,
+      countryCode: c.telegramCC,
+      phoneNumber: c.telegramPhone,
+      mobile: c.telegramCC + " " + c.telegramPhone,
+      otpVerified: true,
+      mobileVerifiedVia: "telegram_bot",
+      mobileConflict: null,
+    });
+    setOtpState({ status: "verified" });
+  };
+  const keepEnteredNumber = () => {
+    if (!patient) return;
+    // Drop the conflict; OTP still required for the manually-entered number.
+    onUpdate({ ...patient, mobileConflict: null });
   };
 
   const mins = Math.floor(countdown / 60);
@@ -307,7 +339,7 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
               }}>
                 <I.Check size={11} strokeWidth={3} /> {t("otp.verified")}
               </span>
-              <button type="button" onClick={resetToIdle} title="Edit number" style={{
+              <button type="button" onClick={resetToIdle} title={t("mobile.editToReverify")} style={{
                 background: "transparent", border: "none", padding: 4, cursor: "pointer",
                 color: "var(--ink-500)", display: "grid", placeItems: "center",
               }}>
@@ -380,6 +412,39 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
             paddingTop: 10, fontWeight: 550, whiteSpace: "nowrap",
           }}>
             {status === "expired" ? t("otp.expired") : `${t("otp.resendIn")} ${timerLabel}`}
+          </div>
+        </div>
+      )}
+
+      {/* Round 12 #3 — "via Telegram" label below the field when verified by bot */}
+      {status === "verified" && verifiedViaTelegram && !conflict && (
+        <div className="mobile-via">
+          <I.Send size={10} /> {t("mobile.verifiedViaTelegram")}
+        </div>
+      )}
+
+      {/* Round 12 #3 — Inline conflict prompt: bot returned a different number */}
+      {conflict && (
+        <div className="mobile-conflict" role="alert">
+          <div className="mobile-conflict-title">
+            <I.AlertTriangle size={11} /> {t("mobile.conflict.title")}
+          </div>
+          <div className="mobile-conflict-row">
+            <span className="mobile-conflict-label">{t("mobile.conflict.entered")}</span>
+            <span className="mobile-conflict-val">{conflict.entered}</span>
+          </div>
+          <div className="mobile-conflict-row">
+            <span className="mobile-conflict-label">{t("mobile.conflict.viaTg")}</span>
+            <span className="mobile-conflict-val">{conflict.viaTelegram}</span>
+          </div>
+          <div className="mobile-conflict-q">{t("mobile.conflict.use")}</div>
+          <div className="mobile-conflict-actions">
+            <button type="button" className="btn btn-primary btn-sm" onClick={useTelegramNumber}>
+              <I.Check size={11} /> {t("mobile.conflict.useTg")}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={keepEnteredNumber}>
+              {t("mobile.conflict.keep")}
+            </button>
           </div>
         </div>
       )}
@@ -477,12 +542,48 @@ function TelegramCaptureCard({ patient, onUpdate }) {
     setTimeout(() => { setSending(false); setSent(true); }, 600);
   };
 
+  // Round 12 #3 — when the patient taps "Share my number" inside the Telegram
+  // bot flow, Telegram returns the registered phone alongside the username.
+  // We mock that here with a fixed bot-returned number. Use it to:
+  //   1. Override the Mobile field (no OTP needed — Telegram is the verifier)
+  //   2. Mark patient.otpVerified = true via mobileVerifiedVia = "telegram_bot"
+  // If the nurse already typed a different number, surface an inline conflict
+  // prompt instead of silently overwriting.
+  const TG_BOT_CC = "+855";
+  const TG_BOT_PHONE = "92 415 678";
   const verify = (val) => {
     setCode(val);
     if (val.length === 6) {
       if (val === "123456" || val === "000000") {
         setWrong(false);
-        onUpdate({ ...patient, telegramVerified: true });
+        const currentRaw = (patient.phoneNumber || "").replace(/\D/g, "");
+        const botRaw = TG_BOT_PHONE.replace(/\D/g, "");
+        const noConflict = !currentRaw || currentRaw === botRaw;
+        if (noConflict) {
+          onUpdate({
+            ...patient,
+            telegramVerified: true,
+            telegramPhone: TG_BOT_PHONE,
+            countryCode: TG_BOT_CC,
+            phoneNumber: TG_BOT_PHONE,
+            mobile: TG_BOT_CC + " " + TG_BOT_PHONE,
+            otpVerified: true,
+            mobileVerifiedVia: "telegram_bot",
+            mobileConflict: null,
+          });
+        } else {
+          onUpdate({
+            ...patient,
+            telegramVerified: true,
+            telegramPhone: TG_BOT_PHONE,
+            mobileConflict: {
+              entered: (patient.countryCode || "+855") + " " + (patient.phoneNumber || ""),
+              viaTelegram: TG_BOT_CC + " " + TG_BOT_PHONE,
+              telegramCC: TG_BOT_CC,
+              telegramPhone: TG_BOT_PHONE,
+            },
+          });
+        }
       } else {
         setWrong(true);
       }
@@ -942,6 +1043,8 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 error={errors.phone}
                 otpState={otpState}
                 setOtpState={setOtpState}
+                patient={patient}
+                onUpdate={onUpdate}
               />
             </div>
 

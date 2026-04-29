@@ -3,7 +3,7 @@
 // payment (KHQR + Cash), pregnancy consent gate, primary CTA "Check in & confirm order"
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
-import { QRGlyph, mockInsurerDecide, playDrawerDing, Kbd, useKeydown, isTypingTarget } from "./shared";
+import { QRGlyph, mockInsurerDecide, playDrawerDing, Kbd, useKeydown, isTypingTarget, DisabledTooltip } from "./shared";
 import { useLang } from "./i18n";
 
 const KHR_RATE = 4100;
@@ -384,7 +384,7 @@ function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
           </div>
           <button onClick={onClose} className="icon-btn"><I.X size={16} /></button>
         </div>
-        <div style={{ display: "flex", gap: 4, padding: "10px 20px", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "10px 20px", borderBottom: "1px solid var(--border)" }}>
           {KIND_ORDER.map((k, i) => {
             const m = KIND_META[k];
             const Ico = I[m.icon];
@@ -730,111 +730,117 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 }
 
 // === Cart Line ===
+// Round 12 #1 — Always compact (~36px) cart row.
+//   Layout: [icon] name [status icons] · price · [×]
+//   Payer tag is tucked into a hover tooltip (title attr on the row).
+//   Validation / policy info collapses to small badge icons that expand inline on click.
 function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, hideValidationLabel }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
   const Ico = I[meta.icon];
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
-  // Imaging requires patient sign-off (chain of custody)
   const requiresValidation = item.kind === "imaging";
   const validationState = item.validationState || "idle"; // idle | sending | sent | signed
-  // Out-of-policy notice (when payer = insurance)
   const showPolicyNote = item.payer === "insurance" && policyDecision && policyDecision.status !== "covered";
-  const [policyOpen, setPolicyOpen] = useState(false);
+  const [openExpand, setOpenExpand] = useState(null); // null | "validation" | "policy"
+
+  const rowTitle = `${t(payerMeta.labelKey)}`; // hover tooltip = payer name
+  const validationBadgeTone =
+    validationState === "signed" ? "success" :
+    validationState === "sent"   ? "info" :
+                                   "warn";
+
   return (
-    <div className="cart-line" style={{
-      borderBottom: isLast ? "none" : "1px solid var(--border)",
-    }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ width: 22, height: 22, borderRadius: 5, background: meta.color + "18", color: meta.color, display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
+    <div className="cart-line cart-line-compact" data-payer={item.payer}>
+      <div
+        className="cart-line-row"
+        title={rowTitle}
+        style={{ borderBottom: isLast ? "none" : "1px solid var(--border)" }}
+      >
+        <div className="cart-line-ico" style={{ background: meta.color + "18", color: meta.color }}>
           <Ico size={11} />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-900)", lineHeight: 1.3 }}>{item.name}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 3, alignItems: "center" }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color: payerMeta.color, background: payerMeta.color + "15", padding: "1px 5px", borderRadius: 3 }}>
-              {t(payerMeta.shortKey)}
-            </span>
-            {requiresValidation && (
-              validationState === "signed" ? (
-                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--success-600)", background: "var(--success-50)", padding: "1px 5px", borderRadius: 3, border: "1px solid var(--success-500)", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                  <I.ShieldCheck size={9} strokeWidth={2.5} /> {t("validate.signed")}
-                </span>
-              ) : validationState === "sent" ? (
-                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--brand-700)", background: "var(--brand-50)", padding: "1px 5px", borderRadius: 3, border: "1px solid var(--brand-200)", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                  <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1 }} /> {t("validate.sent")}
-                </span>
-              ) : (
-                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--warn-600)", background: "var(--warn-50)", padding: "1px 5px", borderRadius: 3, border: "1px solid var(--warn-500)", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                  <I.AlertTriangle size={9} /> {t("validate.requiresPatient")}
-                </span>
-              )
-            )}
-            {showPolicyNote && (
-              <button
-                type="button"
-                onClick={() => setPolicyOpen(o => !o)}
-                style={{
-                  fontSize: 10, fontWeight: 600,
-                  color: policyDecision.status === "outOfPolicy" ? "var(--danger-600)" : "var(--warn-600)",
-                  background: policyDecision.status === "outOfPolicy" ? "var(--danger-50)" : "var(--warn-50)",
-                  padding: "1px 5px", borderRadius: 3,
-                  border: "1px solid " + (policyDecision.status === "outOfPolicy" ? "var(--danger-500)" : "var(--warn-500)"),
-                  display: "inline-flex", alignItems: "center", gap: 3,
-                  cursor: "pointer",
-                }}
-                title={policyDecision.reason}
-              >
-                <I.AlertCircle size={9} /> {policyDecision.status === "outOfPolicy" ? t("cart.policy.outOfPolicy") : `${policyDecision.coveredPct}% ${t("cart.policy.partial")}`}
-                <I.Info size={8} />
-              </button>
-            )}
-          </div>
-          {requiresValidation && validationState === "idle" && (
+        <div className="cart-line-name">
+          <span className="cart-line-name-text">{item.name}</span>
+          {requiresValidation && (
+            <button
+              type="button"
+              className={"cart-line-badge cart-line-badge-" + validationBadgeTone}
+              onClick={(e) => { e.stopPropagation(); setOpenExpand(o => o === "validation" ? null : "validation"); }}
+              title={
+                validationState === "signed" ? t("validate.signed") :
+                validationState === "sent"   ? t("validate.sent")   :
+                                               t("validate.requiresPatient")
+              }
+              aria-label={t("validate.requiresPatient")}
+            >
+              {validationState === "signed"
+                ? <I.ShieldCheck size={10} strokeWidth={2.5} />
+                : <I.AlertTriangle size={10} />}
+            </button>
+          )}
+          {showPolicyNote && (
+            <button
+              type="button"
+              className={"cart-line-badge cart-line-badge-" + (policyDecision.status === "outOfPolicy" ? "danger" : "warn")}
+              onClick={(e) => { e.stopPropagation(); setOpenExpand(o => o === "policy" ? null : "policy"); }}
+              title={policyDecision.reason}
+              aria-label={t("cart.policy.note")}
+            >
+              <I.AlertCircle size={10} />
+            </button>
+          )}
+        </div>
+        <div className="cart-line-price">
+          {item.price === 0 ? "—" : fmtCcy((item.price || 0) * (item.qty || 1), ccy)}
+        </div>
+        <button
+          onClick={onRemove}
+          disabled={item.auto}
+          className={"cart-line-remove" + (item.auto ? " disabled" : "")}
+          title={item.auto ? t("cart.autoVisitFee") : t("cart.remove")}
+        >
+          <I.X size={10} strokeWidth={2.5} />
+        </button>
+      </div>
+      {openExpand === "validation" && (
+        <div className="cart-line-expand">
+          {validationState === "idle" ? (
             <button
               type="button"
               onClick={onSendValidation}
-              style={{
-                marginTop: 5,
-                background: "transparent", border: "1px dashed var(--brand-200)",
-                color: "var(--brand-700)", borderRadius: 4,
-                padding: "2px 6px", fontSize: 10.5, fontWeight: 600,
-                display: "inline-flex", alignItems: "center", gap: 3,
-                cursor: "pointer",
-              }}
+              className="cart-line-action"
             >
               <I.Smartphone size={10} /> {t("validate.sendPhone")}
             </button>
+          ) : validationState === "sent" ? (
+            <span className="cart-line-action-info">
+              <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1 }} /> {t("validate.sent")}
+            </span>
+          ) : (
+            <span className="cart-line-action-info success">
+              <I.ShieldCheck size={10} /> {t("validate.signed")}
+            </span>
           )}
-          {showPolicyNote && policyOpen && (
-            <div style={{
-              marginTop: 6, padding: "6px 8px",
-              background: "var(--surface-2)", border: "1px solid var(--border)",
-              borderRadius: 5,
-              fontSize: 10.5, color: "var(--ink-700)", lineHeight: 1.4,
-            }}>
-              <div style={{ fontWeight: 700, color: "var(--ink-900)", marginBottom: 2, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                <I.Shield size={10} /> {t("cart.policy.note")}
-              </div>
-              {policyDecision.reason}
-              {policyDecision.status === "outOfPolicy" && (
-                <div style={{ marginTop: 3, color: "var(--danger-600)", fontWeight: 600 }}>
-                  → {t("cart.policy.cashOnly")}
-                </div>
-              )}
+        </div>
+      )}
+      {openExpand === "policy" && showPolicyNote && (
+        <div className="cart-line-expand">
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+            <I.Shield size={10} />
+            <span style={{ fontWeight: 700 }}>
+              {policyDecision.status === "outOfPolicy"
+                ? t("cart.policy.outOfPolicy")
+                : `${policyDecision.coveredPct}% ${t("cart.policy.partial")}`}
+            </span>
+          </div>
+          <div style={{ color: "var(--ink-700)" }}>{policyDecision.reason}</div>
+          {policyDecision.status === "outOfPolicy" && (
+            <div style={{ marginTop: 2, color: "var(--danger-600)", fontWeight: 600 }}>
+              → {t("cart.policy.cashOnly")}
             </div>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-900)", fontVariantNumeric: "tabular-nums" }}>
-            {item.price === 0 ? "—" : fmtCcy((item.price || 0) * (item.qty || 1), ccy)}
-          </div>
-          <button onClick={onRemove} disabled={item.auto}
-            className={"cart-line-remove" + (item.auto ? " disabled" : "")}
-            title={item.auto ? t("cart.autoVisitFee") : t("cart.remove")}>
-            <I.X size={10} strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -911,28 +917,48 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
             })}
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          <button onClick={() => onMethod("khqr")} disabled={itemCount === 0 || due === 0}
-            style={{
-              padding: "10px 8px", border: "1.5px solid var(--border-strong)", borderRadius: 7, background: "var(--surface)",
-              cursor: itemCount === 0 || due === 0 ? "not-allowed" : "pointer",
-              opacity: itemCount === 0 || due === 0 ? 0.5 : 1,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            }}>
-            <QRGlyph size={18} />
-            <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-900)" }}>KHQR</span>
-          </button>
-          <button onClick={() => onMethod("cash")} disabled={itemCount === 0 || due === 0}
-            style={{
-              padding: "10px 8px", border: "1.5px solid var(--border-strong)", borderRadius: 7, background: "var(--surface)",
-              cursor: itemCount === 0 || due === 0 ? "not-allowed" : "pointer",
-              opacity: itemCount === 0 || due === 0 ? 0.5 : 1,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            }}>
-            <I.Wallet size={18} style={{ color: "var(--ink-700)" }} />
-            <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("cart.pay.cash")}</span>
-          </button>
-        </div>
+        {/* Round 12 #2 — payment methods get the same disabled-tooltip treatment. */}
+        {(() => {
+          const payDisabled = itemCount === 0 || due === 0;
+          const payReasons = [];
+          if (itemCount === 0) payReasons.push(t("disabled.payment.empty"));
+          else if (due === 0) payReasons.push(t("disabled.payment.zero"));
+          const payProps = {
+            disabled: payDisabled,
+            title: t("disabled.payment.title"),
+            reasons: payReasons,
+          };
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <DisabledTooltip block {...payProps}>
+                <button onClick={() => onMethod("khqr")} disabled={payDisabled}
+                  style={{
+                    width: "100%",
+                    padding: "10px 8px", border: "1.5px solid var(--border-strong)", borderRadius: 7, background: "var(--surface)",
+                    cursor: payDisabled ? "not-allowed" : "pointer",
+                    opacity: payDisabled ? 0.5 : 1,
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  }}>
+                  <QRGlyph size={18} />
+                  <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-900)" }}>KHQR</span>
+                </button>
+              </DisabledTooltip>
+              <DisabledTooltip block {...payProps}>
+                <button onClick={() => onMethod("cash")} disabled={payDisabled}
+                  style={{
+                    width: "100%",
+                    padding: "10px 8px", border: "1.5px solid var(--border-strong)", borderRadius: 7, background: "var(--surface)",
+                    cursor: payDisabled ? "not-allowed" : "pointer",
+                    opacity: payDisabled ? 0.5 : 1,
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  }}>
+                  <I.Wallet size={18} style={{ color: "var(--ink-700)" }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("cart.pay.cash")}</span>
+                </button>
+              </DisabledTooltip>
+            </div>
+          );
+        })()}
         {due === 0 && itemCount > 0 && (
           <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-500)", textAlign: "center" }}>
             {t("cart.pay.fullyCovered")}
@@ -1041,6 +1067,15 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const [tendered, setTendered] = useState(cart.payment.tendered || "");
   const [pregOpen, setPregOpen] = useState(false);
   const [pendingPregItems, setPendingPregItems] = useState(null);
+  // Round 12 #1 — collapse state per kind. Resets on reload (no persistence by design).
+  const [collapsedKinds, setCollapsedKinds] = useState(() => new Set());
+  const toggleKindCollapsed = (kind) => {
+    setCollapsedKinds(prev => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind); else next.add(kind);
+      return next;
+    });
+  };
 
   const setCart = (next) => persistCart(patient, onUpdate, next);
 
@@ -1216,12 +1251,20 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     amount: s.sub,
   }));
 
-  // === Primary CTA (Round 9 #1) ===
-  const ctaDisabled = !identityComplete && itemCount === 0;
+  // === Primary CTA (Round 9 #1) — Round 12 #2: strictly gated on verified contact ===
+  // Verification (mobile OTP or Telegram) is REQUIRED — no override path.
+  const hasName = !!patient.name;
+  const hasDob  = !!patient.dob;
+  const isVerified = !!(patient.otpVerified || patient.telegramVerified);
+  const ctaDisabled = !(hasName && hasDob && isVerified);
   const ctaLabel = itemCount === 0
     ? t("cart.cta.checkInOnly")
     : t("cart.cta.checkInConfirm");
-  const ctaTooltip = !identityComplete ? t("cart.cta.completeFirst") : "";
+  // Build the precise list of what's missing — feeds the disabled tooltip.
+  const ctaReasons = [];
+  if (!isVerified) ctaReasons.push(t("disabled.checkin.contact"));
+  if (!hasDob)     ctaReasons.push(t("disabled.checkin.dob"));
+  if (!hasName)    ctaReasons.push(t("disabled.checkin.name"));
 
   return (
     <>
@@ -1257,28 +1300,46 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               if (!items || items.length === 0) return null;
               const meta = KIND_META[kind];
               const groupSub = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+              const isCollapsed = collapsedKinds.has(kind);
               return (
-                <div key={kind} className="cart-group">
-                  <div className="cart-group-head">
+                <div key={kind} className={"cart-group" + (isCollapsed ? " is-collapsed" : "")}>
+                  <button
+                    type="button"
+                    className="cart-group-head"
+                    onClick={() => toggleKindCollapsed(kind)}
+                    aria-expanded={!isCollapsed}
+                    aria-controls={`cart-group-body-${kind}`}
+                    title={isCollapsed ? t("cart.group.expand") : t("cart.group.collapse")}
+                  >
+                    <I.ChevronDown
+                      size={12}
+                      strokeWidth={2.5}
+                      className={"cart-group-chev" + (isCollapsed ? " is-collapsed" : "")}
+                      style={{ color: meta.color }}
+                    />
                     <span className="cart-group-label" style={{ color: meta.color }}>
                       <span className="cart-group-dot" style={{ background: meta.color }} />
                       {t(meta.labelKey)}
                       <span className="cart-group-count">{items.length}</span>
                     </span>
                     <span className="cart-group-sub">{fmtCcy(groupSub, cart.ccy || "USD")}</span>
-                  </div>
-                  {items.map((item, idx) => (
-                    <CartLine
-                      key={item.id}
-                      item={item}
-                      isLast={idx === items.length - 1}
-                      ccy={cart.ccy || "USD"}
-                      onRemove={() => removeItem(item.id)}
-                      onSendValidation={() => sendValidation(item.id)}
-                      policyDecision={policyDecisions[item.id]}
-                      t={t}
-                    />
-                  ))}
+                  </button>
+                  {!isCollapsed && (
+                    <div id={`cart-group-body-${kind}`}>
+                      {items.map((item, idx) => (
+                        <CartLine
+                          key={item.id}
+                          item={item}
+                          isLast={idx === items.length - 1}
+                          ccy={cart.ccy || "USD"}
+                          onRemove={() => removeItem(item.id)}
+                          onSendValidation={() => sendValidation(item.id)}
+                          policyDecision={policyDecisions[item.id]}
+                          t={t}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1445,18 +1506,25 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
           />
 
           {/* === Round 9 #1: Primary CTA — Cart is the primary CTA === */}
+          {/* Round 12 #2: wrap in DisabledTooltip — list precise missing requirements. */}
           {cart.payment.status !== "confirmed" && (
             <div style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
-              <button className="btn btn-primary" onClick={onCheckIn} disabled={ctaDisabled}
-                title={ctaTooltip}
-                style={{ width: "100%", justifyContent: "center", height: 40, fontSize: 13, fontWeight: 650 }}>
-                <I.Check size={15} /> {ctaLabel}
-              </button>
-              {!identityComplete && itemCount > 0 && (
-                <div style={{ fontSize: 10.5, color: "var(--ink-500)", textAlign: "center", marginTop: 6 }}>
-                  {t("cart.cta.completeFirst")}
-                </div>
-              )}
+              <DisabledTooltip
+                block
+                disabled={ctaDisabled}
+                title={t("disabled.checkin.title")}
+                reasons={ctaReasons}
+                hint={t("disabled.checkin.hint")}
+              >
+                <button
+                  className="btn btn-primary"
+                  onClick={onCheckIn}
+                  disabled={ctaDisabled}
+                  style={{ width: "100%", justifyContent: "center", height: 40, fontSize: 13, fontWeight: 650 }}
+                >
+                  <I.Check size={15} /> {ctaLabel}
+                </button>
+              </DisabledTooltip>
             </div>
           )}
         </div>

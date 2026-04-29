@@ -9,7 +9,7 @@ import {
   VISIT_FEE,
   KHR_RATE,
 } from "./data";
-import { VisitReasonPills, VISIT_REASONS, AuthorBadge, fuzzyNameScore, playDrawerDing } from "./shared";
+import { VisitReasonPills, VISIT_REASONS, AuthorBadge, fuzzyNameScore, playDrawerDing, DisabledTooltip } from "./shared";
 
 // ============================================================
 // VISIT DETAILS — Round 10 #4 Figma rebuild (185:14415)
@@ -133,14 +133,19 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
         </div>
         <div className="vd-head-actions">
           {!filling && !allComplete && (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={onSendToPhone}
+            <DisabledTooltip
               disabled={!channelReady}
-              title={!channelReady ? t("vd.lockNoChannel") : (pwaSent ? t("vd.resend") : t("vd.sendIntakeLink"))}
+              title={t("disabled.intake.title")}
+              reasons={[t("disabled.intake.channel")]}
             >
-              <I.Paperclip size={12} /> {pwaSent ? t("vd.resend") : t("vd.sendIntakeLink")}
-            </button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={onSendToPhone}
+                disabled={!channelReady}
+              >
+                <I.Paperclip size={12} /> {pwaSent ? t("vd.resend") : t("vd.sendIntakeLink")}
+              </button>
+            </DisabledTooltip>
           )}
           {!filling && (
             <button
@@ -204,16 +209,21 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
                   </>
                 )}
               </div>
-              <button
-                className="btn btn-primary vd-hero-send"
-                onClick={onSendToPhone}
+              <DisabledTooltip
                 disabled={!channelReady}
-                title={!channelReady ? t("vd.lockNoChannel") : ""}
+                title={t("disabled.intake.title")}
+                reasons={[t("disabled.intake.channel")]}
               >
-                {sentFlash
-                  ? (<><I.Check size={14} /> {t("vd.sentShort")}</>)
-                  : (<><I.Send size={14} /> {pwaSent ? t("vd.heroResend") : t("vd.heroSendCta")}</>)}
-              </button>
+                <button
+                  className="btn btn-primary vd-hero-send"
+                  onClick={onSendToPhone}
+                  disabled={!channelReady}
+                >
+                  {sentFlash
+                    ? (<><I.Check size={14} /> {t("vd.sentShort")}</>)
+                    : (<><I.Send size={14} /> {pwaSent ? t("vd.heroResend") : t("vd.heroSendCta")}</>)}
+                </button>
+              </DisabledTooltip>
               <div className="vd-hero-or"><span>{t("vd.or")}</span></div>
               <button
                 type="button"

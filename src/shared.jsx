@@ -43,6 +43,90 @@ export function isTypingTarget(el) {
   return false;
 }
 
+// === DisabledTooltip — Round 12 #2 ===
+// Wraps a (typically disabled) CTA. On hover/focus, after a 300ms delay,
+// pops a dark tooltip listing exactly which requirements are missing.
+// Active state: the wrapper passes through; tooltip never shows.
+// Disabled state: the wrapper applies cursor: not-allowed and shows the popover on hover.
+//
+// Usage:
+//   <DisabledTooltip
+//     disabled={ctaDisabled}
+//     title="To check in, you need:"
+//     reasons={["Verified contact (verify mobile OTP or scan Telegram)", "Date of birth"]}
+//   >
+//     <button className="btn btn-primary" disabled={ctaDisabled}>Check in</button>
+//   </DisabledTooltip>
+export function DisabledTooltip({ disabled, title, reasons, hint, children, placement = "top", forbidden = false, delay = 300, block = false }) {
+  const [hover, setHover] = useState(false);
+  const [longPress, setLongPress] = useState(false);
+  const timer = useRef(null);
+  const lpTimer = useRef(null);
+
+  const open = disabled && (hover || longPress);
+
+  const onEnter = () => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setHover(true), delay);
+  };
+  const onLeave = () => {
+    clearTimeout(timer.current);
+    setHover(false);
+  };
+  const onTouchStart = () => {
+    clearTimeout(lpTimer.current);
+    lpTimer.current = setTimeout(() => setLongPress(true), 500);
+  };
+  const onTouchEnd = () => {
+    clearTimeout(lpTimer.current);
+    // Keep open briefly so the user can read; tap-elsewhere to dismiss.
+    setTimeout(() => setLongPress(false), 4000);
+  };
+
+  useEffect(() => () => {
+    clearTimeout(timer.current);
+    clearTimeout(lpTimer.current);
+  }, []);
+
+  // Decide what to render. Even when not disabled, render the wrapper
+  // (so layout never shifts) but skip the cursor/tooltip behaviour.
+  const wrapStyle = {
+    display: block ? "block" : "inline-flex",
+    width: block ? "100%" : undefined,
+    ...(disabled ? { cursor: forbidden ? "not-allowed" : "not-allowed" } : {}),
+  };
+
+  // Tooltip body
+  const tip = open ? (
+    <div className={"disabled-tip disabled-tip-" + placement} role="tooltip" aria-live="polite">
+      {title && <div className="disabled-tip-title">{title}</div>}
+      {Array.isArray(reasons) && reasons.length > 0 && (
+        <ul className="disabled-tip-list">
+          {reasons.map((r, i) => <li key={i}>{r}</li>)}
+        </ul>
+      )}
+      {hint && <div className="disabled-tip-hint">{hint}</div>}
+      <span className={"disabled-tip-arrow disabled-tip-arrow-" + placement} aria-hidden="true" />
+    </div>
+  ) : null;
+
+  return (
+    <span
+      className={"disabled-tip-wrap" + (disabled ? " is-disabled" : "")}
+      style={wrapStyle}
+      onMouseEnter={disabled ? onEnter : undefined}
+      onMouseLeave={disabled ? onLeave : undefined}
+      onFocus={disabled ? onEnter : undefined}
+      onBlur={disabled ? onLeave : undefined}
+      onTouchStart={disabled ? onTouchStart : undefined}
+      onTouchEnd={disabled ? onTouchEnd : undefined}
+    >
+      {children}
+      {tip}
+    </span>
+  );
+}
+
 // === Fuzzy name match (Dice's coefficient on bigrams) ===
 // Returns a similarity score 0..1.
 export function fuzzyNameScore(a, b) {
@@ -865,13 +949,31 @@ export function TeleconsultCard({ patient, onUpdate, onPushToast }) {
       </div>
 
       <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 12 }}>
-        {tc.status === "notBooked" && (
+        {tc.status === "notBooked" && (() => {
+          // Round 12 #2 — Teleconsult is scheduled AFTER lab/imaging results are
+          // available. Disable "Book video call" until cart contains lab/imaging tests.
+          const hasResultableTests = (patient.cart?.items || [])
+            .some(i => i.kind === "lab" || i.kind === "imaging");
+          const bookDisabled = !hasResultableTests;
+          return (
           <>
             {!expanded ? (
               <div style={{ display: "flex", gap: 6 }}>
-                <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => setExpanded(true)}>
-                  <I.Calendar size={12} /> {t("telecon.bookHere")}
-                </button>
+                <DisabledTooltip
+                  block
+                  disabled={bookDisabled}
+                  title={t("disabled.telecon.title")}
+                  reasons={[t("disabled.telecon.tests")]}
+                >
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ width: "100%", justifyContent: "center" }}
+                    onClick={() => !bookDisabled && setExpanded(true)}
+                    disabled={bookDisabled}
+                  >
+                    <I.Calendar size={12} /> {t("telecon.bookHere")}
+                  </button>
+                </DisabledTooltip>
                 <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={sendToPhone}>
                   <I.Smartphone size={12} /> {t("telecon.sendToPhone")}
                 </button>
@@ -911,7 +1013,8 @@ export function TeleconsultCard({ patient, onUpdate, onPushToast }) {
               </>
             )}
           </>
-        )}
+          );
+        })()}
         {tc.status === "pending" && (
           <div className="telecon-pending">
             <I.Smartphone size={14} />
