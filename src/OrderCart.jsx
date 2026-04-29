@@ -3,7 +3,7 @@
 // payment (KHQR + Cash), pregnancy consent gate, primary CTA "Check in & confirm order"
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
-import { QRGlyph, mockInsurerDecide, playDrawerDing, Kbd, useKeydown, isTypingTarget, DisabledTooltip } from "./shared";
+import { QRGlyph, mockInsurerDecide, playDrawerDing, Kbd, useKeydown, isTypingTarget, DisabledTooltip, TatCompact } from "./shared";
 import { useLang } from "./i18n";
 
 const KHR_RATE = 4100;
@@ -853,6 +853,40 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
   const due = totals.patientDue;
   const dueLabel = fmtCcy(due, ccy);
 
+  // v9 §10 — KHQR CFD-driven flow.
+  //   Nurse no longer sees the QR (it's on the customer-facing display).
+  //   Nurse sees: "Bakong webhook listening" status + countdown.
+  //   Auto-confirms after ~4s (mocks real Bakong webhook) OR nurse clicks
+  //   "Mark as received" → inline confirmation prompt → confirm.
+  //   10-minute countdown to expiry; expired offers Regenerate.
+  const inKhqrWaiting = method === "khqr" && status === "waiting";
+  const [khqrSecsLeft, setKhqrSecsLeft] = useState(0);
+  const [khqrExpired, setKhqrExpired] = useState(false);
+  const [manualConfirmOpen, setManualConfirmOpen] = useState(false);
+  const [khqrSession, setKhqrSession] = useState(0); // bump to restart session after Regenerate
+
+  React.useEffect(() => {
+    if (!inKhqrWaiting) {
+      setKhqrSecsLeft(0); setKhqrExpired(false); setManualConfirmOpen(false);
+      return;
+    }
+    setKhqrSecsLeft(10 * 60);
+    setKhqrExpired(false);
+    const auto = setTimeout(() => onConfirmKhqr(), 4000);
+    return () => clearTimeout(auto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inKhqrWaiting, khqrSession]);
+
+  React.useEffect(() => {
+    if (!inKhqrWaiting || khqrExpired) return;
+    if (khqrSecsLeft <= 0) { setKhqrExpired(true); return; }
+    const tick = setTimeout(() => setKhqrSecsLeft(s => s - 1), 1000);
+    return () => clearTimeout(tick);
+  }, [khqrSecsLeft, inKhqrWaiting, khqrExpired]);
+
+  const fmtClock = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  const regenerateKhqr = () => setKhqrSession(s => s + 1);
+
   if (status === "confirmed") {
     const methodLabel = method === "cash" ? t("cart.pay.cash") : "KHQR";
     return (
@@ -970,45 +1004,70 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
 
   if (method === "khqr") {
     return (
-      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+      <div className="khqr-cfd" style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
         <div className="between" style={{ marginBottom: 10 }}>
           <button onClick={() => onMethod(null)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "var(--ink-600)", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}>
             <I.ChevronLeft size={12} /> {t("cart.pay.back")}
           </button>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-900)" }}>KHQR · {dueLabel}</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <KHQRGraphic size={148} />
-          {/* Seamless integration mock: webhook listening live */}
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "3px 8px", borderRadius: 4,
-            background: "var(--success-50)", color: "var(--success-600)",
-            border: "1px solid var(--success-500)",
-            fontSize: 10.5, fontWeight: 600,
-          }}>
-            <I.Wifi size={10} />
-            <span style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: "50%", background: "var(--success-500)",
-                animation: "pulseDot 1.4s ease-in-out infinite",
-              }} />
-              {t("cart.pay.khqrLive")}
-            </span>
+
+        {khqrExpired ? (
+          // v9 §10 — 10-min timeout. Nurse must regenerate.
+          <div className="khqr-cfd-panel khqr-cfd-expired">
+            <div className="khqr-cfd-row">
+              <I.AlertTriangle size={14} style={{ color: "var(--warn-600)" }} />
+              <span className="khqr-cfd-status">{t("cart.pay.khqrExpired")}</span>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={regenerateKhqr}>
+              <I.RefreshCw size={11} /> {t("cart.pay.khqrRegenerate")}
+            </button>
           </div>
-          {status === "waiting" && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-600)" }}>
+        ) : (
+          <div className="khqr-cfd-panel">
+            {/* Bakong webhook live indicator (the QR itself is on the CFD) */}
+            <div className="khqr-cfd-live">
+              <span className="khqr-cfd-live-dot" />
+              <I.Wifi size={11} />
+              <span>{t("cart.pay.khqrLive")}</span>
+              <span className="khqr-cfd-clock">
+                <I.Clock size={10} /> {fmtClock(khqrSecsLeft)}
+              </span>
+            </div>
+            <div className="khqr-cfd-msg">
+              <I.Smartphone size={11} /> {t("cart.pay.khqrCfdMsg")}
+            </div>
+            <div className="khqr-cfd-msg-sub">
               <span className="spinner" style={{ width: 9, height: 9, borderWidth: 1.5 }} />
               {t("cart.pay.khqrAuto")}
             </div>
-          )}
-          <div style={{ fontSize: 10, color: "var(--ink-400)", textAlign: "center", maxWidth: 200 }}>
-            {t("cart.pay.bakongHint")}
+
+            {/* Manual fallback — requires explicit confirmation per v9 §10 */}
+            {manualConfirmOpen ? (
+              <div className="khqr-cfd-confirm" role="alertdialog">
+                <div className="khqr-cfd-confirm-q">
+                  {t("cart.pay.confirmManualQ", { amount: dueLabel })}
+                </div>
+                <div className="khqr-cfd-confirm-actions">
+                  <button className="btn btn-ghost btn-sm" onClick={() => setManualConfirmOpen(false)}>
+                    {t("modal.cancel")}
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={() => { setManualConfirmOpen(false); onConfirmKhqr(); }}>
+                    <I.Check size={11} /> {t("cart.pay.confirmManualYes")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                className="btn btn-ghost btn-sm khqr-cfd-fallback"
+                onClick={() => setManualConfirmOpen(true)}
+                title={t("cart.pay.markReceivedHint")}
+              >
+                <I.Check size={11} /> {t("cart.pay.markReceived")}
+              </button>
+            )}
           </div>
-          <button className="btn btn-primary" onClick={onConfirmKhqr} style={{ height: 34, marginTop: 2 }}>
-            <I.Check size={14} /> {t("cart.pay.markReceived")}
-          </button>
-        </div>
+        )}
       </div>
     );
   }
@@ -1351,6 +1410,10 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             </button>
           </div>
 
+          {/* v9 §3 — Hide promo / totals / split / payment / TAT entirely when
+             cart is empty. Receptionist isn't distracted by a $0.00 row.
+             Reappears as soon as the first item lands in the cart. */}
+          {itemCount > 0 && (<>
           {/* Promo + totals + split */}
           <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", background: "var(--surface-2)" }}>
             {Object.keys(cart.promos || {}).length > 0 && (
@@ -1504,6 +1567,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             itemCount={itemCount}
             t={t}
           />
+          </>)}
 
           {/* === Round 9 #1: Primary CTA — Cart is the primary CTA === */}
           {/* Round 12 #2: wrap in DisabledTooltip — list precise missing requirements. */}
@@ -1525,6 +1589,15 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                   <I.Check size={15} /> {ctaLabel}
                 </button>
               </DisabledTooltip>
+            </div>
+          )}
+
+          {/* v9 §2 — Results Turnaround is pinned inside the cart, below the CTA.
+             Lives in the fixed footer zone — never scrolls with cart items.
+             Only visible when cart has items (per v9 §3). */}
+          {itemCount > 0 && cart.payment.status !== "confirmed" && (
+            <div className="cart-tat-footer">
+              <TatCompact patient={patient} embedded />
             </div>
           )}
         </div>

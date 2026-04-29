@@ -680,7 +680,7 @@ export const TAT_OUTSOURCED = new Set([
   "vit-d", "vit-b12", "ana", "mri-knee", "ct-head", "tsh",
 ]);
 
-function fmtTatHours(h) {
+export function fmtTatHours(h) {
   if (h == null) return "—";
   if (h < 1) return "< 1h";
   if (h < 24) return Math.round(h) + "h";
@@ -724,14 +724,17 @@ export function computeTatPlan(items) {
 //   - All internal  → one row "All results ~ Xh"
 //   - Mix           → "First results ~ Xh (internal) · All results ~ Xd (external: ...)"
 //   - All external  → one row "All results ~ Xd" with destination
-export function TatCompact({ patient }) {
+// v9 §2 — `embedded` strips the outer card chrome so this can sit inside
+// the OrderCart's fixed footer (no double border / shadow stacking).
+export function TatCompact({ patient, embedded = false }) {
   const t = useLang();
   const items = patient.cart?.items || [];
   const plan = computeTatPlan(items);
+  const wrapClass = embedded ? "tat-compact tat-compact-embedded" : "card tat-compact";
 
   if (!plan) {
     return (
-      <div className="card tat-compact">
+      <div className={wrapClass}>
         <div className="tat-compact-head">
           <span className="tat-compact-eyebrow">
             <I.Clock size={10} /> {t("tat.compact.title")}
@@ -768,7 +771,7 @@ export function TatCompact({ patient }) {
   }));
 
   return (
-    <div className="card tat-compact">
+    <div className={wrapClass}>
       <div className="tat-compact-head">
         <span className="tat-compact-eyebrow">
           <I.Clock size={10} /> {t("tat.compact.title")}
@@ -849,10 +852,12 @@ export const TatTimeline = TatCompact;
 //   status: "notBooked" | "pending" | "booked" | "completed" | "cancelled"
 // ============================================================
 const SLOT_OPTIONS = [
-  { id: "today_pm",  labelKey: "telecon.slot.todayPm",  hint: "Today · 14:00–14:30" },
-  { id: "today_eve", labelKey: "telecon.slot.todayEve", hint: "Today · 17:30–18:00" },
-  { id: "tom_am",    labelKey: "telecon.slot.tomAm",    hint: "Tomorrow · 09:00–09:30" },
-  { id: "tom_pm",    labelKey: "telecon.slot.tomPm",    hint: "Tomorrow · 15:00–15:30" },
+  // etaHours = approximate hours from "now" until the slot starts.
+  // Used by v9 §8 to grey slots earlier than the cart's TAT estimate.
+  { id: "today_pm",  labelKey: "telecon.slot.todayPm",  hint: "Today · 14:00–14:30",     etaHours: 6 },
+  { id: "today_eve", labelKey: "telecon.slot.todayEve", hint: "Today · 17:30–18:00",     etaHours: 9 },
+  { id: "tom_am",    labelKey: "telecon.slot.tomAm",    hint: "Tomorrow · 09:00–09:30",  etaHours: 24 },
+  { id: "tom_pm",    labelKey: "telecon.slot.tomPm",    hint: "Tomorrow · 15:00–15:30",  etaHours: 30 },
 ];
 
 function TeleconStatusPill({ status }) {
@@ -952,13 +957,26 @@ export function TeleconsultCard({ patient, onUpdate, onPushToast }) {
         {tc.status === "notBooked" && (() => {
           // Round 12 #2 — Teleconsult is scheduled AFTER lab/imaging results are
           // available. Disable "Book video call" until cart contains lab/imaging tests.
-          const hasResultableTests = (patient.cart?.items || [])
-            .some(i => i.kind === "lab" || i.kind === "imaging");
+          // v9 §8 — Once a TAT can be computed, surface the earliest slot
+          // (based on the longest TAT in cart) and grey out earlier picker slots.
+          const cartItems = patient.cart?.items || [];
+          const hasResultableTests = cartItems.some(i => i.kind === "lab" || i.kind === "imaging");
+          const tatPlan = hasResultableTests ? computeTatPlan(cartItems) : null;
+          const tatHours = tatPlan?.finalResultHours ?? 0;
+          const tatEtaLabel = fmtTatHours(tatHours);
+          const tatTopContributors = (tatPlan?.items || [])
+            .slice()
+            .sort((a, b) => b.hours - a.hours)
+            .slice(0, 2)
+            .map(i => i.name.replace(/\s*\(.+\)\s*/, "").trim());
           const bookDisabled = !hasResultableTests;
           return (
           <>
             {!expanded ? (
-              <div style={{ display: "flex", gap: 6 }}>
+              // v9 §7 — "Send to patient's phone" was removed; the booking link
+              // is delivered via the PWA intake flow. Only "Book video call"
+              // remains here.
+              <div>
                 <DisabledTooltip
                   block
                   disabled={bookDisabled}
@@ -974,27 +992,49 @@ export function TeleconsultCard({ patient, onUpdate, onPushToast }) {
                     <I.Calendar size={12} /> {t("telecon.bookHere")}
                   </button>
                 </DisabledTooltip>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={sendToPhone}>
-                  <I.Smartphone size={12} /> {t("telecon.sendToPhone")}
-                </button>
+                {/* v9 §8 — Show earliest-slot hint based on the longest TAT in cart.
+                    Helps the nurse pick a sensible slot and signals why earlier
+                    slots will be greyed out in the picker below. */}
+                {!bookDisabled && tatPlan && (
+                  <div className="telecon-tat-hint">
+                    <I.Clock size={10} />{" "}
+                    {t("telecon.earliestSlot", { eta: tatEtaLabel })}
+                    {tatTopContributors.length > 0 && (
+                      <span className="telecon-tat-hint-basis">
+                        {" "}({t("telecon.basedOn", { items: tatTopContributors.join(", ") })})
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <>
                 <div className="telecon-slots">
                   {SLOT_OPTIONS.map(s => {
                     const active = pickedSlot === s.id;
+                    const tooEarly = tatHours > 0 && s.etaHours < tatHours;
                     return (
                       <button
                         key={s.id}
                         type="button"
                         onClick={() => setPickedSlot(s.id)}
-                        className={"telecon-slot" + (active ? " active" : "")}
+                        className={"telecon-slot" + (active ? " active" : "") + (tooEarly ? " too-early" : "")}
+                        title={tooEarly ? t("telecon.resultsNotReady") : ""}
                       >
                         <div className="telecon-slot-label">{t(s.labelKey)}</div>
                         <div className="telecon-slot-time">{s.hint}</div>
+                        {tooEarly && (
+                          <div className="telecon-slot-warn">
+                            <I.AlertTriangle size={9} /> {t("telecon.resultsNotReady")}
+                          </div>
+                        )}
                       </button>
                     );
                   })}
+                </div>
+                {/* v9 §8 challenge — disclaimer reminding nurse the slot is an estimate */}
+                <div className="telecon-disclaimer">
+                  <I.Info size={10} /> {t("telecon.estimateDisclaimer")}
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setExpanded(false); setPickedSlot(null); }}>

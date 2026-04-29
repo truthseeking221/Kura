@@ -132,47 +132,43 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
           </div>
         </div>
         <div className="vd-head-actions">
-          {!filling && !allComplete && (
-            <DisabledTooltip
-              disabled={!channelReady}
-              title={t("disabled.intake.title")}
-              reasons={[t("disabled.intake.channel")]}
-            >
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={onSendToPhone}
-                disabled={!channelReady}
-              >
-                <I.Paperclip size={12} /> {pwaSent ? t("vd.resend") : t("vd.sendIntakeLink")}
-              </button>
-            </DisabledTooltip>
-          )}
-          {!filling && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setFilling(true)}
-              title={t("vd.fillForPatient")}
-            >
-              <I.User size={12} /> {allComplete ? t("vd.editFields") : t("vd.fillForPatient")}
-            </button>
-          )}
-          {filling && (
+          {/* v9 §6 — Header is minimal. Send-intake / Fill-on-behalf / kebab
+             are removed; the same actions live inside the card body (hero).
+             Resend + Edit only appear AFTER the link has been sent (Round 9).
+             In fill mode, the Done CTA is the only action visible here. */}
+          {filling ? (
             <button
               className="btn btn-primary btn-sm"
               onClick={() => setFilling(false)}
             >
               <I.Check size={12} /> {t("vd.done")}
             </button>
-          )}
-          {!filling && (
-            <button
-              className="icon-btn vd-kebab"
-              title={t("vd.more")}
-              type="button"
-              onClick={() => {/* hook for future menu */}}
-            >
-              <I.MoreHorizontal size={14} />
-            </button>
+          ) : (
+            !allComplete && pwaSent && (
+              <>
+                <DisabledTooltip
+                  disabled={!channelReady}
+                  title={t("disabled.intake.title")}
+                  reasons={[t("disabled.intake.channel")]}
+                >
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={onSendToPhone}
+                    disabled={!channelReady}
+                    title={t("vd.resend")}
+                  >
+                    <I.RefreshCw size={12} /> {t("vd.resend")}
+                  </button>
+                </DisabledTooltip>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setFilling(true)}
+                  title={t("vd.editFields")}
+                >
+                  <I.Edit size={12} /> {t("vd.editFields")}
+                </button>
+              </>
+            )
           )}
         </div>
       </div>
@@ -309,7 +305,11 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
         </div>
       )}
 
-      {/* === Intake progress === */}
+      {/* === Intake progress ===
+         v9 §5 — When the nurse is filling on behalf of the patient, the
+         live PWA-status feed is meaningless. Hide it to reduce cognitive load.
+         Mode indicator + form fields are the only things the nurse needs. */}
+      {!filling && (
       <div className="card-pad vd-pad" style={{ paddingTop: 0 }}>
         <div className="vd-progress-card">
           <div className="vd-progress-head">
@@ -357,6 +357,7 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
           </ul>
         </div>
       </div>
+      )}
 
       <div className="vd-foot">
         <I.Lock size={11} /> <span>{t("vd.foot.secure")}</span>

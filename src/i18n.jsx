@@ -73,7 +73,7 @@ const en = {
   "comm.contactCapture.sub": "At least one verified channel is required",
 
   // Telegram inline
-  "telegram.title": "Scan patient's Telegram QR",
+  "telegram.title": "Telegram",
   "telegram.hint": "Telegram → Settings → QR (top left)",
   "telegram.start": "Start scan",
   "telegram.scanning": "Scanning…",
@@ -86,6 +86,17 @@ const en = {
   "telegram.codeSent": "Code sent · check Telegram",
   "telegram.verified": "Telegram verified",
   "telegram.enterCode": "Enter the code from Telegram",
+  // === v9 §9 — CFD Bot Flow ===
+  "telegram.idleSub":      "Show a QR on the patient's screen to capture their contact via the Telegram bot.",
+  "telegram.cfdSub":       "QR is displayed on the patient's screen.",
+  "telegram.generate":     "Generate QR",
+  "telegram.generateNew":  "Generate new QR",
+  "telegram.waiting":      "Waiting for patient to scan…",
+  "telegram.expired":      "Session expired",
+  "telegram.expiredSub":   "The QR was not scanned within 5 minutes.",
+  "telegram.simulateScan": "Simulate scan",
+  "telegram.simHint":      "Prototype only — fast-forward the bot confirmation",
+  "telegram.viaBot":       "BOT",
 
   // PatientStub
   "stub.title": "Patient Stub",
@@ -555,6 +566,13 @@ const en = {
   // KHQR seamless
   "cart.pay.khqrLive": "Live · Bakong webhook listening",
   "cart.pay.khqrAuto": "Will auto-confirm when patient pays",
+  // === v9 §10 — KHQR CFD flow ===
+  "cart.pay.khqrCfdMsg":     "QR is displayed on the patient's screen.",
+  "cart.pay.markReceivedHint": "Manual fallback — confirm only if you've seen the cash or banking app receipt.",
+  "cart.pay.confirmManualQ":   "Confirm manual receipt of {amount}?",
+  "cart.pay.confirmManualYes": "Yes, mark received",
+  "cart.pay.khqrExpired":      "QR expired. Generate a new one to retry.",
+  "cart.pay.khqrRegenerate":   "Regenerate QR",
 
   // Mobile / roaming mode
   "mobile.title": "Mobile reception",
@@ -597,6 +615,11 @@ const en = {
   "telecon.status.completed": "Completed",
   "telecon.status.cancelled": "Cancelled",
   "telecon.bookHere": "Book video call",
+  // === v9 §8 — TAT-aware booking ===
+  "telecon.earliestSlot":       "Earliest slot: after ~{eta}",
+  "telecon.basedOn":             "based on {items}",
+  "telecon.resultsNotReady":     "Results not ready yet",
+  "telecon.estimateDisclaimer":  "Slots are based on estimated result availability. We'll notify the patient if the lab is delayed.",
   "telecon.sendToPhone": "Send to patient's phone",
   "telecon.confirmBook": "Confirm booking",
   "telecon.cancel": "Cancel booking",
@@ -795,7 +818,7 @@ const km = {
   "comm.contactCapture.sub": "ត្រូវការឆានែលផ្ទៀងផ្ទាត់យ៉ាងតិចមួយ",
 
   // Telegram inline
-  "telegram.title": "ស្កែន QR Telegram របស់អ្នកជំងឺ",
+  "telegram.title": "Telegram",
   "telegram.hint": "Telegram → ការកំណត់ → QR (ជ្រុងឆ្វេងខាងលើ)",
   "telegram.start": "ចាប់ផ្តើមស្កែន",
   "telegram.scanning": "កំពុងស្កែន…",
@@ -808,6 +831,17 @@ const km = {
   "telegram.codeSent": "បានផ្ញើ · ពិនិត្យ Telegram",
   "telegram.verified": "Telegram បានផ្ទៀងផ្ទាត់",
   "telegram.enterCode": "បញ្ចូលលេខពី Telegram",
+  // === v9 §9 — CFD Bot Flow ===
+  "telegram.idleSub":      "បង្ហាញ QR នៅលើអេក្រង់អ្នកជំងឺ​ដើម្បី​ចាប់​ទំនាក់ទំនង​តាម Telegram bot។",
+  "telegram.cfdSub":       "QR កំពុង​បង្ហាញ​នៅលើ​អេក្រង់​អ្នកជំងឺ។",
+  "telegram.generate":     "បង្កើត QR",
+  "telegram.generateNew":  "បង្កើត QR ថ្មី",
+  "telegram.waiting":      "កំពុង​រង់ចាំ​អ្នកជំងឺ​ស្កែន…",
+  "telegram.expired":      "សម័យ​បាន​ផុតកំណត់",
+  "telegram.expiredSub":   "QR មិនត្រូវបាន​ស្កែន​ក្នុងរយៈពេល ៥ នាទី។",
+  "telegram.simulateScan": "ក្លែងធ្វើការស្កែន",
+  "telegram.simHint":      "សម្រាប់​ការ​សាក​ល្បង — រំលង​ការ​បញ្ជាក់​ពី bot",
+  "telegram.viaBot":       "BOT",
 
   // PatientStub
   "stub.title": "ព័ត៌មានអ្នកជំងឺ",
@@ -1277,6 +1311,13 @@ const km = {
   // KHQR seamless
   "cart.pay.khqrLive": "ភ្ជាប់ផ្ទាល់ · Bakong webhook",
   "cart.pay.khqrAuto": "នឹងបញ្ជាក់ស្វ័យប្រវត្តិពេលអ្នកជំងឺបង់",
+  // === v9 §10 — KHQR CFD flow ===
+  "cart.pay.khqrCfdMsg":     "QR កំពុង​បង្ហាញ​នៅលើ​អេក្រង់​អ្នកជំងឺ។",
+  "cart.pay.markReceivedHint": "ការបម្រុង​ដៃ — បញ្ជាក់​តែ​នៅពេល​អ្នក​បាន​ឃើញ​សាច់ប្រាក់ ឬ​បង្កាន់ដៃ​ធនាគារ។",
+  "cart.pay.confirmManualQ":   "បញ្ជាក់​ការទទួល​ដោយ​ដៃ {amount}?",
+  "cart.pay.confirmManualYes": "បាទ/ចាស ចំណាំ​បាន​ទទួល",
+  "cart.pay.khqrExpired":      "QR ផុតកំណត់។ បង្កើត​ថ្មី​ដើម្បី​សាក​ម្ដងទៀត។",
+  "cart.pay.khqrRegenerate":   "បង្កើត QR ឡើងវិញ",
 
   // Mobile / roaming
   "mobile.title": "ការទទួលភ្ញៀវចល័ត",
@@ -1319,6 +1360,11 @@ const km = {
   "telecon.status.completed": "បានបញ្ចប់",
   "telecon.status.cancelled": "បានបោះបង់",
   "telecon.bookHere": "កក់ការហៅវីដេអូ",
+  // === v9 §8 — TAT-aware booking ===
+  "telecon.earliestSlot":       "ពេលវេលា​ដែល​អាច​ធ្វើ​បាន​ដំបូង​បំផុត៖ បន្ទាប់ពី ~{eta}",
+  "telecon.basedOn":             "យោងតាម {items}",
+  "telecon.resultsNotReady":     "លទ្ធផល​មិនទាន់​មាន",
+  "telecon.estimateDisclaimer":  "ពេលវេលា​ឯកសារ​ផ្អែក​លើ​ការ​ប៉ាន់​លទ្ធផល។ យើង​នឹង​ជូន​ដំណឹង​អ្នក​ជំងឺ​ប្រសិន​បើ​មន្ទីរ​ពិសោធន៍​យឺត។",
   "telecon.sendToPhone": "ផ្ញើទៅទូរស័ព្ទអ្នកជំងឺ",
   "telecon.confirmBook": "បញ្ជាក់ការកក់",
   "telecon.cancel": "បោះបង់ការកក់",

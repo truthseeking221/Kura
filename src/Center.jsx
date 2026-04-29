@@ -510,88 +510,109 @@ function CommMethodSelector({ value, onChange, error, telegramReady, smsReady })
 
 // === Telegram capture card with OTP verification ===
 // Mirrors the SMS OTP flow: scan QR → handle captured → send 6-digit code → verify.
+// v9 §9 — Telegram CFD Bot Flow
+//   Replaces the legacy QR-scan + OTP flow. The bot returns the patient's
+//   handle + phone in one shot when they tap "Share my number" in Telegram.
+//   For the prototype:
+//     - "Generate QR" creates a session token and enters `waiting` state
+//     - Auto-confirms after ~4s (mimics real flow); a "Simulate scan" button
+//       lets the tester trigger immediately
+//     - 5-minute countdown to expiry; expired state offers "Generate new QR"
+//   Per Round 12 #3, on confirm we also override the Mobile field with the
+//   bot-returned phone (or surface a conflict if the nurse already typed one).
 function TelegramCaptureCard({ patient, onUpdate }) {
   const t = useLang();
-  const [scanning, setScanning] = React.useState(false);
-  const [code, setCode] = React.useState("");
-  const [sent, setSent] = React.useState(false);
-  const [sending, setSending] = React.useState(false);
-  const [wrong, setWrong] = React.useState(false);
   const handle = patient.telegramHandle || "";
-  const captured = !!handle;
   const verified = !!patient.telegramVerified;
 
-  const startScan = () => {
-    setScanning(true);
-    setTimeout(() => {
-      setScanning(false);
+  // Local session state (not persisted across patient switches — by design)
+  const [sessionState, setSessionState] = React.useState("idle"); // idle | waiting | expired
+  const [secsLeft, setSecsLeft] = React.useState(0);
+  const [sessionToken, setSessionToken] = React.useState("");
+
+  // 5-min countdown ticker while waiting
+  React.useEffect(() => {
+    if (sessionState !== "waiting") return;
+    if (secsLeft <= 0) { setSessionState("expired"); return; }
+    const tick = setTimeout(() => setSecsLeft(s => s - 1), 1000);
+    return () => clearTimeout(tick);
+  }, [secsLeft, sessionState]);
+
+  const TG_BOT_CC = "+855";
+  const TG_BOT_PHONE = "92 415 678";
+
+  const triggerScanComplete = React.useCallback(() => {
+    const currentRaw = (patient.phoneNumber || "").replace(/\D/g, "");
+    const botRaw = TG_BOT_PHONE.replace(/\D/g, "");
+    const noConflict = !currentRaw || currentRaw === botRaw;
+    const tgHandle = "@" + (patient.name || "patient").toLowerCase().replace(/\s+/g, "");
+    if (noConflict) {
       onUpdate({
         ...patient,
-        telegramHandle: "@" + (patient.name || "patient").toLowerCase().replace(/\s+/g, ""),
+        telegramHandle: tgHandle,
+        telegramVerified: true,
+        telegramPhone: TG_BOT_PHONE,
+        countryCode: TG_BOT_CC,
+        phoneNumber: TG_BOT_PHONE,
+        mobile: TG_BOT_CC + " " + TG_BOT_PHONE,
+        otpVerified: true,
+        mobileVerifiedVia: "telegram_bot",
+        mobileConflict: null,
       });
-    }, 1100);
+    } else {
+      onUpdate({
+        ...patient,
+        telegramHandle: tgHandle,
+        telegramVerified: true,
+        telegramPhone: TG_BOT_PHONE,
+        mobileConflict: {
+          entered: (patient.countryCode || "+855") + " " + (patient.phoneNumber || ""),
+          viaTelegram: TG_BOT_CC + " " + TG_BOT_PHONE,
+          telegramCC: TG_BOT_CC,
+          telegramPhone: TG_BOT_PHONE,
+        },
+      });
+    }
+    setSessionState("idle");
+  }, [patient, onUpdate]);
+
+  // Auto-trigger after ~4s while waiting (mocks the real Telegram flow speed)
+  React.useEffect(() => {
+    if (sessionState !== "waiting") return;
+    const auto = setTimeout(triggerScanComplete, 4000);
+    return () => clearTimeout(auto);
+  }, [sessionState, triggerScanComplete]);
+
+  const generateSession = () => {
+    // Mock UUID — single-use, expires in 5 min
+    const tok = "ksn_" + Math.random().toString(36).slice(2, 10);
+    setSessionToken(tok);
+    setSecsLeft(5 * 60);
+    setSessionState("waiting");
+  };
+
+  const cancelSession = () => {
+    setSessionState("idle");
+    setSecsLeft(0);
   };
 
   const rescan = () => {
-    setSent(false); setCode(""); setWrong(false);
-    onUpdate({ ...patient, telegramHandle: "", telegramVerified: false });
+    setSessionState("idle");
+    setSecsLeft(0);
+    onUpdate({
+      ...patient,
+      telegramHandle: "",
+      telegramVerified: false,
+      otpVerified: patient.mobileVerifiedVia === "telegram_bot" ? false : patient.otpVerified,
+      mobileVerifiedVia: patient.mobileVerifiedVia === "telegram_bot" ? null : patient.mobileVerifiedVia,
+      mobileConflict: null,
+    });
   };
 
-  const sendCode = () => {
-    setSending(true);
-    setTimeout(() => { setSending(false); setSent(true); }, 600);
-  };
+  const fmtClock = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // Round 12 #3 — when the patient taps "Share my number" inside the Telegram
-  // bot flow, Telegram returns the registered phone alongside the username.
-  // We mock that here with a fixed bot-returned number. Use it to:
-  //   1. Override the Mobile field (no OTP needed — Telegram is the verifier)
-  //   2. Mark patient.otpVerified = true via mobileVerifiedVia = "telegram_bot"
-  // If the nurse already typed a different number, surface an inline conflict
-  // prompt instead of silently overwriting.
-  const TG_BOT_CC = "+855";
-  const TG_BOT_PHONE = "92 415 678";
-  const verify = (val) => {
-    setCode(val);
-    if (val.length === 6) {
-      if (val === "123456" || val === "000000") {
-        setWrong(false);
-        const currentRaw = (patient.phoneNumber || "").replace(/\D/g, "");
-        const botRaw = TG_BOT_PHONE.replace(/\D/g, "");
-        const noConflict = !currentRaw || currentRaw === botRaw;
-        if (noConflict) {
-          onUpdate({
-            ...patient,
-            telegramVerified: true,
-            telegramPhone: TG_BOT_PHONE,
-            countryCode: TG_BOT_CC,
-            phoneNumber: TG_BOT_PHONE,
-            mobile: TG_BOT_CC + " " + TG_BOT_PHONE,
-            otpVerified: true,
-            mobileVerifiedVia: "telegram_bot",
-            mobileConflict: null,
-          });
-        } else {
-          onUpdate({
-            ...patient,
-            telegramVerified: true,
-            telegramPhone: TG_BOT_PHONE,
-            mobileConflict: {
-              entered: (patient.countryCode || "+855") + " " + (patient.phoneNumber || ""),
-              viaTelegram: TG_BOT_CC + " " + TG_BOT_PHONE,
-              telegramCC: TG_BOT_CC,
-              telegramPhone: TG_BOT_PHONE,
-            },
-          });
-        }
-      } else {
-        setWrong(true);
-      }
-    } else if (wrong) setWrong(false);
-  };
-
-  // === Captured + verified ===
-  if (captured && verified) {
+  // === Verified — green confirmed card (kept from prior rounds) ===
+  if (verified) {
     return (
       <div style={{
         background: "var(--success-50)", border: "1.5px solid var(--success-500)",
@@ -617,7 +638,7 @@ function TelegramCaptureCard({ patient, onUpdate }) {
                 borderRadius: 4, padding: "1px 6px",
                 fontSize: 10, fontWeight: 700,
               }}>
-                <I.ShieldCheck size={9} strokeWidth={2.5} /> OTP
+                <I.ShieldCheck size={9} strokeWidth={2.5} /> {t("telegram.viaBot")}
               </span>
             </div>
             <div style={{ fontSize: 11, color: "var(--ink-600)", marginTop: 1, fontFamily: "'SF Mono', ui-monospace, monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -635,128 +656,87 @@ function TelegramCaptureCard({ patient, onUpdate }) {
     );
   }
 
-  // === Captured, awaiting OTP ===
-  if (captured) {
+  // === Waiting for patient to scan ===
+  // Per spec: "No camera on the nurse's screen. Nurse is purely reactive —
+  // they watch the countdown and wait for the green confirmation."
+  if (sessionState === "waiting") {
     return (
-      <div style={{
-        background: "var(--surface-2)", border: "1.5px solid var(--border-strong)",
-        borderRadius: 10, padding: 12,
-        display: "flex", flexDirection: "column", gap: 8,
-        height: "100%",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: "#e7f0fa", color: "#2087d6",
-            display: "grid", placeItems: "center", flexShrink: 0,
-          }}>
-            <I.Send size={15} />
+      <div className="tg-cfd-card tg-cfd-waiting" style={{ height: "100%" }}>
+        <div className="tg-cfd-head">
+          <div className="tg-cfd-ico tg-cfd-ico-info">
+            <I.Send size={14} />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 650, color: "var(--ink-900)" }}>{t("telegram.verify")}</div>
-            <div style={{ fontSize: 10.5, color: "var(--ink-500)", marginTop: 1, fontFamily: "'SF Mono', ui-monospace, monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{handle}</div>
+          <div className="tg-cfd-head-text">
+            <div className="tg-cfd-title">{t("telegram.title")}</div>
+            <div className="tg-cfd-sub">{t("telegram.cfdSub")}</div>
           </div>
-          <button type="button" onClick={rescan} title={t("telegram.rescan")} style={{
-            background: "transparent", border: "none", padding: 4, cursor: "pointer",
-            color: "var(--ink-500)", display: "grid", placeItems: "center", flexShrink: 0,
-          }}>
-            <I.RefreshCw size={11} />
-          </button>
         </div>
-        {!sent ? (
+        <div className="tg-cfd-status">
+          <span className="tg-cfd-spinner" />
+          <span className="tg-cfd-status-text">{t("telegram.waiting")}</span>
+          <span className="tg-cfd-clock"><I.Clock size={10} /> {fmtClock(secsLeft)}</span>
+        </div>
+        <div className="tg-cfd-actions">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={cancelSession}>
+            {t("modal.cancel")}
+          </button>
           <button
             type="button"
-            onClick={sendCode}
-            disabled={sending}
-            className="btn btn-secondary btn-sm"
-            style={{ height: 30, justifyContent: "center", fontSize: 11.5 }}
+            className="btn btn-secondary btn-sm tg-cfd-sim"
+            onClick={triggerScanComplete}
+            title={t("telegram.simHint")}
           >
-            {sending
-              ? (<><span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t("telegram.sending")}</>)
-              : (<><I.KeyRound size={12} /> {t("telegram.sendCode")}</>)}
+            <I.Camera size={11} /> {t("telegram.simulateScan")}
           </button>
-        ) : (
-          <>
-            <input
-              className={"input" + (wrong ? " invalid" : "")}
-              value={code}
-              onChange={e => verify(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder={t("telegram.enterCode")}
-              autoFocus
-              style={{ height: 30, fontSize: 12, letterSpacing: "0.15em", fontFamily: "'SF Mono', ui-monospace, monospace", textAlign: "center" }}
-            />
-            <div style={{ fontSize: 10.5, color: wrong ? "var(--danger-500)" : "var(--ink-500)", display: "inline-flex", alignItems: "center", gap: 3 }}>
-              {wrong ? (<><I.AlertCircle size={10} /> {t("otp.incorrect")}</>) : (<><I.Send size={10} /> {t("telegram.codeSent")}</>)}
-            </div>
-          </>
-        )}
+        </div>
       </div>
     );
   }
 
-  // === Not captured: scan QR ===
-  return (
-    <div style={{
-      background: "var(--surface-2)", border: "1.5px dashed var(--border-strong)",
-      borderRadius: 10, padding: 12,
-      display: "flex", gap: 10, alignItems: "stretch",
-      height: "100%",
-    }}>
-      <div style={{
-        width: 64, height: 64, borderRadius: 8,
-        background: "linear-gradient(135deg, #1a1d24 0%, #0f1115 100%)",
-        position: "relative", overflow: "hidden", flexShrink: 0,
-        display: "grid", placeItems: "center",
-      }}>
-        {[
-          { top: 5, left: 5, br: ["solid", "solid", "none", "none"] },
-          { top: 5, right: 5, br: ["solid", "none", "none", "solid"] },
-          { bottom: 5, left: 5, br: ["none", "solid", "solid", "none"] },
-          { bottom: 5, right: 5, br: ["none", "none", "solid", "solid"] },
-        ].map((c, idx) => (
-          <div key={idx} style={{
-            position: "absolute",
-            top: c.top, left: c.left, bottom: c.bottom, right: c.right,
-            width: 12, height: 12,
-            borderTop:    c.br[0] === "solid" ? "2px solid var(--brand-400)" : "none",
-            borderRight:  c.br[1] === "solid" ? "2px solid var(--brand-400)" : "none",
-            borderBottom: c.br[2] === "solid" ? "2px solid var(--brand-400)" : "none",
-            borderLeft:   c.br[3] === "solid" ? "2px solid var(--brand-400)" : "none",
-          }} />
-        ))}
-        {scanning && (
-          <div style={{
-            position: "absolute", left: 8, right: 8,
-            height: 2, background: "linear-gradient(90deg, transparent, var(--brand-400), transparent)",
-            animation: "scanLine 1.4s linear infinite",
-            boxShadow: "0 0 8px var(--brand-400)",
-          }} />
-        )}
-        <div style={{ color: scanning ? "var(--brand-400)" : "rgba(255,255,255,0.35)", transition: "color 0.2s" }}>
-          <QRGlyph size={26} />
-        </div>
-      </div>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 650, color: "var(--ink-900)", marginBottom: 2 }}>
-            {t("telegram.title")}
+  // === Session expired (5 min timeout) ===
+  if (sessionState === "expired") {
+    return (
+      <div className="tg-cfd-card tg-cfd-expired" style={{ height: "100%" }}>
+        <div className="tg-cfd-head">
+          <div className="tg-cfd-ico tg-cfd-ico-warn">
+            <I.AlertTriangle size={14} />
           </div>
-          <div style={{ fontSize: 10.5, color: "var(--ink-500)", lineHeight: 1.4 }}>
-            {t("telegram.hint")}
+          <div className="tg-cfd-head-text">
+            <div className="tg-cfd-title">{t("telegram.title")}</div>
+            <div className="tg-cfd-sub">{t("telegram.expiredSub")}</div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={startScan}
-          disabled={scanning}
-          className="btn btn-ghost btn-sm"
-          style={{ height: 28, fontSize: 11, justifyContent: "center" }}
-        >
-          {scanning
-            ? (<><span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t("telegram.scanning")}</>)
-            : (<><I.Camera size={12} /> {t("telegram.start")}</>)}
+        <div className="tg-cfd-status tg-cfd-status-expired">
+          <I.AlertCircle size={11} />
+          <span className="tg-cfd-status-text">{t("telegram.expired")}</span>
+        </div>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={generateSession}>
+          <I.RefreshCw size={11} /> {t("telegram.generateNew")}
         </button>
       </div>
+    );
+  }
+
+  // === Idle — patient hasn't started; show "Generate QR" ===
+  return (
+    <div className="tg-cfd-card tg-cfd-idle" style={{ height: "100%" }}>
+      <div className="tg-cfd-head">
+        <div className="tg-cfd-ico tg-cfd-ico-idle">
+          <QRGlyph size={18} />
+        </div>
+        <div className="tg-cfd-head-text">
+          <div className="tg-cfd-title">{t("telegram.title")}</div>
+          <div className="tg-cfd-sub">{t("telegram.idleSub")}</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={generateSession}
+        className="btn btn-ghost btn-sm"
+        style={{ height: 28, fontSize: 11, justifyContent: "center" }}
+      >
+        <QRGlyph size={12} /> {t("telegram.generate")}
+      </button>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Sidebar, Topbar, GoalBar } from "./Layout";
 import { FastCheckIn } from "./Center";
 import { VisitDetails, Insurance, PriorResults } from "./Cards";
 import { OrderCart } from "./OrderCart";
-import { TatCompact, TeleconsultCard, useKeydown, isTypingTarget } from "./shared";
+import { TeleconsultCard, useKeydown, isTypingTarget } from "./shared";
 import {
   NewWalkInModal,
   AddServiceModal,
@@ -320,8 +320,8 @@ export default function App() {
               onCheckIn={() => pushToast(`${active.name} checked in · ${active.queueNumber}`, "success")}
               identityComplete={!!(active.name && active.dob && (active.phoneNumber || active.mobile))}
             />
-            {/* Round 10 #3 — TAT lives BELOW the cart (it's a cart-level summary) */}
-            <TatCompact patient={active} />
+            {/* v9 §2 — TAT is now PINNED inside the OrderCart's fixed footer
+               (below the CTA), not rendered separately here anymore. */}
           </div>
         </div>
         <GoalBar onLearnMore={handleLearnMore} />
