@@ -1,7 +1,7 @@
 // === Visit Details · Lab Tests · Insurance · Payment (v3) ===
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { I } from "./icons";
-import { useLang, VISIT_REASON_KEYS } from "./i18n";
+import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
 import {
   LAB_CATALOG,
   LAB_CATEGORIES,
@@ -9,7 +9,7 @@ import {
   VISIT_FEE,
   KHR_RATE,
 } from "./data";
-import { MultiSelectSearch, VISIT_REASONS } from "./shared";
+import { VisitReasonPills, VISIT_REASONS, AuthorBadge, fuzzyNameScore, playDrawerDing } from "./shared";
 
 // ============================================================
 // VISIT DETAILS — visit reason + clinical intake
@@ -34,6 +34,7 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
     allergies: "",
     notes: "",
   };
+  const authors = patient.visitDetailsAuthors || {};
 
   const reasonsLegacy = Array.isArray(patient.visitReason)
     ? patient.visitReason
@@ -42,7 +43,12 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
     ? fields.visitReason
     : reasonsLegacy;
 
-  const set = (k, v) => onUpdate({ ...patient, visitDetails: { ...fields, visitReason, [k]: v } });
+  // any edit by the receptionist attributes the field to "nurse"
+  const set = (k, v) => onUpdate({
+    ...patient,
+    visitDetails: { ...fields, visitReason, [k]: v },
+    visitDetailsAuthors: { ...authors, [k]: "nurse" },
+  });
 
   const [editing, setEditing] = useState(false);
 
@@ -91,21 +97,21 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
             {t("vd.visitReason")} <span style={{ color: "var(--danger-500)" }}>*</span>
             <span className="vd-label-hint">{t("vd.recepFills")}</span>
           </div>
-          <MultiSelectSearch
+          <VisitReasonPills
             value={visitReason}
             onChange={v => set("visitReason", v)}
-            options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key) }))}
+            options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
             placeholder={t("checkin.visitReason.placeholder")}
           />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <VDField label={t("vd.chiefComplaint")} value={fields.chiefComplaint} onChange={v => set("chiefComplaint", v)} editing={editing} placeholder={t("vd.chiefComplaint.placeholder")} multiline t={t} />
-          <VDField label={t("vd.medicalHistory")} value={fields.medicalHistory} onChange={v => set("medicalHistory", v)} editing={editing} placeholder={t("vd.medicalHistory.placeholder")} multiline t={t} />
-          <VDField label={t("vd.medications")} value={fields.medications} onChange={v => set("medications", v)} editing={editing} placeholder={t("vd.medications.placeholder")} t={t} />
-          <VDField label={t("vd.allergies")} value={fields.allergies} onChange={v => set("allergies", v)} editing={editing} placeholder={t("vd.allergies.placeholder")} t={t} />
+          <VDField label={t("vd.chiefComplaint")} value={fields.chiefComplaint} author={authors.chiefComplaint} onChange={v => set("chiefComplaint", v)} editing={editing} placeholder={t("vd.chiefComplaint.placeholder")} multiline t={t} />
+          <VDField label={t("vd.medicalHistory")} value={fields.medicalHistory} author={authors.medicalHistory} onChange={v => set("medicalHistory", v)} editing={editing} placeholder={t("vd.medicalHistory.placeholder")} multiline t={t} />
+          <VDField label={t("vd.medications")} value={fields.medications} author={authors.medications} onChange={v => set("medications", v)} editing={editing} placeholder={t("vd.medications.placeholder")} t={t} />
+          <VDField label={t("vd.allergies")} value={fields.allergies} author={authors.allergies} onChange={v => set("allergies", v)} editing={editing} placeholder={t("vd.allergies.placeholder")} t={t} />
         </div>
-        <VDField label={t("vd.notes")} value={fields.notes} onChange={v => set("notes", v)} editing={editing} placeholder={t("vd.notes.placeholder")} multiline t={t} />
+        <VDField label={t("vd.notes")} value={fields.notes} author={authors.notes} onChange={v => set("notes", v)} editing={editing} placeholder={t("vd.notes.placeholder")} multiline t={t} />
 
         <div className="vd-status-line">
           {pwaActive ? t("vd.pwaActive") : t("vd.pwaIdle")}
@@ -138,10 +144,13 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
   );
 }
 
-function VDField({ label, value, onChange, editing, placeholder, multiline, t }) {
+function VDField({ label, value, author, onChange, editing, placeholder, multiline, t }) {
   return (
     <div>
-      <div className="vd-label">{label}</div>
+      <div className="vd-label" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span>{label}</span>
+        {value && author && <AuthorBadge who={author} t={t} />}
+      </div>
       {editing ? (
         multiline ? (
           <textarea className="input" value={value || ""} onChange={e => onChange(e.target.value)} placeholder={placeholder}
@@ -274,7 +283,7 @@ export function LabTests({ patient, onUpdate }) {
 }
 
 // ============================================================
-// INSURANCE — provider scan/manual, multi-policy
+// INSURANCE — provider scan/manual, multi-policy, fuzzy name match
 // ============================================================
 export function Insurance({ patient, onUpdate }) {
   const t = useLang();
@@ -310,12 +319,12 @@ export function Insurance({ patient, onUpdate }) {
         {policies.length > 0 && !editingPolicy && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: adding ? 12 : 0 }}>
             {policies.map(p => (
-              <PolicyRow key={p.id} policy={p} onEdit={() => setEditId(p.id)} t={t} />
+              <PolicyRow key={p.id} policy={p} patient={patient} onEdit={() => setEditId(p.id)} t={t} />
             ))}
           </div>
         )}
         {(adding || editingPolicy) && (
-          <InsuranceForm initial={editingPolicy} onSave={save} onCancel={cancel} t={t} />
+          <InsuranceForm initial={editingPolicy} patient={patient} onSave={save} onCancel={cancel} t={t} />
         )}
       </div>
       <div style={{ height: "var(--card-pad)" }} />
@@ -323,7 +332,14 @@ export function Insurance({ patient, onUpdate }) {
   );
 }
 
-function PolicyRow({ policy, onEdit, t }) {
+function PolicyRow({ policy, patient, onEdit, t }) {
+  // Fuzzy match score against the patient's name
+  const score = patient ? fuzzyNameScore(policy.memberName, patient.name) : 1;
+  const pct = Math.round(score * 100);
+  const isFamily = !!policy.familyPlan;
+  const matchOk = score >= 0.9 || isFamily;
+  const relationKey = `ins.relation.${policy.relation || "self"}`;
+
   return (
     <div className="ins-policy">
       <div className="ins-policy-icon"><I.Shield size={16} /></div>
@@ -334,6 +350,32 @@ function PolicyRow({ policy, onEdit, t }) {
         </div>
         <div className="ins-policy-tags">
           <span className="ins-tag">{policy.coverage || "Outpatient"}</span>
+          {/* Match badge */}
+          {patient && (
+            isFamily ? (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                color: "var(--brand-700)", background: "var(--brand-50)",
+                border: "1px solid var(--brand-200)",
+                padding: "1px 6px", borderRadius: 4,
+                fontSize: 10, fontWeight: 600,
+              }} title={t("ins.match.familyOk", { relation: t(relationKey) })}>
+                <I.Users size={10} /> {t("ins.familyPlan")} · {t(relationKey)}
+              </span>
+            ) : (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                color: matchOk ? "var(--success-600)" : "var(--warn-600)",
+                background: matchOk ? "var(--success-50)" : "var(--warn-50)",
+                border: "1px solid " + (matchOk ? "var(--success-500)" : "var(--warn-500)"),
+                padding: "1px 6px", borderRadius: 4,
+                fontSize: 10, fontWeight: 600,
+              }} title={matchOk ? t("ins.match.ok", { pct }) : t("ins.match.warn", { pct })}>
+                {matchOk ? <I.Check size={10} strokeWidth={3} /> : <I.AlertTriangle size={10} />}
+                {pct}% match
+              </span>
+            )
+          )}
           <span style={{ color: policy.cardAttached ? "var(--success-700)" : "var(--ink-400)", display: "inline-flex", alignItems: "center", gap: 3 }}>
             {policy.cardAttached
               ? (<><I.Paperclip size={11} /> {t("ins.cardAttached")}</>)
@@ -348,7 +390,7 @@ function PolicyRow({ policy, onEdit, t }) {
   );
 }
 
-function InsuranceForm({ initial, onSave, onCancel, t }) {
+function InsuranceForm({ initial, patient, onSave, onCancel, t }) {
   const [provider, setProvider] = useState(initial?.provider || "");
   const [policyNumber, setPolicyNumber] = useState(initial?.policyNumber || "");
   const [memberName, setMemberName] = useState(initial?.memberName || "");
@@ -356,6 +398,8 @@ function InsuranceForm({ initial, onSave, onCancel, t }) {
   const [expiry, setExpiry] = useState(initial?.expiry || "");
   const [coverage, setCoverage] = useState(initial?.coverage || "Outpatient");
   const [cardAttached, setCardAttached] = useState(!!initial?.cardAttached);
+  const [familyPlan, setFamilyPlan] = useState(!!initial?.familyPlan);
+  const [relation, setRelation] = useState(initial?.relation || "self");
   const [moreOpen, setMoreOpen] = useState(false);
   const [groupName, setGroupName] = useState(initial?.groupName || "");
   const [copay, setCopay] = useState(initial?.copay || "");
@@ -377,10 +421,28 @@ function InsuranceForm({ initial, onSave, onCancel, t }) {
     setTimeout(() => { setScanning(false); setCardAttached(true); setShowManual(true); }, 1100);
   };
 
+  // === Live fuzzy match (debounced via memo) ===
+  const matchScore = useMemo(() => {
+    if (!memberName || !patient?.name) return null;
+    return fuzzyNameScore(memberName, patient.name);
+  }, [memberName, patient?.name]);
+  const matchPct = matchScore == null ? null : Math.round(matchScore * 100);
+  const matchOk = matchScore != null && matchScore >= 0.9;
+  const matchWarn = matchScore != null && matchScore < 0.9 && memberName.length > 1;
+  // Auto-suggest family plan when names diverge
+  useEffect(() => {
+    if (matchWarn && !familyPlan && !initial?.familyPlan) {
+      // do not auto-toggle — but the warning surfaces & nudges
+    }
+  }, [matchWarn]);
+
+  // All required fields filled.
   const valid = provider && policyNumber && memberName && memberId && expiry;
+  // Soft warning (does NOT block save) when name mismatches and no family flag.
+  const needsFamilyAck = matchWarn && !familyPlan;
   const submit = () => {
     if (!valid) return;
-    onSave({ id: initial?.id, provider, policyNumber, memberName, memberId, expiry, coverage, cardAttached, groupName, copay, notes });
+    onSave({ id: initial?.id, provider, policyNumber, memberName, memberId, expiry, coverage, cardAttached, familyPlan, relation: familyPlan ? relation : "self", groupName, copay, notes });
   };
 
   const filteredProviders = INSURANCE_PROVIDERS.filter(p => !providerQuery || p.toLowerCase().includes(providerQuery.toLowerCase()));
@@ -451,13 +513,93 @@ function InsuranceForm({ initial, onSave, onCancel, t }) {
 
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 10, marginBottom: 10 }}>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label className="label">{t("ins.memberName")} <span className="req">*</span></label>
-              <input className="input" value={memberName} onChange={e => setMemberName(e.target.value)} placeholder={t("ins.memberNamePlaceholder")} />
+              <label className="label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {t("ins.memberName")} <span className="req">*</span>
+                {matchPct != null && memberName.length > 1 && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 3,
+                    fontSize: 9.5, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                    color: matchOk ? "var(--success-600)" : "var(--warn-600)",
+                    background: matchOk ? "var(--success-50)" : "var(--warn-50)",
+                    border: "1px solid " + (matchOk ? "var(--success-500)" : "var(--warn-500)"),
+                    textTransform: "none", letterSpacing: 0,
+                  }}>
+                    {matchOk ? <I.Check size={9} strokeWidth={3} /> : <I.AlertTriangle size={9} />} {matchPct}%
+                  </span>
+                )}
+              </label>
+              <input className={"input" + (matchWarn && !familyPlan ? " invalid" : "")} value={memberName} onChange={e => setMemberName(e.target.value)} placeholder={t("ins.memberNamePlaceholder")} />
+              {matchWarn && !familyPlan && (
+                <div className="help" style={{ color: "var(--warn-600)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "flex-start", gap: 4, lineHeight: 1.4 }}>
+                  <I.AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>{t("ins.match.warnBody")}</span>
+                </div>
+              )}
+              {matchOk && (
+                <div className="help" style={{ color: "var(--success-600)", fontSize: 11, marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <I.Check size={11} strokeWidth={3} /> {t("ins.match.ok", { pct: matchPct })}
+                </div>
+              )}
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
               <label className="label">{t("ins.expiry")} <span className="req">*</span></label>
               <input className="input" value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="MM/YYYY" />
             </div>
+          </div>
+
+          {/* Family plan toggle + relation */}
+          <div style={{
+            marginBottom: 10,
+            padding: "8px 10px",
+            background: familyPlan ? "var(--brand-50)" : "var(--surface-2)",
+            border: "1px solid " + (familyPlan ? "var(--brand-200)" : "var(--border)"),
+            borderRadius: 7,
+          }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={familyPlan}
+                onChange={e => setFamilyPlan(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "var(--brand-500)" }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)" }}>
+                  <I.Users size={12} /> {t("ins.familyPlan")}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--ink-600)", marginTop: 1 }}>
+                  {t("ins.familyPlan.sub")}
+                </div>
+              </div>
+            </label>
+            {familyPlan && (
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px dashed var(--border-strong)" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-600)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  {t("ins.familyPlan.relation")}
+                </div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {["self", "spouse", "child", "parent", "other"].map(r => {
+                    const active = relation === r;
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setRelation(r)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 5,
+                          border: "1px solid " + (active ? "var(--brand-500)" : "var(--border-strong)"),
+                          background: active ? "var(--brand-500)" : "var(--surface)",
+                          color: active ? "white" : "var(--ink-700)",
+                          fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                        }}
+                      >
+                        {t(`ins.relation.${r}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="field" style={{ marginBottom: 10 }}>
@@ -513,6 +655,199 @@ function InsuranceForm({ initial, onSave, onCancel, t }) {
 }
 
 // ============================================================
+// PRIOR RESULTS — gated reorder (sensitive results require fresh OTP)
+// ============================================================
+export function PriorResults({ patient, onUpdate, onAddToOrder, onPushToast }) {
+  const t = useLang();
+  const results = patient.priorResults || [];
+  const [unlocked, setUnlocked] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [wrong, setWrong] = useState(false);
+  const [unlockExpiresAt, setUnlockExpiresAt] = useState(null);
+  const [tick, setTick] = useState(0);
+
+  // 5-minute expiry on unlock
+  useEffect(() => {
+    if (!unlocked || !unlockExpiresAt) return;
+    const id = setInterval(() => setTick(x => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [unlocked, unlockExpiresAt]);
+  const remaining = unlockExpiresAt ? Math.max(0, Math.round((unlockExpiresAt - Date.now()) / 1000)) : 0;
+  useEffect(() => {
+    if (unlocked && remaining === 0 && unlockExpiresAt) {
+      setUnlocked(false); setOtpSent(false); setCode(""); setUnlockExpiresAt(null);
+    }
+  }, [tick]);
+
+  const sensitive = results.some(r => r.sensitive);
+  const sendOtp = () => {
+    setOtpSent(true);
+    onPushToast?.(t("reorder.otpSent"));
+  };
+  const verify = (val) => {
+    setCode(val);
+    if (val.length === 6) {
+      if (val === "123456" || val === "000000") {
+        setWrong(false);
+        setUnlocked(true);
+        setUnlockExpiresAt(Date.now() + 5 * 60 * 1000);
+      } else {
+        setWrong(true);
+      }
+    } else if (wrong) setWrong(false);
+  };
+  const reset = () => { setOtpSent(false); setCode(""); setWrong(false); setUnlocked(false); setUnlockExpiresAt(null); };
+
+  if (results.length === 0) {
+    return (
+      <div className="card">
+        <div className="card-head"><div><h2>{t("reorder.title")}</h2></div></div>
+        <div className="card-pad" style={{ paddingTop: 4, color: "var(--ink-500)", fontSize: 12.5 }}>
+          {t("reorder.empty")}
+        </div>
+        <div style={{ height: "var(--card-pad)" }} />
+      </div>
+    );
+  }
+
+  const lastVisit = results.reduce((acc, r) => (r.visitDate > acc ? r.visitDate : acc), "");
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <h2>{t("reorder.title")}</h2>
+          <p className="sub">{t("reorder.sub", { date: lastVisit })}</p>
+        </div>
+        {unlocked && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", borderRadius: 5,
+              background: "var(--success-50)", color: "var(--success-600)",
+              border: "1px solid var(--success-500)",
+              fontSize: 11, fontWeight: 600,
+            }}>
+              <I.Unlock size={11} /> {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={reset}>
+              <I.Lock size={11} /> {t("reorder.locked")}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!unlocked && sensitive && (
+        <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 0 }}>
+          <div style={{
+            background: "var(--warn-50)",
+            border: "1px solid var(--warn-500)",
+            borderRadius: 8, padding: 12,
+            display: "flex", flexDirection: "column", gap: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: "var(--warn-500)", color: "white",
+                display: "grid", placeItems: "center", flexShrink: 0,
+              }}>
+                <I.Lock size={16} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 650, color: "var(--ink-900)" }}>
+                  {t("reorder.gate")}
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-700)", marginTop: 2, lineHeight: 1.45 }}>
+                  {t("reorder.gateBody")}
+                </div>
+              </div>
+            </div>
+            {!otpSent ? (
+              <button className="btn btn-primary btn-sm" onClick={sendOtp} style={{ height: 32, justifyContent: "center" }}>
+                <I.Smartphone size={13} /> {t("reorder.sendOtp")}
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                <input
+                  className={"input" + (wrong ? " invalid" : "")}
+                  value={code}
+                  onChange={e => verify(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder={t("otp.enter")}
+                  autoFocus
+                  style={{ flex: 1, height: 32, letterSpacing: "0.15em", fontFamily: "'SF Mono', ui-monospace, monospace", textAlign: "center" }}
+                />
+                <button className="btn btn-ghost btn-sm" onClick={sendOtp} style={{ height: 32 }} title={t("otp.resend")}>
+                  <I.RefreshCw size={11} />
+                </button>
+              </div>
+            )}
+            {wrong && (
+              <div style={{ fontSize: 11, color: "var(--danger-500)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <I.AlertCircle size={11} /> {t("otp.incorrect")}
+              </div>
+            )}
+            {otpSent && !wrong && (
+              <div style={{ fontSize: 11, color: "var(--ink-500)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <I.Send size={11} /> {t("reorder.otpSent")}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="card-pad" style={{ paddingTop: unlocked || !sensitive ? 4 : 12, paddingBottom: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {results.map(r => {
+            const showSensitive = unlocked || !r.sensitive;
+            return (
+              <div key={r.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 10px", borderRadius: 7,
+                border: "1px solid var(--border)",
+                background: showSensitive ? "var(--surface)" : "var(--surface-2)",
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 6,
+                  background: showSensitive ? "var(--brand-50)" : "var(--ink-100)",
+                  color: showSensitive ? "var(--brand-600)" : "var(--ink-400)",
+                  display: "grid", placeItems: "center", flexShrink: 0,
+                }}>
+                  {showSensitive ? <I.FlaskConical size={13} /> : <I.Lock size={13} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-900)", filter: showSensitive ? "none" : "blur(4px)", userSelect: showSensitive ? "auto" : "none" }}>
+                    {r.testName}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 1 }}>
+                    {r.visitDate} · ${r.price.toFixed(2)}
+                    {r.sensitive && (
+                      <span style={{ marginLeft: 6, color: showSensitive ? "var(--success-600)" : "var(--warn-600)", fontWeight: 600 }}>
+                        · {showSensitive ? t("reorder.unlocked") : t("reorder.locked")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={!showSensitive}
+                  onClick={() => onAddToOrder?.(r)}
+                  style={{ flexShrink: 0, color: showSensitive ? "var(--brand-600)" : "var(--ink-400)" }}
+                  title={showSensitive ? t("reorder.add") : t("reorder.locked")}
+                >
+                  <I.Plus size={11} /> {t("reorder.add")}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ height: "var(--card-pad)" }} />
+    </div>
+  );
+}
+
+// ============================================================
 // PAYMENT — USD/KHR toggle, KHQR + Cash, receipt
 // ============================================================
 const fmtUSD = (n) => "$" + n.toFixed(2);
@@ -560,8 +895,8 @@ export function Payment({ patient, onUpdate }) {
     }
   }, [khqrState, method]);
 
-  const popDrawer = () => { setDrawerFlash(true); setTimeout(() => setDrawerFlash(false), 2000); };
-  const confirmCash = () => { if (tenderedUSD >= amountDueUSD) setPaid(true); };
+  const popDrawer = () => { playDrawerDing(); setDrawerFlash(true); setTimeout(() => setDrawerFlash(false), 2000); };
+  const confirmCash = () => { if (tenderedUSD >= amountDueUSD) { playDrawerDing(); setPaid(true); } };
   const reset = () => { setMethod(null); setKhqrState("waiting"); setTendered(""); setPaid(false); setReceiptSent(false); };
 
   if (paid) {

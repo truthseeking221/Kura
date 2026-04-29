@@ -1697,3 +1697,175 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   display: block; font-size: 11px; color: var(--ink-600); margin-bottom: 4px; font-weight: 600;
 }
 .order-cart .req { color: var(--danger-500); }
+
+/* === Visit-reason pills (Round 10 — pills > dropdowns) === */
+.reason-pills {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px 6px 6px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  min-height: var(--field-h);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.reason-pills.invalid {
+  border-color: var(--danger-500);
+  box-shadow: 0 0 0 3px rgba(216, 58, 58, 0.12);
+}
+.reason-pills:focus-within {
+  border-color: var(--brand-500);
+  box-shadow: var(--shadow-focus);
+}
+.reason-pills-grid {
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.reason-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 10px;
+  height: 26px;
+  border-radius: 13px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-700);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.06s;
+  white-space: nowrap;
+}
+.reason-pill:hover {
+  background: var(--ink-50);
+  border-color: var(--ink-300);
+}
+.reason-pill:active { transform: scale(0.97); }
+.reason-pill.active {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: white;
+  box-shadow: 0 1px 2px rgba(var(--brand-rgb), 0.32);
+}
+.reason-pill.active:hover {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+.reason-pill-more {
+  border-style: dashed;
+  color: var(--brand-700);
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+.reason-pill-more:hover {
+  background: var(--brand-100);
+  border-color: var(--brand-300);
+}
+.reason-pills-hint {
+  font-size: 11px; color: var(--ink-400);
+  padding: 0 4px 2px;
+  font-style: italic;
+}
+
+/* === Check-in channel cards — equal height, side-by-side === */
+.checkin-channels { display: grid; align-items: stretch; }
+.checkin-channels > * { height: 100%; min-height: 92px; display: flex; flex-direction: column; }
+
+/* === Roaming-mode toggle (topbar) === */
+.roaming-btn { position: relative; }
+.roaming-btn.active {
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border-color: var(--brand-200);
+}
+.roaming-dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success-500);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 8px rgba(26, 161, 99, 0.5);
+}
+
+/* === Roaming-mode body adjustments (tablet-friendly density) === */
+.app.roaming .workspace.no-queue {
+  grid-template-columns: minmax(0, 1fr) !important;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.app.roaming .order-cart {
+  position: static !important;
+  max-height: none !important;
+}
+.app.roaming .sidebar { display: none; }
+.app.roaming .topbar { padding-left: var(--gap); }
+.app.roaming .workspace { padding-bottom: 80px; }
+.app.roaming .reason-pill {
+  height: 32px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* === Mobile responsive (under 768px) === */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    z-index: 50;
+    width: 232px;
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(.4,0,.2,1);
+  }
+  .sidebar:not(.collapsed) {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+  .app {
+    grid-template-columns: 1fr;
+  }
+  .topbar {
+    padding: 0 12px;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    gap: 8px;
+  }
+  .topbar h1 { font-size: 15px; }
+  .topbar .pill-select { display: none; }
+  .search-wrap { order: 2; flex-basis: 100%; }
+  .workspace.no-queue {
+    grid-template-columns: 1fr !important;
+    padding: 12px;
+    gap: 12px;
+  }
+  .order-cart {
+    position: static !important;
+    max-height: none !important;
+  }
+  .field-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .checkin-channels {
+    grid-template-columns: 1fr !important;
+  }
+  .reason-pill {
+    height: 32px;
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+  .pay-methods { grid-template-columns: 1fr 1fr !important; }
+  .stub-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* === Tablet sweet-spot (768–1100px) === */
+@media (min-width: 769px) and (max-width: 1100px) {
+  .workspace.no-queue {
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+  }
+}
+
+/* === Pulse dot for KHQR live indicator === */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.7); }
+}

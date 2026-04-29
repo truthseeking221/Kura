@@ -3,7 +3,7 @@
 // payment (KHQR + Cash), pregnancy consent gate, primary CTA "Check in & confirm order"
 import React, { useState, useEffect, useMemo } from "react";
 import { I } from "./icons";
-import { QRGlyph } from "./shared";
+import { QRGlyph, mockInsurerDecide, playDrawerDing } from "./shared";
 import { useLang } from "./i18n";
 
 const KHR_RATE = 4100;
@@ -576,10 +576,16 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 }
 
 // === Cart Line ===
-function CartLine({ item, onRemove, isLast, ccy, t }) {
+function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
   const Ico = I[meta.icon];
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
+  // Imaging requires patient sign-off (chain of custody)
+  const requiresValidation = item.kind === "imaging";
+  const validationState = item.validationState || "idle"; // idle | sending | sent | signed
+  // Out-of-policy notice (when payer = insurance)
+  const showPolicyNote = item.payer === "insurance" && policyDecision && policyDecision.status !== "covered";
+  const [policyOpen, setPolicyOpen] = useState(false);
   return (
     <div style={{
       borderBottom: isLast ? "none" : "1px solid var(--border)",
@@ -595,7 +601,75 @@ function CartLine({ item, onRemove, isLast, ccy, t }) {
             <span style={{ fontSize: 10, fontWeight: 600, color: payerMeta.color, background: payerMeta.color + "15", padding: "1px 5px", borderRadius: 3 }}>
               {t(payerMeta.shortKey)}
             </span>
+            {requiresValidation && (
+              validationState === "signed" ? (
+                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--success-600)", background: "var(--success-50)", padding: "1px 5px", borderRadius: 3, border: "1px solid var(--success-500)", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <I.ShieldCheck size={9} strokeWidth={2.5} /> {t("validate.signed")}
+                </span>
+              ) : validationState === "sent" ? (
+                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--brand-700)", background: "var(--brand-50)", padding: "1px 5px", borderRadius: 3, border: "1px solid var(--brand-200)", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1 }} /> {t("validate.sent")}
+                </span>
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--warn-600)", background: "var(--warn-50)", padding: "1px 5px", borderRadius: 3, border: "1px solid var(--warn-500)", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <I.AlertTriangle size={9} /> {t("validate.requiresPatient")}
+                </span>
+              )
+            )}
+            {showPolicyNote && (
+              <button
+                type="button"
+                onClick={() => setPolicyOpen(o => !o)}
+                style={{
+                  fontSize: 10, fontWeight: 600,
+                  color: policyDecision.status === "outOfPolicy" ? "var(--danger-600)" : "var(--warn-600)",
+                  background: policyDecision.status === "outOfPolicy" ? "var(--danger-50)" : "var(--warn-50)",
+                  padding: "1px 5px", borderRadius: 3,
+                  border: "1px solid " + (policyDecision.status === "outOfPolicy" ? "var(--danger-500)" : "var(--warn-500)"),
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                  cursor: "pointer",
+                }}
+                title={policyDecision.reason}
+              >
+                <I.AlertCircle size={9} /> {policyDecision.status === "outOfPolicy" ? t("cart.policy.outOfPolicy") : `${policyDecision.coveredPct}% ${t("cart.policy.partial")}`}
+                <I.Info size={8} />
+              </button>
+            )}
           </div>
+          {requiresValidation && validationState === "idle" && (
+            <button
+              type="button"
+              onClick={onSendValidation}
+              style={{
+                marginTop: 5,
+                background: "transparent", border: "1px dashed var(--brand-200)",
+                color: "var(--brand-700)", borderRadius: 4,
+                padding: "2px 6px", fontSize: 10.5, fontWeight: 600,
+                display: "inline-flex", alignItems: "center", gap: 3,
+                cursor: "pointer",
+              }}
+            >
+              <I.Smartphone size={10} /> {t("validate.sendPhone")}
+            </button>
+          )}
+          {showPolicyNote && policyOpen && (
+            <div style={{
+              marginTop: 6, padding: "6px 8px",
+              background: "var(--surface-2)", border: "1px solid var(--border)",
+              borderRadius: 5,
+              fontSize: 10.5, color: "var(--ink-700)", lineHeight: 1.4,
+            }}>
+              <div style={{ fontWeight: 700, color: "var(--ink-900)", marginBottom: 2, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <I.Shield size={10} /> {t("cart.policy.note")}
+              </div>
+              {policyDecision.reason}
+              {policyDecision.status === "outOfPolicy" && (
+                <div style={{ marginTop: 3, color: "var(--danger-600)", fontWeight: 600 }}>
+                  → {t("cart.policy.cashOnly")}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-900)", fontVariantNumeric: "tabular-nums" }}>
@@ -716,10 +790,27 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
           <KHQRGraphic size={148} />
+          {/* Seamless integration mock: webhook listening live */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "3px 8px", borderRadius: 4,
+            background: "var(--success-50)", color: "var(--success-600)",
+            border: "1px solid var(--success-500)",
+            fontSize: 10.5, fontWeight: 600,
+          }}>
+            <I.Wifi size={10} />
+            <span style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%", background: "var(--success-500)",
+                animation: "pulseDot 1.4s ease-in-out infinite",
+              }} />
+              {t("cart.pay.khqrLive")}
+            </span>
+          </div>
           {status === "waiting" && (
             <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-600)" }}>
               <span className="spinner" style={{ width: 9, height: 9, borderWidth: 1.5 }} />
-              {t("cart.pay.waiting")}
+              {t("cart.pay.khqrAuto")}
             </div>
           )}
           <div style={{ fontSize: 10, color: "var(--ink-400)", textAlign: "center", maxWidth: 200 }}>
@@ -839,6 +930,41 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
 
   const removeItem = (id) => setCart({ ...cart, items: cart.items.filter(i => i.id !== id) });
 
+  // === Patient-side validation for imaging (chain of custody) ===
+  const sendValidation = (id) => {
+    setCart({
+      ...cart,
+      items: cart.items.map(i => i.id === id ? { ...i, validationState: "sent" } : i),
+    });
+    onPushToast?.(t("validate.sent"));
+    // mock the patient tap-to-sign 1.8s later
+    setTimeout(() => {
+      const after = deriveCart(patient);
+      // only flip if still "sent" (use latest patient state)
+      onUpdate({
+        ...patient,
+        cart: {
+          ...(patient.cart || after),
+          items: (patient.cart?.items || after.items).map(i =>
+            i.id === id ? { ...i, validationState: "signed", patientValidatedAt: new Date().toISOString() } : i
+          ),
+        },
+      });
+      onPushToast?.(t("validate.signed"), "success");
+    }, 1800);
+  };
+
+  // === Mock insurer API decisions for insurance-paid items ===
+  const insItems = cart.items.filter(i => i.payer === "insurance");
+  const policyDecisions = useMemo(() => {
+    const map = {};
+    mockInsurerDecide(insItems).forEach(d => { map[d.id] = d; });
+    return map;
+  }, [insItems.map(i => i.id).join("|")]);
+
+  // Pending validations gate
+  const pendingValidations = cart.items.filter(i => i.kind === "imaging" && (i.validationState || "idle") !== "signed");
+
   const applyPromo = () => {
     const code = promoInput.trim().toUpperCase();
     if (!code) { setPromoError(""); return; }
@@ -870,10 +996,27 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     onPushToast?.(t("cart.pay.khqrReceived"));
   };
 
+  // === Seamless KHQR (QHA) auto-confirm via mock Bakong webhook ===
+  useEffect(() => {
+    if (cart.payment.method !== "khqr") return;
+    if (cart.payment.status !== "waiting") return;
+    const id = setTimeout(() => {
+      // re-read latest cart from patient to avoid stale state
+      const latest = patient.cart;
+      if (!latest) return;
+      if (latest.payment?.method === "khqr" && latest.payment?.status === "waiting") {
+        confirmKhqr();
+      }
+    }, 5000);
+    return () => clearTimeout(id);
+  }, [cart.payment.method, cart.payment.status]);
+
   const confirmCash = () => {
     const tenderedInUSD = (cart.ccy || "USD") === "KHR" ? tenderedNum / KHR_RATE : tenderedNum;
+    // Cash-drawer ding (Web Audio mock)
+    const dinged = playDrawerDing();
     setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", method: "cash", tendered, change: tenderedInUSD - totals.patientDue, receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
-    onPushToast?.(t("cart.pay.cashRecorded"));
+    onPushToast?.(dinged ? t("cart.pay.drawerDing") : t("cart.pay.cashRecorded"));
   };
 
   const splits = (() => {
@@ -936,8 +1079,16 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                     {t(meta.labelKey)} · {items.length}
                   </div>
                   {items.map((item, idx) => (
-                    <CartLine key={item.id} item={item} isLast={idx === items.length - 1} ccy={cart.ccy || "USD"}
-                      onRemove={() => removeItem(item.id)} t={t} />
+                    <CartLine
+                      key={item.id}
+                      item={item}
+                      isLast={idx === items.length - 1}
+                      ccy={cart.ccy || "USD"}
+                      onRemove={() => removeItem(item.id)}
+                      onSendValidation={() => sendValidation(item.id)}
+                      policyDecision={policyDecisions[item.id]}
+                      t={t}
+                    />
                   ))}
                 </div>
               );
@@ -1044,6 +1195,47 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               <I.Split size={12} /> {isSplit ? t("cart.split.edit") : t("cart.split.bill")}
             </button>
           </div>
+
+          {/* === Chain-of-custody banner (imaging not yet validated by patient) === */}
+          {pendingValidations.length > 0 && cart.payment.status !== "confirmed" && (
+            <div style={{
+              padding: "10px 16px", borderTop: "1px solid var(--border)",
+              background: "var(--warn-50)",
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: 5,
+                  background: "var(--warn-500)", color: "white",
+                  display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1,
+                }}>
+                  <I.AlertTriangle size={12} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("validate.bannerTitle")}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-700)", marginTop: 1, lineHeight: 1.4 }}>
+                    {t("validate.bannerBody")}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* === Auto-split hint (when insurance is in the mix) === */}
+          {insItems.length > 0 && cart.payment.status !== "confirmed" && (
+            <div style={{
+              padding: "8px 16px", borderTop: "1px solid var(--border)",
+              background: "var(--brand-50)",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <I.Sparkles size={13} style={{ color: "var(--brand-600)", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 650, color: "var(--brand-700)" }}>{t("ins.autoSplit")}</div>
+                <div style={{ fontSize: 10, color: "var(--ink-600)", marginTop: 1 }}>
+                  {t("ins.autoSplit.sub", { covered: 80, patient: 20 })}
+                </div>
+              </div>
+            </div>
+          )}
 
           <PaymentArea
             cart={cart}

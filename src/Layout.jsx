@@ -5,9 +5,9 @@ import { useLang } from "./i18n";
 import { NotificationsPanel, PillMenu, UserMenu } from "./Notifications";
 import { stations, shifts } from "./data";
 
-const LANGUAGES = ["English", "Khmer", "Vietnamese", "Thai", "French", "Korean"];
+const LANGUAGES = ["Khmer", "English", "Vietnamese", "Thai", "French", "Korean"];
 
-export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange }) {
+export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange, roaming, onToggleRoaming }) {
   const t = useLang();
   const items = [
     { id: "reception", key: "nav.reception", icon: "Home" },
@@ -231,6 +231,8 @@ export function Topbar({
   onUserAction,
   onSearch,
   patients,
+  roaming,
+  onToggleRoaming,
 }) {
   const t = useLang();
   const [stationOpen, setStationOpen] = useState(false);
@@ -327,6 +329,15 @@ export function Topbar({
           role="Receptionist"
         />
       </div>
+
+      <button
+        className={"icon-btn roaming-btn" + (roaming ? " active" : "")}
+        onClick={onToggleRoaming}
+        title={roaming ? t("mobile.exit") : t("mobile.enter")}
+      >
+        <I.Tablet size={16} />
+        {roaming && <span className="roaming-dot" />}
+      </button>
 
       <button className="btn btn-primary" onClick={onNewWalkIn}>
         <I.Plus size={16} /> {t("topbar.newWalkin")}

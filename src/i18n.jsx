@@ -67,6 +67,10 @@ const en = {
   // Comm method
   "comm.sms": "SMS",
   "comm.telegram": "Telegram",
+  "comm.telegram.locked": "Capture Telegram first to enable",
+  "comm.telegram.lockedShort": "Scan first",
+  "comm.contactCapture": "Contact channels",
+  "comm.contactCapture.sub": "At least one verified channel is required",
 
   // Telegram inline
   "telegram.title": "Scan patient's Telegram QR",
@@ -75,6 +79,13 @@ const en = {
   "telegram.scanning": "Scanning…",
   "telegram.captured": "Telegram captured",
   "telegram.rescan": "Rescan",
+  "telegram.verify": "Verify Telegram",
+  "telegram.verifyHint": "Send a 6-digit code to {handle}",
+  "telegram.sendCode": "Send code",
+  "telegram.sending": "Sending…",
+  "telegram.codeSent": "Code sent · check Telegram",
+  "telegram.verified": "Telegram verified",
+  "telegram.enterCode": "Enter the code from Telegram",
 
   // PatientStub
   "stub.title": "Patient Stub",
@@ -262,9 +273,52 @@ const en = {
   "lab.cat.immunology": "Immunology",
   "lab.cat.urinalysis": "Urinalysis",
 
+  // Author attribution
+  "author.nurse": "Nurse",
+  "author.patient": "Patient",
+  "author.system": "System",
+  "author.enteredBy": "Entered by {who}",
+  "author.signed": "{who} · {time}",
+
+  // Sensitive results / reorder
+  "reorder.title": "Reorder previous tests",
+  "reorder.sub": "Last visit · {date}",
+  "reorder.gate": "Sensitive results — fresh OTP required",
+  "reorder.gateBody": "To protect privacy, prior results stay hidden until the patient verifies a new code on their phone.",
+  "reorder.sendOtp": "Send OTP to patient",
+  "reorder.otpSent": "Code sent · awaiting verification",
+  "reorder.unlocked": "Unlocked · prior results visible for 5 min",
+  "reorder.empty": "No prior tests on file for this patient.",
+  "reorder.add": "Add to current order",
+  "reorder.added": "Added to order",
+  "reorder.locked": "Locked",
+
+  // Patient-side validation
+  "validate.sendPhone": "Send to patient's phone for sign-off",
+  "validate.sent": "Sent to patient · awaiting their tap",
+  "validate.signed": "Patient signed off on phone",
+  "validate.requiresPatient": "Requires patient sign-off (chain-of-custody)",
+  "validate.bannerTitle": "Chain of custody",
+  "validate.bannerBody": "X-rays and imaging must be validated by the patient on their own phone before the technician proceeds.",
+
   // Insurance
   "ins.title": "Insurance",
   "ins.add": "Add Insurance",
+  "ins.familyPlan": "Family plan",
+  "ins.familyPlan.sub": "Member name may differ from patient",
+  "ins.familyPlan.relation": "Relation to policy holder",
+  "ins.relation.self": "Self",
+  "ins.relation.spouse": "Spouse",
+  "ins.relation.child": "Child",
+  "ins.relation.parent": "Parent",
+  "ins.relation.other": "Other",
+  "ins.match.checking": "Checking name against patient record…",
+  "ins.match.ok": "{pct}% match — names align with patient",
+  "ins.match.warn": "{pct}% match — names differ",
+  "ins.match.warnBody": "Member name doesn't match the patient on this visit. Mark as a family plan if the policy belongs to a spouse, parent, or child.",
+  "ins.match.familyOk": "Family plan — relation: {relation}",
+  "ins.autoSplit": "Auto-split applied · insurer API",
+  "ins.autoSplit.sub": "{covered}% covered · {patient}% patient copay",
   "ins.empty": "No insurance on file — click Add Insurance above.",
   "ins.cardTitle": "Insurance Card",
   "ins.cardSub": "Scan to attach a copy of the card",
@@ -434,6 +488,29 @@ const en = {
   "cart.cta.checkInOnly": "Check in patient",
   "cart.cta.completeFirst": "Complete patient details to check in",
 
+  // Out-of-policy explanations from insurer API
+  "cart.policy.note": "Insurer note",
+  "cart.policy.outOfPolicy": "Out of policy",
+  "cart.policy.partial": "Partially covered",
+  "cart.policy.covered": "Fully covered",
+  "cart.policy.why": "Why?",
+  "cart.policy.expandComments": "Why this isn't fully covered",
+  "cart.policy.cashOnly": "Patient must pay this line in cash",
+
+  // Cash drawer ding
+  "cart.pay.drawerDing": "Drawer opened (♪ ding)",
+  "cart.pay.drawerSilent": "Audio muted — enable sound for drawer alert",
+
+  // KHQR seamless
+  "cart.pay.khqrLive": "Live · Bakong webhook listening",
+  "cart.pay.khqrAuto": "Will auto-confirm when patient pays",
+
+  // Mobile / roaming mode
+  "mobile.title": "Mobile reception",
+  "mobile.exit": "Exit roaming mode",
+  "mobile.enter": "Roaming mode",
+  "mobile.hint": "Optimised for tablet · capture identity, send link, walk away",
+
   // Visit reasons
   "reason.general": "General check-up",
   "reason.annual": "Annual physical",
@@ -518,6 +595,10 @@ const km = {
   // Comm method
   "comm.sms": "SMS",
   "comm.telegram": "Telegram",
+  "comm.telegram.locked": "ចាប់ Telegram មុនសិនដើម្បីបើក",
+  "comm.telegram.lockedShort": "ស្កែនមុន",
+  "comm.contactCapture": "ឆានែលទំនាក់ទំនង",
+  "comm.contactCapture.sub": "ត្រូវការឆានែលផ្ទៀងផ្ទាត់យ៉ាងតិចមួយ",
 
   // Telegram inline
   "telegram.title": "ស្កែន QR Telegram របស់អ្នកជំងឺ",
@@ -526,6 +607,13 @@ const km = {
   "telegram.scanning": "កំពុងស្កែន…",
   "telegram.captured": "បានចាប់ Telegram",
   "telegram.rescan": "ស្កែនឡើងវិញ",
+  "telegram.verify": "ផ្ទៀងផ្ទាត់ Telegram",
+  "telegram.verifyHint": "ផ្ញើលេខ ៦ ខ្ទង់ទៅ {handle}",
+  "telegram.sendCode": "ផ្ញើលេខ",
+  "telegram.sending": "កំពុងផ្ញើ…",
+  "telegram.codeSent": "បានផ្ញើ · ពិនិត្យ Telegram",
+  "telegram.verified": "Telegram បានផ្ទៀងផ្ទាត់",
+  "telegram.enterCode": "បញ្ចូលលេខពី Telegram",
 
   // PatientStub
   "stub.title": "ព័ត៌មានអ្នកជំងឺ",
@@ -713,9 +801,52 @@ const km = {
   "lab.cat.immunology": "ភាពស៊ាំ",
   "lab.cat.urinalysis": "ទឹកនោម",
 
+  // Author attribution
+  "author.nurse": "គិលានុបដ្ឋាយិកា",
+  "author.patient": "អ្នកជំងឺ",
+  "author.system": "ប្រព័ន្ធ",
+  "author.enteredBy": "បំពេញដោយ {who}",
+  "author.signed": "{who} · {time}",
+
+  // Sensitive results / reorder
+  "reorder.title": "បញ្ជាការពិនិត្យដែលធ្លាប់មាន",
+  "reorder.sub": "ការមកលើកមុន · {date}",
+  "reorder.gate": "លទ្ធផលរសើប — ត្រូវការ OTP ថ្មី",
+  "reorder.gateBody": "ដើម្បីការពារភាពឯកជន លទ្ធផលមុនត្រូវលាក់ រហូតដល់អ្នកជំងឺផ្ទៀងផ្ទាត់លេខថ្មីនៅលើទូរស័ព្ទរបស់ខ្លួន។",
+  "reorder.sendOtp": "ផ្ញើ OTP ទៅអ្នកជំងឺ",
+  "reorder.otpSent": "បានផ្ញើ · កំពុងរង់ចាំការផ្ទៀងផ្ទាត់",
+  "reorder.unlocked": "បានដោះសោ · មើលបានរយៈពេល ៥ នាទី",
+  "reorder.empty": "មិនមានការពិនិត្យពីមុនសម្រាប់អ្នកជំងឺនេះ។",
+  "reorder.add": "បន្ថែមទៅការបញ្ជាបច្ចុប្បន្ន",
+  "reorder.added": "បានបន្ថែម",
+  "reorder.locked": "ចាក់សោ",
+
+  // Patient-side validation
+  "validate.sendPhone": "ផ្ញើទៅទូរស័ព្ទអ្នកជំងឺដើម្បីបញ្ជាក់",
+  "validate.sent": "បានផ្ញើទៅអ្នកជំងឺ · កំពុងរង់ចាំ",
+  "validate.signed": "អ្នកជំងឺបានបញ្ជាក់នៅលើទូរស័ព្ទ",
+  "validate.requiresPatient": "តម្រូវឲ្យអ្នកជំងឺបញ្ជាក់ (chain-of-custody)",
+  "validate.bannerTitle": "ច្រវ៉ាក់ការគ្រប់គ្រង",
+  "validate.bannerBody": "ការថតកាំរស្មី X និងចិត្រាការត្រូវបញ្ជាក់ដោយអ្នកជំងឺនៅលើទូរស័ព្ទរបស់ខ្លួន មុនពេលអ្នកបច្ចេកទេសបន្ត។",
+
   // Insurance
   "ins.title": "ធានារ៉ាប់រង",
   "ins.add": "បន្ថែមធានារ៉ាប់រង",
+  "ins.familyPlan": "គម្រោងគ្រួសារ",
+  "ins.familyPlan.sub": "ឈ្មោះសមាជិកអាចខុសពីអ្នកជំងឺ",
+  "ins.familyPlan.relation": "ទំនាក់ទំនងនឹងម្ចាស់គោលការណ៍",
+  "ins.relation.self": "ខ្លួនឯង",
+  "ins.relation.spouse": "ប្តីប្រពន្ធ",
+  "ins.relation.child": "កូន",
+  "ins.relation.parent": "ឪពុកម្តាយ",
+  "ins.relation.other": "ផ្សេងទៀត",
+  "ins.match.checking": "កំពុងពិនិត្យឈ្មោះជាមួយកំណត់ត្រាអ្នកជំងឺ…",
+  "ins.match.ok": "{pct}% ត្រូវ — ឈ្មោះស្របនឹងអ្នកជំងឺ",
+  "ins.match.warn": "{pct}% ត្រូវ — ឈ្មោះមិនស្រប",
+  "ins.match.warnBody": "ឈ្មោះសមាជិកមិនស្របនឹងអ្នកជំងឺនៃការមកលើកនេះ។ សម្គាល់ជាគម្រោងគ្រួសារ បើគោលការណ៍ជារបស់ប្តីប្រពន្ធ ឪពុកម្តាយ ឬកូន។",
+  "ins.match.familyOk": "គម្រោងគ្រួសារ — ទំនាក់ទំនង: {relation}",
+  "ins.autoSplit": "ការបំបែកស្វ័យប្រវត្តិ · API ធានារ៉ាប់រង",
+  "ins.autoSplit.sub": "{covered}% គ្របដណ្តប់ · {patient}% អ្នកជំងឺបង់រួម",
   "ins.empty": "មិនមានធានារ៉ាប់រង — ចុច បន្ថែមធានារ៉ាប់រង ខាងលើ។",
   "ins.cardTitle": "កាតធានារ៉ាប់រង",
   "ins.cardSub": "ស្កែនដើម្បីភ្ជាប់ច្បាប់ចម្លងនៃកាត",
@@ -885,6 +1016,29 @@ const km = {
   "cart.cta.checkInOnly": "ចុះ​ឈ្មោះ​អ្នក​ជំងឺ",
   "cart.cta.completeFirst": "បំពេញ​ព័ត៌មាន​អ្នក​ជំងឺ​មុន​ចុះ​ឈ្មោះ",
 
+  // Out-of-policy
+  "cart.policy.note": "កំណត់ចំណាំធានារ៉ាប់រង",
+  "cart.policy.outOfPolicy": "ក្រៅគោលការណ៍",
+  "cart.policy.partial": "គ្របដណ្តប់ដោយផ្នែក",
+  "cart.policy.covered": "គ្របដណ្តប់ពេញ",
+  "cart.policy.why": "ហេតុអ្វី?",
+  "cart.policy.expandComments": "ហេតុអ្វីមិនគ្របដណ្តប់ពេញ",
+  "cart.policy.cashOnly": "អ្នកជំងឺត្រូវបង់ជាសាច់ប្រាក់",
+
+  // Cash drawer ding
+  "cart.pay.drawerDing": "ថតបានបើក (♪ ឌីង)",
+  "cart.pay.drawerSilent": "បិទសម្លេង — បើកសម្លេងសម្រាប់ការជូនដំណឹង",
+
+  // KHQR seamless
+  "cart.pay.khqrLive": "ភ្ជាប់ផ្ទាល់ · Bakong webhook",
+  "cart.pay.khqrAuto": "នឹងបញ្ជាក់ស្វ័យប្រវត្តិពេលអ្នកជំងឺបង់",
+
+  // Mobile / roaming
+  "mobile.title": "ការទទួលភ្ញៀវចល័ត",
+  "mobile.exit": "បិទមុខងារចល័ត",
+  "mobile.enter": "មុខងារចល័ត",
+  "mobile.hint": "ប្រសើរសម្រាប់ Tablet · ចាប់អត្តសញ្ញាណ ផ្ញើតំណ ដើររួច",
+
   // Visit reasons
   "reason.general": "ពិនិត្យទូទៅ",
   "reason.annual": "ពិនិត្យប្រចាំឆ្នាំ",
@@ -928,3 +1082,9 @@ export const VISIT_REASON_KEYS = [
   "reason.diabetes", "reason.bloodpressure", "reason.allergy",
   "reason.skin", "reason.pregnancy", "reason.travel",
 ];
+
+// 6 most-tapped reasons (shown as default pills before "+more")
+export const VISIT_REASON_POPULAR = new Set([
+  "reason.general", "reason.annual", "reason.followup",
+  "reason.vaccination", "reason.lab", "reason.bloodpressure",
+]);

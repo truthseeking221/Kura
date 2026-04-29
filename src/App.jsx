@@ -4,7 +4,7 @@ import { I } from "./icons";
 import { initialPatients, payerOptions, initialNotifications } from "./data";
 import { Sidebar, Topbar, GoalBar } from "./Layout";
 import { FastCheckIn } from "./Center";
-import { VisitDetails, Insurance } from "./Cards";
+import { VisitDetails, Insurance, PriorResults } from "./Cards";
 import { OrderCart } from "./OrderCart";
 import {
   NewWalkInModal,
@@ -44,7 +44,8 @@ export default function App() {
   const [activeId, setActiveId] = useState("p1");
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("reception");
-  const [uiLang, setUiLang] = useState("English");
+  const [uiLang, setUiLang] = useState("Khmer");
+  const [roaming, setRoaming] = useState(false);
 
   const [sending, setSending] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
@@ -211,7 +212,7 @@ export default function App() {
 
   return (
     <LangProvider lang={uiLang}>
-    <div className="app" data-screen-label="Reception">
+    <div className={"app" + (roaming ? " roaming" : "")} data-screen-label="Reception">
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed(c => !c)}
@@ -219,6 +220,8 @@ export default function App() {
         onNavigate={handleNavigate}
         lang={uiLang}
         onLangChange={setUiLang}
+        roaming={roaming}
+        onToggleRoaming={() => setRoaming(r => !r)}
       />
       <div className="main">
         <Topbar
@@ -235,6 +238,8 @@ export default function App() {
           onUserAction={handleUserAction}
           patients={patients}
           onSearch={handleSearch}
+          roaming={roaming}
+          onToggleRoaming={() => setRoaming(r => !r)}
         />
         <div className="workspace no-queue">
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
@@ -259,6 +264,24 @@ export default function App() {
               sentFlash={sentFlash}
             />
             <Insurance patient={active} onUpdate={updatePatient} />
+            <PriorResults
+              patient={active}
+              onUpdate={updatePatient}
+              onPushToast={pushToast}
+              onAddToOrder={(r) => {
+                const cart = active.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" }, pregnancyConsent: null };
+                if (cart.items.find(i => i.id === r.testId)) {
+                  pushToast("Already in cart", "error");
+                  return;
+                }
+                const newItem = {
+                  id: r.testId, kind: "lab", name: r.testName, price: r.price, qty: 1,
+                  payer: active.payer || "direct", status: "pending",
+                };
+                updatePatient({ ...active, cart: { ...cart, items: [...cart.items, newItem] } });
+                pushToast(`Reordered: ${r.testName}`, "success");
+              }}
+            />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
             <OrderCart

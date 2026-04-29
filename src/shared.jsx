@@ -2,6 +2,178 @@
 import React, { useState, useEffect, useRef } from "react";
 import { I } from "./icons";
 
+// === Fuzzy name match (Dice's coefficient on bigrams) ===
+// Returns a similarity score 0..1.
+export function fuzzyNameScore(a, b) {
+  if (!a || !b) return 0;
+  const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zក-៿\s]/g, "").trim().replace(/\s+/g, " ");
+  const A = norm(a), B = norm(b);
+  if (A === B) return 1;
+  if (!A || !B) return 0;
+  // exact token overlap (e.g. last name match)
+  const tokensA = new Set(A.split(" "));
+  const tokensB = new Set(B.split(" "));
+  let tokenHits = 0;
+  tokensA.forEach(t => { if (tokensB.has(t) && t.length > 1) tokenHits++; });
+  const tokenScore = tokenHits / Math.max(tokensA.size, tokensB.size);
+  // bigram dice
+  const bigrams = (s) => {
+    const out = new Map();
+    const compact = s.replace(/\s+/g, "");
+    for (let i = 0; i < compact.length - 1; i++) {
+      const bg = compact.slice(i, i + 2);
+      out.set(bg, (out.get(bg) || 0) + 1);
+    }
+    return out;
+  };
+  const ba = bigrams(A), bb = bigrams(B);
+  let inter = 0, ta = 0, tb = 0;
+  ba.forEach(v => ta += v);
+  bb.forEach(v => tb += v);
+  ba.forEach((v, k) => { if (bb.has(k)) inter += Math.min(v, bb.get(k)); });
+  const dice = (ta + tb) === 0 ? 0 : (2 * inter) / (ta + tb);
+  return Math.max(dice, tokenScore);
+}
+
+// === Mock insurer API ===
+// Returns coverage decisions per cart-item id. Stable & deterministic.
+const POLICY_RULES = {
+  // out-of-policy tests (cosmetic / non-essential)
+  outOfPolicy: new Set(["vit-d", "vit-b12", "us-thyroid", "tele-mh"]),
+  // partial coverage labs (50%)
+  partial: new Set(["mri-knee", "ct-head"]),
+  // standard outpatient (80%)
+  // everything else default 80% if covered
+};
+const POLICY_REASONS = {
+  "vit-d":      "Vitamin D testing is wellness-tier — not covered under outpatient plan.",
+  "vit-b12":    "Supplement testing falls outside diagnostic coverage.",
+  "us-thyroid": "Imaging without referring symptoms is excluded.",
+  "tele-mh":    "Mental health teleconsultation requires separate rider.",
+  "mri-knee":   "MRI capped at 50% — pre-auth required for full coverage.",
+  "ct-head":    "Advanced imaging — 50% co-insurance per policy schedule.",
+};
+export function mockInsurerDecide(items) {
+  return items.map(i => {
+    if (POLICY_RULES.outOfPolicy.has(i.id)) {
+      return { id: i.id, status: "outOfPolicy", coveredPct: 0, reason: POLICY_REASONS[i.id] };
+    }
+    if (POLICY_RULES.partial.has(i.id)) {
+      return { id: i.id, status: "partial", coveredPct: 50, reason: POLICY_REASONS[i.id] };
+    }
+    return { id: i.id, status: "covered", coveredPct: 80, reason: null };
+  });
+}
+
+// === Cash drawer ding (Web Audio) ===
+let _audioCtx = null;
+export function playDrawerDing() {
+  try {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return false;
+    if (!_audioCtx) _audioCtx = new Ctor();
+    const ctx = _audioCtx;
+    if (ctx.state === "suspended") ctx.resume();
+    const now = ctx.currentTime;
+    // Two-tone bell: 1318 Hz (E6) → 1568 Hz (G6)
+    const tones = [{ f: 1318, t: 0 }, { f: 1568, t: 0.08 }];
+    tones.forEach(({ f, t }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0, now + t);
+      gain.gain.linearRampToValueAtTime(0.18, now + t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.42);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.45);
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// === Author attribution badge ===
+export function AuthorBadge({ who, time, t }) {
+  if (!who) return null;
+  const isPatient = who === "patient";
+  const isSystem = who === "system";
+  const Ico = isPatient ? I.Smartphone : isSystem ? I.Sparkles : I.User;
+  const fg = isPatient ? "#7a45ec" : isSystem ? "var(--ink-500)" : "var(--brand-600)";
+  const bg = isPatient ? "#f0eafd" : isSystem ? "var(--ink-50)" : "var(--brand-50)";
+  const label = isPatient
+    ? (t ? t("author.patient") : "Patient")
+    : isSystem
+      ? (t ? t("author.system") : "System")
+      : (t ? t("author.nurse") : "Nurse");
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 3,
+      fontSize: 10, fontWeight: 600, color: fg, background: bg,
+      padding: "1px 5px 1px 4px", borderRadius: 3, whiteSpace: "nowrap",
+      border: "1px solid " + bg,
+    }} title={time ? (t ? t("author.signed", { who: label, time }) : `${label} · ${time}`) : (t ? t("author.enteredBy", { who: label }) : `Entered by ${label}`)}>
+      <Ico size={9} /> {label}
+    </span>
+  );
+}
+
+// === Visit-reason pills (replaces dropdown for fast tap-selection) ===
+// options: { value, label, popular? }[]
+export function VisitReasonPills({ value, onChange, options, placeholder, invalid }) {
+  const sel = Array.isArray(value) ? value : (value ? [value] : []);
+  const [showAll, setShowAll] = useState(false);
+  const popular = options.filter(o => o.popular);
+  const visible = showAll || popular.length === 0 ? options : popular;
+  const hidden = options.length - visible.length;
+  const toggle = (v) => {
+    onChange(sel.includes(v) ? sel.filter(x => x !== v) : [...sel, v]);
+  };
+  return (
+    <div className={"reason-pills" + (invalid ? " invalid" : "")}>
+      <div className="reason-pills-grid">
+        {visible.map(o => {
+          const active = sel.includes(o.value);
+          return (
+            <button
+              key={o.value}
+              type="button"
+              className={"reason-pill" + (active ? " active" : "")}
+              onClick={() => toggle(o.value)}
+            >
+              {active && <I.Check size={11} strokeWidth={3} style={{ flexShrink: 0 }} />}
+              <span>{o.label}</span>
+            </button>
+          );
+        })}
+        {hidden > 0 && !showAll && (
+          <button
+            type="button"
+            className="reason-pill reason-pill-more"
+            onClick={() => setShowAll(true)}
+          >
+            <I.Plus size={11} /> +{hidden}
+          </button>
+        )}
+        {showAll && popular.length > 0 && (
+          <button
+            type="button"
+            className="reason-pill reason-pill-more"
+            onClick={() => setShowAll(false)}
+          >
+            <I.ChevronUp size={11} /> Less
+          </button>
+        )}
+      </div>
+      {sel.length === 0 && placeholder && (
+        <div className="reason-pills-hint">{placeholder}</div>
+      )}
+    </div>
+  );
+}
+
 export const COUNTRIES = [
   { code: "+855", name: "Cambodia",   flag: "🇰🇭" },
   { code: "+84",  name: "Vietnam",    flag: "🇻🇳" },

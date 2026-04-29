@@ -3,11 +3,9 @@ import React, { useState } from "react";
 import { I } from "./icons";
 import {
   QRGlyph,
-  MultiSelectSearch,
   CountryCodeSelect,
-  VISIT_REASONS,
 } from "./shared";
-import { useLang, VISIT_REASON_KEYS } from "./i18n";
+import { useLang } from "./i18n";
 
 // === Mobile field with OTP verification ===
 function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, otpState, setOtpState }) {
@@ -172,11 +170,13 @@ function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, 
 }
 
 // === Preferred Communication Method segmented selector ===
-function CommMethodSelector({ value, onChange, error }) {
+// Telegram option is locked until a Telegram handle has been captured.
+function CommMethodSelector({ value, onChange, error, telegramReady, smsReady }) {
   const t = useLang();
+  // Telegram on the LEFT (per reviewer feedback) — left-to-right.
   const opts = [
-    { id: "sms",      labelKey: "comm.sms",      icon: I.MessageSquare },
-    { id: "telegram", labelKey: "comm.telegram", icon: I.Send },
+    { id: "telegram", labelKey: "comm.telegram", icon: I.Send,           ready: telegramReady, lockedKey: "comm.telegram.locked" },
+    { id: "sms",      labelKey: "comm.sms",      icon: I.MessageSquare,  ready: smsReady,      lockedKey: "comm.telegram.locked" },
   ];
   return (
     <div className="field">
@@ -188,38 +188,55 @@ function CommMethodSelector({ value, onChange, error }) {
       }}>
         {opts.map(o => {
           const active = value === o.id;
+          const locked = !o.ready;
           const Ico = o.icon;
+          const tip = locked ? t(o.lockedKey) : "";
           return (
             <button
               key={o.id}
               type="button"
-              onClick={() => onChange(o.id)}
+              onClick={() => !locked && onChange(o.id)}
+              disabled={locked}
+              title={tip}
               style={{
-                background: active ? "var(--brand-50)" : "transparent",
-                color: active ? "var(--brand-700)" : "var(--ink-600)",
-                border: active ? "1px solid var(--brand-200)" : "1px solid transparent",
+                background: locked ? "transparent" : (active ? "var(--brand-50)" : "transparent"),
+                color: locked ? "var(--ink-400)" : (active ? "var(--brand-700)" : "var(--ink-600)"),
+                border: active && !locked ? "1px solid var(--brand-200)" : "1px solid transparent",
                 borderRadius: 5,
-                fontSize: 12, fontWeight: 600, cursor: "pointer",
+                fontSize: 12, fontWeight: 600,
+                cursor: locked ? "not-allowed" : "pointer",
                 display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4,
                 padding: 0,
               }}
             >
-              <Ico size={12} /> {t(o.labelKey)}
+              {locked ? <I.Lock size={11} /> : <Ico size={12} />}
+              {t(o.labelKey)}
             </button>
           );
         })}
       </div>
       {error && <div className="help error">{error}</div>}
+      {!telegramReady && (
+        <div className="help" style={{ color: "var(--ink-500)", fontSize: 10.5, marginTop: 4, display: "inline-flex", alignItems: "center", gap: 3 }}>
+          <I.Info size={10} /> {t("comm.telegram.locked")}
+        </div>
+      )}
     </div>
   );
 }
 
-// === Inline Telegram QR scanner widget (when Telegram comm method chosen) ===
-function TelegramQRInline({ patient, onUpdate }) {
+// === Telegram capture card with OTP verification ===
+// Mirrors the SMS OTP flow: scan QR → handle captured → send 6-digit code → verify.
+function TelegramCaptureCard({ patient, onUpdate }) {
   const t = useLang();
   const [scanning, setScanning] = React.useState(false);
-  const username = patient.telegramHandle || "";
-  const captured = !!username;
+  const [code, setCode] = React.useState("");
+  const [sent, setSent] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const [wrong, setWrong] = React.useState(false);
+  const handle = patient.telegramHandle || "";
+  const captured = !!handle;
+  const verified = !!patient.telegramVerified;
 
   const startScan = () => {
     setScanning(true);
@@ -229,110 +246,196 @@ function TelegramQRInline({ patient, onUpdate }) {
         ...patient,
         telegramHandle: "@" + (patient.name || "patient").toLowerCase().replace(/\s+/g, ""),
       });
-    }, 1300);
+    }, 1100);
   };
 
-  const rescan = () => onUpdate({ ...patient, telegramHandle: "" });
+  const rescan = () => {
+    setSent(false); setCode(""); setWrong(false);
+    onUpdate({ ...patient, telegramHandle: "", telegramVerified: false });
+  };
 
-  if (captured) {
+  const sendCode = () => {
+    setSending(true);
+    setTimeout(() => { setSending(false); setSent(true); }, 600);
+  };
+
+  const verify = (val) => {
+    setCode(val);
+    if (val.length === 6) {
+      if (val === "123456" || val === "000000") {
+        setWrong(false);
+        onUpdate({ ...patient, telegramVerified: true });
+      } else {
+        setWrong(true);
+      }
+    } else if (wrong) setWrong(false);
+  };
+
+  // === Captured + verified ===
+  if (captured && verified) {
     return (
       <div style={{
-        marginTop: 10,
-        background: "var(--success-50)", border: "1px solid var(--success-200, #a7f3d0)",
-        borderRadius: 8, padding: "10px 12px",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+        background: "var(--success-50)", border: "1.5px solid var(--success-500)",
+        borderRadius: 10, padding: 12,
+        display: "flex", flexDirection: "column", gap: 0,
+        height: "100%",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
-            width: 26, height: 26, borderRadius: 6,
+            width: 32, height: 32, borderRadius: 8,
             background: "var(--success-500)", color: "white",
-            display: "grid", placeItems: "center",
+            display: "grid", placeItems: "center", flexShrink: 0,
           }}>
-            <I.Check size={14} strokeWidth={3} />
+            <I.Check size={16} strokeWidth={3} />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("telegram.captured")}</span>
-            <span style={{ fontSize: 11.5, color: "var(--ink-700)", fontFamily: "'SF Mono', ui-monospace, monospace" }}>{username}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)", display: "flex", alignItems: "center", gap: 6 }}>
+              {t("telegram.verified")}
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 3,
+                background: "var(--success-50)", color: "var(--success-600)",
+                border: "1px solid var(--success-500)",
+                borderRadius: 4, padding: "1px 6px",
+                fontSize: 10, fontWeight: 700,
+              }}>
+                <I.ShieldCheck size={9} strokeWidth={2.5} /> OTP
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-600)", marginTop: 1, fontFamily: "'SF Mono', ui-monospace, monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {handle}
+            </div>
           </div>
+          <button type="button" onClick={rescan} title={t("telegram.rescan")} style={{
+            background: "transparent", border: "none", padding: 4, cursor: "pointer",
+            color: "var(--ink-500)", display: "grid", placeItems: "center", flexShrink: 0,
+          }}>
+            <I.Edit size={12} />
+          </button>
         </div>
-        <button type="button" onClick={rescan} style={{
-          background: "transparent", border: "none", padding: 0, cursor: "pointer",
-          color: "var(--brand-600)", fontSize: 11.5, fontWeight: 600,
-          display: "inline-flex", alignItems: "center", gap: 3,
-        }}>
-          <I.Edit size={11} /> {t("telegram.rescan")}
-        </button>
       </div>
     );
   }
 
+  // === Captured, awaiting OTP ===
+  if (captured) {
+    return (
+      <div style={{
+        background: "var(--surface-2)", border: "1.5px solid var(--border-strong)",
+        borderRadius: 10, padding: 12,
+        display: "flex", flexDirection: "column", gap: 8,
+        height: "100%",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: "#e7f0fa", color: "#2087d6",
+            display: "grid", placeItems: "center", flexShrink: 0,
+          }}>
+            <I.Send size={15} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 650, color: "var(--ink-900)" }}>{t("telegram.verify")}</div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-500)", marginTop: 1, fontFamily: "'SF Mono', ui-monospace, monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{handle}</div>
+          </div>
+          <button type="button" onClick={rescan} title={t("telegram.rescan")} style={{
+            background: "transparent", border: "none", padding: 4, cursor: "pointer",
+            color: "var(--ink-500)", display: "grid", placeItems: "center", flexShrink: 0,
+          }}>
+            <I.RefreshCw size={11} />
+          </button>
+        </div>
+        {!sent ? (
+          <button
+            type="button"
+            onClick={sendCode}
+            disabled={sending}
+            className="btn btn-secondary btn-sm"
+            style={{ height: 30, justifyContent: "center", fontSize: 11.5 }}
+          >
+            {sending
+              ? (<><span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t("telegram.sending")}</>)
+              : (<><I.KeyRound size={12} /> {t("telegram.sendCode")}</>)}
+          </button>
+        ) : (
+          <>
+            <input
+              className={"input" + (wrong ? " invalid" : "")}
+              value={code}
+              onChange={e => verify(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder={t("telegram.enterCode")}
+              autoFocus
+              style={{ height: 30, fontSize: 12, letterSpacing: "0.15em", fontFamily: "'SF Mono', ui-monospace, monospace", textAlign: "center" }}
+            />
+            <div style={{ fontSize: 10.5, color: wrong ? "var(--danger-500)" : "var(--ink-500)", display: "inline-flex", alignItems: "center", gap: 3 }}>
+              {wrong ? (<><I.AlertCircle size={10} /> {t("otp.incorrect")}</>) : (<><I.Send size={10} /> {t("telegram.codeSent")}</>)}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // === Not captured: scan QR ===
   return (
     <div style={{
-      marginTop: 10,
-      background: "var(--surface-2)", border: "1px dashed var(--border-strong)",
-      borderRadius: 8, padding: 14,
-      display: "flex", gap: 14, alignItems: "center",
+      background: "var(--surface-2)", border: "1.5px dashed var(--border-strong)",
+      borderRadius: 10, padding: 12,
+      display: "flex", gap: 10, alignItems: "stretch",
+      height: "100%",
     }}>
-      {/* Viewfinder */}
       <div style={{
-        width: 120, height: 120, borderRadius: 10,
+        width: 64, height: 64, borderRadius: 8,
         background: "linear-gradient(135deg, #1a1d24 0%, #0f1115 100%)",
         position: "relative", overflow: "hidden", flexShrink: 0,
         display: "grid", placeItems: "center",
       }}>
         {[
-          { top: 8, left: 8, br: ["solid", "solid", "none", "none"] },
-          { top: 8, right: 8, br: ["solid", "none", "none", "solid"] },
-          { bottom: 8, left: 8, br: ["none", "solid", "solid", "none"] },
-          { bottom: 8, right: 8, br: ["none", "none", "solid", "solid"] },
+          { top: 5, left: 5, br: ["solid", "solid", "none", "none"] },
+          { top: 5, right: 5, br: ["solid", "none", "none", "solid"] },
+          { bottom: 5, left: 5, br: ["none", "solid", "solid", "none"] },
+          { bottom: 5, right: 5, br: ["none", "none", "solid", "solid"] },
         ].map((c, idx) => (
           <div key={idx} style={{
             position: "absolute",
             top: c.top, left: c.left, bottom: c.bottom, right: c.right,
-            width: 18, height: 18,
-            borderTop:    c.br[0] === "solid" ? "2.5px solid #5fb1f5" : "none",
-            borderRight:  c.br[1] === "solid" ? "2.5px solid #5fb1f5" : "none",
-            borderBottom: c.br[2] === "solid" ? "2.5px solid #5fb1f5" : "none",
-            borderLeft:   c.br[3] === "solid" ? "2.5px solid #5fb1f5" : "none",
-            borderTopLeftRadius:     c.br[0] === "solid" && c.br[3] === "solid" ? 4 : 0,
-            borderTopRightRadius:    c.br[0] === "solid" && c.br[1] === "solid" ? 4 : 0,
-            borderBottomLeftRadius:  c.br[2] === "solid" && c.br[3] === "solid" ? 4 : 0,
-            borderBottomRightRadius: c.br[2] === "solid" && c.br[1] === "solid" ? 4 : 0,
+            width: 12, height: 12,
+            borderTop:    c.br[0] === "solid" ? "2px solid var(--brand-400)" : "none",
+            borderRight:  c.br[1] === "solid" ? "2px solid var(--brand-400)" : "none",
+            borderBottom: c.br[2] === "solid" ? "2px solid var(--brand-400)" : "none",
+            borderLeft:   c.br[3] === "solid" ? "2px solid var(--brand-400)" : "none",
           }} />
         ))}
         {scanning && (
           <div style={{
-            position: "absolute", left: 14, right: 14,
-            height: 2, background: "linear-gradient(90deg, transparent, #5fb1f5, transparent)",
+            position: "absolute", left: 8, right: 8,
+            height: 2, background: "linear-gradient(90deg, transparent, var(--brand-400), transparent)",
             animation: "scanLine 1.4s linear infinite",
-            boxShadow: "0 0 8px #5fb1f5",
+            boxShadow: "0 0 8px var(--brand-400)",
           }} />
         )}
-        <div style={{ color: scanning ? "#5fb1f5" : "rgba(255,255,255,0.35)", transition: "color 0.2s" }}>
-          <QRGlyph size={42} />
+        <div style={{ color: scanning ? "var(--brand-400)" : "rgba(255,255,255,0.35)", transition: "color 0.2s" }}>
+          <QRGlyph size={26} />
         </div>
       </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)", marginBottom: 3 }}>
-          {t("telegram.title")}
-        </div>
-        <div style={{
-          fontSize: 11.5, color: "var(--ink-600)", lineHeight: 1.45,
-          fontStyle: "italic", marginBottom: 10,
-        }}>
-          {t("telegram.hint")}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 650, color: "var(--ink-900)", marginBottom: 2 }}>
+            {t("telegram.title")}
+          </div>
+          <div style={{ fontSize: 10.5, color: "var(--ink-500)", lineHeight: 1.4 }}>
+            {t("telegram.hint")}
+          </div>
         </div>
         <button
           type="button"
           onClick={startScan}
           disabled={scanning}
           className="btn btn-ghost btn-sm"
-          style={{ height: 30 }}
+          style={{ height: 28, fontSize: 11, justifyContent: "center" }}
         >
           {scanning
-            ? (<><span className="spinner" /> {t("telegram.scanning")}</>)
-            : (<><I.Camera size={13} /> {t("telegram.start")}</>)}
+            ? (<><span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t("telegram.scanning")}</>)
+            : (<><I.Camera size={12} /> {t("telegram.start")}</>)}
         </button>
       </div>
     </div>
@@ -378,9 +481,33 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
   };
 
   const idScanned = !!patient.idScanned;
-  const commMethod = patient.commMethod === "telegram" ? "telegram" : "sms";
+  const telegramVerified = !!patient.telegramVerified;
+  const phoneVerified = !!patient.otpVerified;
+  // Telegram option locked until captured AND OTP-verified.
+  // Auto-default to whichever channel is verified first.
+  const commMethod = patient.commMethod === "telegram" && telegramVerified
+    ? "telegram"
+    : phoneVerified
+      ? "sms"
+      : (telegramVerified ? "telegram" : (patient.commMethod || "sms"));
 
-  const [otpState, setOtpState] = useState({ status: "idle" });
+  const [otpState, setOtpState] = useState({ status: phoneVerified ? "verified" : "idle" });
+  React.useEffect(() => {
+    // sync local OTP state if the patient becomes pre-verified (seed/data switch)
+    if (phoneVerified && otpState.status !== "verified") setOtpState({ status: "verified" });
+  }, [phoneVerified]);
+  React.useEffect(() => {
+    // mirror local "verified" status into patient.otpVerified
+    if (otpState.status === "verified" && !patient.otpVerified) {
+      onUpdate({ ...patient, otpVerified: true });
+    }
+    if (otpState.status !== "verified" && patient.otpVerified && otpState.status !== "idle") {
+      // clear when explicitly reset
+      if (otpState.status === "idle" || otpState.status === "sent") {
+        // no-op for sent flow — only clear on explicit reset
+      }
+    }
+  }, [otpState.status]);
 
   const onIdScan = () => {
     onUpdate({
@@ -558,8 +685,21 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
               </div>
             </div>
 
-            {/* Row 2: Mobile (with OTP) | Preferred Comm | Language */}
-            <div className="field-row" style={{ gridTemplateColumns: "1.4fr 1.1fr 0.9fr", marginBottom: 14 }}>
+            {/* Section heading — Contact channels (left = Telegram, right = SMS) */}
+            <div style={{
+              fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
+              fontWeight: 650, color: "var(--ink-500)", marginBottom: 8,
+              display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
+            }}>
+              {t("comm.contactCapture")}
+              <span style={{ fontSize: 10.5, color: "var(--ink-400)", textTransform: "none", letterSpacing: 0, fontWeight: 500, fontStyle: "italic" }}>
+                · {t("comm.contactCapture.sub")}
+              </span>
+            </div>
+
+            {/* Row 2 — Telegram (LEFT) | Mobile + OTP (RIGHT) */}
+            <div className="field-row checkin-channels" style={{ gridTemplateColumns: "1fr 1.15fr", marginBottom: 14, alignItems: "stretch" }}>
+              <TelegramCaptureCard patient={patient} onUpdate={onUpdate} />
               <MobileWithOTP
                 countryCode={countryCode}
                 phoneNumber={phoneNumber}
@@ -569,22 +709,28 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 otpState={otpState}
                 setOtpState={setOtpState}
               />
+            </div>
+
+            {/* Row 3 — Preferred Comm (Telegram-locked unless verified) | Language (Khmer default) */}
+            <div className="field-row" style={{ gridTemplateColumns: "1.3fr 1fr", marginBottom: 0 }}>
               <CommMethodSelector
                 value={commMethod}
                 onChange={v => update("commMethod", v)}
                 error={errors.commMethod}
+                telegramReady={telegramVerified}
+                smsReady={phoneVerified}
               />
               <div className="field">
                 <label className="label">{t("checkin.language")}</label>
                 <div className="input-wrap">
                   <select
                     className="select"
-                    value={patient.language || "English"}
+                    value={patient.language || "Khmer"}
                     onChange={e => update("language", e.target.value)}
                     style={{ paddingRight: 32, appearance: "none" }}
                   >
-                    <option>English</option>
                     <option>Khmer</option>
+                    <option>English</option>
                     <option>Vietnamese</option>
                     <option>Thai</option>
                     <option>French</option>
@@ -594,11 +740,6 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
                 </div>
               </div>
             </div>
-
-            {/* Conditional: Telegram QR inline scanner */}
-            {commMethod === "telegram" && (
-              <TelegramQRInline patient={patient} onUpdate={onUpdate} />
-            )}
           </>
         )}
       </div>

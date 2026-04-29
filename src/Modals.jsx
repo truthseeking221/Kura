@@ -1,8 +1,8 @@
 // === Modals + Toasts ===
 import React, { useState, useEffect } from "react";
 import { I } from "./icons";
-import { CountryCodeSelect, MultiSelectSearch, VISIT_REASONS } from "./shared";
-import { useLang, VISIT_REASON_KEYS } from "./i18n";
+import { CountryCodeSelect, VisitReasonPills, VISIT_REASONS } from "./shared";
+import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
 
 export function NewWalkInModal({ open, onClose, onCreate }) {
   const t = useLang();
@@ -81,10 +81,10 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
           <div className="field-row" style={{ gridTemplateColumns: "1fr", marginBottom: 14 }}>
             <div className="field">
               <label className="label">{t("checkin.visitReason")} <span className="req">*</span></label>
-              <MultiSelectSearch
+              <VisitReasonPills
                 value={form.visitReason}
                 onChange={v => set("visitReason", v)}
-                options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key) }))}
+                options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
                 placeholder={t("checkin.visitReason.placeholder")}
                 invalid={!!errors.visitReason}
               />

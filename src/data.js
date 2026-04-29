@@ -19,6 +19,7 @@ export const initialPatients = [
     mobile: "+855 12 345 678",
     dob: "1996-02-14",
     telegramHandle: "t.me/mayatran",
+    telegramVerified: true,
     commMethod: "telegram",
     otpVerified: true,
     pwaSentAt: "09:12 AM",
@@ -63,6 +64,17 @@ export const initialPatients = [
       { id: "glucose", name: "Blood Glucose (Fasting)",    price: 5, status: "pending" },
     ],
     insurance: [],
+    visitDetailsAuthors: {
+      chiefComplaint: "patient",
+      medicalHistory: "patient",
+      medications: "patient",
+      allergies: "patient",
+    },
+    priorResults: [
+      { id: "pr-1", testId: "lipid", testName: "Lipid Panel", visitDate: "2026-01-14", status: "complete", price: 12, sensitive: true },
+      { id: "pr-2", testId: "hba1c", testName: "HbA1c (Diabetes)", visitDate: "2026-01-14", status: "complete", price: 11, sensitive: true },
+      { id: "pr-3", testId: "cbc", testName: "Complete Blood Count (CBC)", visitDate: "2025-10-04", status: "complete", price: 8, sensitive: false },
+    ],
     handoff: 1,
     handoffStates: ["new","in-progress","pending","pending"],
     identity: { verified: true },
@@ -116,6 +128,14 @@ export const initialPatients = [
     insurance: [
       { id: "ins-p2", provider: "Forte Insurance", policyNumber: "FT-00123456", memberName: "Bao Nguyen", memberId: "M-7788991", expiry: "12/2026", coverage: "Outpatient", cardAttached: false },
     ],
+    visitDetailsAuthors: {
+      chiefComplaint: "patient",
+      allergies: "patient",
+    },
+    priorResults: [
+      { id: "pr-b1", testId: "lipid", testName: "Lipid Panel", visitDate: "2025-12-02", status: "complete", price: 12, sensitive: true },
+      { id: "pr-b2", testId: "ecg-12", testName: "ECG — 12 lead", visitDate: "2025-12-02", status: "complete", price: 22, sensitive: false },
+    ],
     handoff: 1,
     handoffStates: ["done","in-progress","pending","pending"],
     identity: { verified: true },
@@ -139,6 +159,7 @@ export const initialPatients = [
     mobile: "+855 77 555 244",
     dob: "1993-11-22",
     telegramHandle: "t.me/pierret",
+    telegramVerified: true,
     commMethod: "telegram",
     otpVerified: true,
     pwaSentAt: "08:58 AM",
