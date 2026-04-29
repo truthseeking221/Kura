@@ -60,18 +60,42 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
       ? t("vd.lockNoReason")
       : "";
 
+  // === Field metadata: which are nurse-required, which are patient-supplied ===
+  // Visit reason = NURSE captures (it gates the order). Everything else = PATIENT.
+  const fieldDefs = [
+    { key: "chiefComplaint", labelKey: "vd.chiefComplaint", placeholderKey: "vd.chiefComplaint.placeholder", multiline: true,  source: "patient", missingTone: "warn" },
+    { key: "medicalHistory", labelKey: "vd.medicalHistory", placeholderKey: "vd.medicalHistory.placeholder", multiline: true,  source: "patient", missingTone: "muted" },
+    { key: "medications",    labelKey: "vd.medications",    placeholderKey: "vd.medications.placeholder",    multiline: false, source: "patient", missingTone: "muted" },
+    { key: "allergies",      labelKey: "vd.allergies",      placeholderKey: "vd.allergies.placeholder",      multiline: false, source: "patient", missingTone: "warn" }, // empty allergies is risky → highlight
+    { key: "notes",          labelKey: "vd.notes",          placeholderKey: "vd.notes.placeholder",          multiline: true,  source: "nurse",   missingTone: "muted" },
+  ];
+
+  // Counts for hierarchy
+  const filledCount   = fieldDefs.filter(f => (fields[f.key] || "").trim()).length;
+  const totalCount    = fieldDefs.length;
+  const attentionCount = fieldDefs.filter(f => f.missingTone === "warn" && !(fields[f.key] || "").trim()).length;
+
   return (
     <div className="card">
       <div className="card-head">
         <div>
           <h2>{t("vd.title")}</h2>
+          <div className="sub" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>{t("vd.completion", { filled: filledCount, total: totalCount })}</span>
+            {pwaActive && (
+              <span className="vd-sent-badge" style={{ marginLeft: 0 }}>
+                <I.Send size={10} /> {t("vd.sent")} {sentAt}
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {pwaActive && (
             <button
               className="btn btn-ghost btn-sm"
               onClick={onSendToPhone}
               title={t("vd.resend")}
+              style={{ color: "var(--ink-500)" }}
             >
               <I.RefreshCw size={11} /> {t("vd.resend")}
             </button>
@@ -79,42 +103,104 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => setEditing(e => !e)}
-            style={{ color: "var(--ink-500)" }}
+            style={{ color: editing ? "var(--brand-700)" : "var(--ink-500)" }}
           >
-            <I.Edit size={13} /> {editing ? t("vd.done") : t("vd.edit")}
+            <I.Edit size={12} /> {editing ? t("vd.done") : t("vd.edit")}
           </button>
-          {pwaActive && (
-            <span className="vd-sent-badge">
-              <I.Send size={11} /> {t("vd.sent")} {sentAt}
-            </span>
-          )}
         </div>
       </div>
 
       <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 0 }}>
-        <div style={{ marginBottom: 14 }}>
-          <div className="vd-label">
-            {t("vd.visitReason")} <span style={{ color: "var(--danger-500)" }}>*</span>
-            <span className="vd-label-hint">{t("vd.recepFills")}</span>
+        {/* === NURSE SECTION — primary, visible weight === */}
+        <div className="vd-section vd-section-nurse">
+          <div className="vd-section-head">
+            <span className="vd-section-tag vd-tag-nurse">
+              <I.User size={10} /> {t("vd.section.nurse")}
+            </span>
+            <span className="vd-section-hint">{t("vd.section.nurseHint")}</span>
           </div>
-          <VisitReasonPills
-            value={visitReason}
-            onChange={v => set("visitReason", v)}
-            options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
-            placeholder={t("checkin.visitReason.placeholder")}
-          />
+          <div className="vd-reason-row">
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-800)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {t("vd.visitReason")}
+              </span>
+              <span style={{ color: "var(--danger-500)", fontSize: 11.5 }}>*</span>
+            </div>
+            {visitReason.length > 0 ? (
+              <div className="vd-reason-display">
+                {visitReason.map((r, i) => (
+                  <span key={i} className="vd-reason-chip">{r}</span>
+                ))}
+                {editing && (
+                  <span className="vd-reason-edit-hint">
+                    <I.Edit size={9} /> {t("vd.editingBelow")}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="vd-reason-empty">
+                <I.AlertTriangle size={11} /> {t("vd.lockNoReason")}
+              </div>
+            )}
+            {editing && (
+              <div style={{ marginTop: 8 }}>
+                <VisitReasonPills
+                  value={visitReason}
+                  onChange={v => set("visitReason", v)}
+                  options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
+                  placeholder={t("checkin.visitReason.placeholder")}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <VDField label={t("vd.chiefComplaint")} value={fields.chiefComplaint} author={authors.chiefComplaint} onChange={v => set("chiefComplaint", v)} editing={editing} placeholder={t("vd.chiefComplaint.placeholder")} multiline t={t} />
-          <VDField label={t("vd.medicalHistory")} value={fields.medicalHistory} author={authors.medicalHistory} onChange={v => set("medicalHistory", v)} editing={editing} placeholder={t("vd.medicalHistory.placeholder")} multiline t={t} />
-          <VDField label={t("vd.medications")} value={fields.medications} author={authors.medications} onChange={v => set("medications", v)} editing={editing} placeholder={t("vd.medications.placeholder")} t={t} />
-          <VDField label={t("vd.allergies")} value={fields.allergies} author={authors.allergies} onChange={v => set("allergies", v)} editing={editing} placeholder={t("vd.allergies.placeholder")} t={t} />
-        </div>
-        <VDField label={t("vd.notes")} value={fields.notes} author={authors.notes} onChange={v => set("notes", v)} editing={editing} placeholder={t("vd.notes.placeholder")} multiline t={t} />
-
-        <div className="vd-status-line">
-          {pwaActive ? t("vd.pwaActive") : t("vd.pwaIdle")}
+        {/* === PATIENT SECTION — secondary, lighter weight === */}
+        <div className="vd-section vd-section-patient">
+          <div className="vd-section-head">
+            <span className="vd-section-tag vd-tag-patient">
+              <I.Smartphone size={10} /> {t("vd.section.patient")}
+            </span>
+            <span className="vd-section-hint">
+              {pwaActive ? t("vd.pwaActive") : t("vd.pwaIdle")}
+              {attentionCount > 0 && (
+                <span className="vd-attn-pill">
+                  <I.AlertTriangle size={9} /> {t("vd.attentionN", { n: attentionCount })}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="vd-grid">
+            {fieldDefs.filter(f => f.source === "patient").map(f => (
+              <VDField
+                key={f.key}
+                label={t(f.labelKey)}
+                value={fields[f.key]}
+                author={authors[f.key]}
+                onChange={v => set(f.key, v)}
+                editing={editing}
+                placeholder={t(f.placeholderKey)}
+                multiline={f.multiline}
+                attention={f.missingTone === "warn" && !(fields[f.key] || "").trim()}
+                t={t}
+              />
+            ))}
+          </div>
+          {/* Nurse-only notes — quiet, last */}
+          {(editing || (fields.notes || "").trim()) && (
+            <div style={{ marginTop: 10 }}>
+              <VDField
+                label={t("vd.notes")}
+                value={fields.notes}
+                author={authors.notes}
+                onChange={v => set("notes", v)}
+                editing={editing}
+                placeholder={t("vd.notes.placeholder")}
+                multiline
+                t={t}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -144,12 +230,16 @@ export function VisitDetails({ patient, onUpdate, onSendToPhone, sentFlash }) {
   );
 }
 
-function VDField({ label, value, author, onChange, editing, placeholder, multiline, t }) {
+function VDField({ label, value, author, onChange, editing, placeholder, multiline, attention, t }) {
+  const filled = !!(value && value.trim());
   return (
-    <div>
-      <div className="vd-label" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <span>{label}</span>
-        {value && author && <AuthorBadge who={author} t={t} />}
+    <div className={"vd-field" + (attention && !filled ? " vd-field-attn" : "")}>
+      <div className="vd-label-row">
+        <span className="vd-label-text">{label}</span>
+        {filled && author && <AuthorBadge who={author} t={t} />}
+        {!filled && attention && (
+          <span className="vd-attn-mark"><I.AlertTriangle size={9} /> {t("vd.needs")}</span>
+        )}
       </div>
       {editing ? (
         multiline ? (
@@ -160,8 +250,8 @@ function VDField({ label, value, author, onChange, editing, placeholder, multili
           <input className="input" value={value || ""} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
         )
       ) : (
-        <div className="vd-readonly" style={{ color: value ? "var(--ink-800)" : "var(--ink-400)", fontStyle: value ? "normal" : "italic" }}>
-          {value || t("vd.awaitingPatient")}
+        <div className={"vd-readonly" + (filled ? " filled" : " empty")}>
+          {filled ? value : t("vd.awaitingPatient")}
         </div>
       )}
     </div>
@@ -900,6 +990,7 @@ export function Payment({ patient, onUpdate }) {
   const reset = () => { setMethod(null); setKhqrState("waiting"); setTendered(""); setPaid(false); setReceiptSent(false); };
 
   if (paid) {
+    const receiptId = "R-" + Math.floor(10000 + Math.random() * 90000);
     return (
       <div className="card">
         <div className="card-head">
@@ -909,18 +1000,42 @@ export function Payment({ patient, onUpdate }) {
           </button>
         </div>
         <div className="card-pad" style={{ paddingTop: 4 }}>
-          <div className="pay-confirm">
-            <div className="pay-confirm-ico"><I.Check size={22} strokeWidth={3} /></div>
-            <div className="pay-confirm-title">{t("pay.confirmed")} — {fmt(amountDueDisplay, ccy)}</div>
-            <div className="pay-confirm-sub">
-              {method === "khqr" ? t("pay.viaKhqr") : t("pay.viaCash", { change: fmt(Math.max(0, changeDisplay), ccy) })}
+          <div className="pay-confirmed">
+            <div className="pay-confirmed-head">
+              <div className="pay-confirmed-mark"><I.Check size={14} strokeWidth={3} /></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="pay-confirmed-title">{t("pay.confirmed")}</div>
+                <div className="pay-confirmed-time">
+                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </div>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
-              <button className="btn btn-secondary btn-sm">
-                <I.Printer size={13} /> {t("pay.print")}
+            <dl className="pay-confirmed-grid">
+              <div>
+                <dt>{t("pay.amount")}</dt>
+                <dd className="pay-confirmed-amount">{fmt(amountDueDisplay, ccy)}</dd>
+              </div>
+              <div>
+                <dt>{t("pay.title")}</dt>
+                <dd>{method === "khqr" ? "KHQR" : t("pay.cash")}</dd>
+              </div>
+              <div>
+                <dt>{t("pay.receiptNo")}</dt>
+                <dd className="mono">#{receiptId}</dd>
+              </div>
+              {method === "cash" && (
+                <div>
+                  <dt>{t("pay.change")}</dt>
+                  <dd>{fmt(Math.max(0, changeDisplay), ccy)}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="pay-confirmed-actions">
+              <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>
+                <I.Printer size={12} /> {t("pay.print")}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setReceiptSent(true)} disabled={receiptSent}>
-                {receiptSent ? (<><I.Check size={13} /> {t("vd.sentShort")}</>) : (<><I.Smartphone size={13} /> {t("pay.sendPhone")}</>)}
+              <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => setReceiptSent(true)} disabled={receiptSent}>
+                {receiptSent ? (<><I.Check size={12} /> {t("vd.sentShort")}</>) : (<><I.Smartphone size={12} /> {t("pay.sendPhone")}</>)}
               </button>
             </div>
           </div>

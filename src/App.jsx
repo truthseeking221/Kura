@@ -1,11 +1,12 @@
 // === Kura Reception — App ===
 import React, { useState, useRef } from "react";
 import { I } from "./icons";
-import { initialPatients, payerOptions, initialNotifications } from "./data";
+import { initialPatients, payerOptions, initialNotifications, blankPatient } from "./data";
 import { Sidebar, Topbar, GoalBar } from "./Layout";
 import { FastCheckIn } from "./Center";
 import { VisitDetails, Insurance, PriorResults } from "./Cards";
 import { OrderCart } from "./OrderCart";
+import { TatTimeline, TeleconsultCard } from "./shared";
 import {
   NewWalkInModal,
   AddServiceModal,
@@ -45,7 +46,6 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("reception");
   const [uiLang, setUiLang] = useState("Khmer");
-  const [roaming, setRoaming] = useState(false);
 
   const [sending, setSending] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
@@ -212,7 +212,7 @@ export default function App() {
 
   return (
     <LangProvider lang={uiLang}>
-    <div className={"app" + (roaming ? " roaming" : "")} data-screen-label="Reception">
+    <div className="app" data-screen-label="Reception">
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed(c => !c)}
@@ -220,8 +220,6 @@ export default function App() {
         onNavigate={handleNavigate}
         lang={uiLang}
         onLangChange={setUiLang}
-        roaming={roaming}
-        onToggleRoaming={() => setRoaming(r => !r)}
       />
       <div className="main">
         <Topbar
@@ -238,8 +236,6 @@ export default function App() {
           onUserAction={handleUserAction}
           patients={patients}
           onSearch={handleSearch}
-          roaming={roaming}
-          onToggleRoaming={() => setRoaming(r => !r)}
         />
         <div className="workspace no-queue">
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", minWidth: 0 }}>
@@ -257,11 +253,17 @@ export default function App() {
                 onSkip={handleSkipException}
               />
             )}
+            <TatTimeline patient={active} />
             <VisitDetails
               patient={active}
               onUpdate={updatePatient}
               onSendToPhone={sendIntakeLink}
               sentFlash={sentFlash}
+            />
+            <TeleconsultCard
+              patient={active}
+              onUpdate={updatePatient}
+              onPushToast={pushToast}
             />
             <Insurance patient={active} onUpdate={updatePatient} />
             <PriorResults
@@ -299,7 +301,32 @@ export default function App() {
       <AddServiceModal open={serviceOpen} onClose={() => setServiceOpen(false)} onAdd={handleAddServices} />
       <ConfirmConsentModal open={consentOpen} onClose={() => setConsentOpen(false)} onConfirm={unblockConsent} patient={active} />
       <ToastStack toasts={toasts} onClose={closeToast} />
+
+      {/* === Dev-only blank-state tester === */}
+      {import.meta.env.DEV && (
+        <DebugBlankStateButton
+          onReset={() => {
+            const reset = blankPatient(active.id, active.queueNumber, active.avatarColor);
+            updatePatient(reset);
+            pushToast("Blank state · cleared all patient data");
+          }}
+        />
+      )}
     </div>
     </LangProvider>
+  );
+}
+
+function DebugBlankStateButton({ onReset }) {
+  return (
+    <button
+      type="button"
+      onClick={onReset}
+      className="debug-blank-btn"
+      title="Reset to first-arrival blank state (dev only)"
+    >
+      <I.Sparkles size={12} />
+      <span>Test blank state</span>
+    </button>
   );
 }

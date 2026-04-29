@@ -576,7 +576,7 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 }
 
 // === Cart Line ===
-function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision }) {
+function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, hideValidationLabel }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
   const Ico = I[meta.icon];
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
@@ -587,13 +587,12 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
   const showPolicyNote = item.payer === "insurance" && policyDecision && policyDecision.status !== "covered";
   const [policyOpen, setPolicyOpen] = useState(false);
   return (
-    <div style={{
+    <div className="cart-line" style={{
       borderBottom: isLast ? "none" : "1px solid var(--border)",
-      padding: "8px 0",
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ width: 24, height: 24, borderRadius: 5, background: meta.color + "18", color: meta.color, display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
-          <Ico size={12} />
+        <div style={{ width: 22, height: 22, borderRadius: 5, background: meta.color + "18", color: meta.color, display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
+          <Ico size={11} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-900)", lineHeight: 1.3 }}>{item.name}</div>
@@ -676,14 +675,9 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
             {item.price === 0 ? "—" : fmtCcy((item.price || 0) * (item.qty || 1), ccy)}
           </div>
           <button onClick={onRemove} disabled={item.auto}
-            style={{
-              background: "transparent", border: "none", padding: 2,
-              cursor: item.auto ? "not-allowed" : "pointer",
-              color: item.auto ? "var(--ink-300)" : "var(--ink-400)",
-              display: "grid", placeItems: "center",
-            }}
+            className={"cart-line-remove" + (item.auto ? " disabled" : "")}
             title={item.auto ? t("cart.autoVisitFee") : t("cart.remove")}>
-            <I.Trash size={11} />
+            <I.X size={10} strokeWidth={2.5} />
           </button>
         </div>
       </div>
@@ -700,25 +694,40 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
   const dueLabel = fmtCcy(due, ccy);
 
   if (status === "confirmed") {
+    const methodLabel = method === "cash" ? t("cart.pay.cash") : "KHQR";
     return (
-      <div style={{ padding: "14px 16px", borderTop: "1px solid var(--border)", background: "var(--success-50)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 9, background: "var(--success-500)", color: "white", display: "grid", placeItems: "center", flexShrink: 0 }}>
-            <I.Check size={18} strokeWidth={2.5} />
+      <div className="pay-confirmed">
+        <div className="pay-confirmed-head">
+          <div className="pay-confirmed-mark">
+            <I.Check size={14} strokeWidth={3} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-900)" }}>{t("cart.pay.confirmed")}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
-              {fmtCcy(due, ccy)} via {method === "cash" ? t("cart.pay.cash") : "KHQR"} · #{cart.payment.receiptId}
+            <div className="pay-confirmed-title">{t("cart.pay.confirmed")}</div>
+            <div className="pay-confirmed-time">
+              {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </div>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          <button type="button" className="btn btn-ghost" style={{ height: 34, justifyContent: "center" }}>
-            <I.Printer size={13} /> {t("cart.pay.print")}
+        <dl className="pay-confirmed-grid">
+          <div>
+            <dt>{t("pay.amount")}</dt>
+            <dd className="pay-confirmed-amount">{fmtCcy(due, ccy)}</dd>
+          </div>
+          <div>
+            <dt>{t("pay.title")}</dt>
+            <dd>{methodLabel}</dd>
+          </div>
+          <div>
+            <dt>{t("pay.receiptNo")}</dt>
+            <dd className="mono">#{cart.payment.receiptId}</dd>
+          </div>
+        </dl>
+        <div className="pay-confirmed-actions">
+          <button type="button" className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>
+            <I.Printer size={12} /> {t("cart.pay.print")}
           </button>
-          <button type="button" className="btn btn-ghost" style={{ height: 34, justifyContent: "center" }}>
-            <I.Send size={13} /> {t("cart.pay.sendPhone")}
+          <button type="button" className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>
+            <I.Send size={12} /> {t("cart.pay.sendPhone")}
           </button>
         </div>
       </div>
@@ -1073,10 +1082,16 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               const items = grouped[kind];
               if (!items || items.length === 0) return null;
               const meta = KIND_META[kind];
+              const groupSub = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
               return (
-                <div key={kind} style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700, color: meta.color, marginBottom: 2, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    {t(meta.labelKey)} · {items.length}
+                <div key={kind} className="cart-group">
+                  <div className="cart-group-head">
+                    <span className="cart-group-label" style={{ color: meta.color }}>
+                      <span className="cart-group-dot" style={{ background: meta.color }} />
+                      {t(meta.labelKey)}
+                      <span className="cart-group-count">{items.length}</span>
+                    </span>
+                    <span className="cart-group-sub">{fmtCcy(groupSub, cart.ccy || "USD")}</span>
                   </div>
                   {items.map((item, idx) => (
                     <CartLine

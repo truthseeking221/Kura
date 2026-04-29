@@ -1,11 +1,54 @@
 // === Center column: Fast Check-in (with QR scan step), Patient Stub, Order Draft ===
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { I } from "./icons";
 import {
   QRGlyph,
   CountryCodeSelect,
 } from "./shared";
 import { useLang } from "./i18n";
+
+// === Scanned ID card — structured "premium" presentation of auto-filled fields ===
+function ScannedIdCard({ patient, onRescan, t }) {
+  const fields = [
+    { key: "name",        labelKey: "checkin.fullName",     value: patient.name },
+    { key: "idNumber",    labelKey: "checkin.nationalId",   value: patient.idNumber, mono: true },
+    { key: "dob",         labelKey: "checkin.dob",          value: patient.dob,      mono: true },
+    { key: "sexAtBirth",  labelKey: "checkin.sexAtBirth",   value: patient.sexAtBirth },
+  ];
+  return (
+    <div className="id-scanned">
+      <div className="id-scanned-head">
+        <div className="id-scanned-badge">
+          <I.Check size={15} strokeWidth={3} />
+        </div>
+        <div className="id-scanned-titles">
+          <div className="id-scanned-title">
+            {t("checkin.nationalId")}
+            <span className="id-scanned-pill">
+              <I.Sparkles size={9} /> {t("checkin.idAutoFilled")}
+            </span>
+          </div>
+          <div className="id-scanned-sub">{t("checkin.nationalId.scanned")}</div>
+        </div>
+        <button
+          onClick={onRescan}
+          className="btn btn-ghost btn-sm id-scanned-rescan"
+          title={t("checkin.rescan")}
+        >
+          <I.RefreshCw size={11} /> {t("checkin.rescan")}
+        </button>
+      </div>
+      <dl className="id-scanned-grid">
+        {fields.map(f => (
+          <div key={f.key} className="id-scanned-cell">
+            <dt>{t(f.labelKey)}</dt>
+            <dd className={f.mono ? "mono" : ""}>{f.value || "—"}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 
 // === Mobile field with OTP verification ===
 function MobileWithOTP({ countryCode, phoneNumber, setCountry, setPhone, error, otpState, setOtpState }) {
@@ -446,9 +489,40 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
   const t = useLang();
   const [errors, setErrors] = useState({});
   const [step2Open, setStep2Open] = useState(false);
+  const fullNameRef = useRef(null);
 
   const update = (key, val) => {
     onUpdate({ ...patient, [key]: val });
+  };
+
+  // === Manual-entry path: clear all Step 2 fields and focus Full name ===
+  const onManualEntry = () => {
+    onUpdate({
+      ...patient,
+      // Wipe scan-derived & patient details so Step 2 starts blank
+      idScanned: false,
+      idNumber: "",
+      name: "",
+      dob: "",
+      sexAtBirth: "",
+      countryCode: "+855",
+      phoneNumber: "",
+      mobile: "",
+      otpVerified: false,
+      telegramHandle: "",
+      telegramVerified: false,
+      commMethod: "sms",
+      // Default new/manual language: Khmer (do not override saved patient preferences elsewhere)
+      language: "Khmer",
+      identity: { ...(patient.identity || {}), verified: false },
+      // Hint flag so other panels can read "manual capture in progress"
+      manualEntry: true,
+    });
+    setStep2Open(true);
+    // focus Full name on the next paint
+    requestAnimationFrame(() => {
+      fullNameRef.current?.focus();
+    });
   };
 
   const reasons = Array.isArray(patient.visitReason)
@@ -537,77 +611,61 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
           fontWeight: 650, color: "var(--ink-500)", marginBottom: 8,
         }}>{t("checkin.step1")}</div>
 
-        <div style={{
-          border: "1.5px solid " + (idScanned ? "var(--success-500)" : "var(--border-strong)"),
-          borderRadius: 10,
-          padding: 16,
-          background: idScanned ? "var(--success-50)" : "var(--surface-2)",
-          transition: "all 0.2s",
-          display: "flex", flexDirection: "column", gap: 12,
-        }}>
-          <div className="row" style={{ gap: 12 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 9,
-              background: idScanned ? "var(--success-500)" : "#f0eafd",
-              color: idScanned ? "white" : "#7a45ec",
-              display: "grid", placeItems: "center", flexShrink: 0,
-            }}>
-              {idScanned ? <I.Check size={18} strokeWidth={2.5} /> : <I.Lock size={18} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("checkin.nationalId")}</div>
-              <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>
-                {idScanned ? t("checkin.nationalId.scanned") : t("checkin.nationalId.sub")}
+        {idScanned ? (
+          <ScannedIdCard
+            patient={patient}
+            onRescan={() => onUpdate({ ...patient, idScanned: false, idNumber: "", manualEntry: false })}
+            t={t}
+          />
+        ) : (
+          <div style={{
+            border: "1.5px solid var(--border-strong)",
+            borderRadius: 10,
+            padding: 16,
+            background: "var(--surface-2)",
+            transition: "all 0.2s",
+            display: "flex", flexDirection: "column", gap: 12,
+          }}>
+            <div className="row" style={{ gap: 12 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 9,
+                background: "#f0eafd", color: "#7a45ec",
+                display: "grid", placeItems: "center", flexShrink: 0,
+              }}>
+                <I.Lock size={18} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("checkin.nationalId")}</div>
+                <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>
+                  {t("checkin.nationalId.sub")}
+                </div>
               </div>
             </div>
-            {idScanned && (
+            <button
+              className="btn btn-secondary"
+              onClick={onIdScan}
+              style={{ width: "100%", justifyContent: "center", height: 40, fontSize: 13 }}
+            >
+              <QRGlyph size={16} /> {t("checkin.scanQr")}
+            </button>
+            {!step2Open && (
               <button
-                onClick={() => onUpdate({ ...patient, idScanned: false, idNumber: "" })}
-                className="btn btn-ghost btn-sm"
-                style={{ height: 28 }}
+                type="button"
+                onClick={onManualEntry}
+                style={{
+                  background: "transparent", border: "none", padding: 0,
+                  color: "var(--brand-600)", fontSize: 12, fontWeight: 500,
+                  cursor: "pointer", alignSelf: "center",
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                }}
+                onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"}
+                onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}
               >
-                <I.RefreshCw size={12} /> {t("checkin.rescan")}
+                {t("checkin.manualEntry")} <I.ChevronRight size={12} />
               </button>
             )}
           </div>
-
-          {idScanned ? (
-            <div style={{
-              background: "var(--surface)", border: "1px solid var(--border)",
-              borderRadius: 7, padding: "10px 12px",
-              fontSize: 12, color: "var(--ink-700)",
-              fontFamily: "'SF Mono', ui-monospace, monospace",
-            }}>
-              {patient.name || "—"} · ID {patient.idNumber || ""} · {patient.dob}
-            </div>
-          ) : (
-            <>
-              <button
-                className="btn btn-secondary"
-                onClick={onIdScan}
-                style={{ width: "100%", justifyContent: "center", height: 40, fontSize: 13 }}
-              >
-                <QRGlyph size={16} /> Scan QR
-              </button>
-              {!step2Open && (
-                <button
-                  type="button"
-                  onClick={() => setStep2Open(true)}
-                  style={{
-                    background: "transparent", border: "none", padding: 0,
-                    color: "var(--brand-600)", fontSize: 12, fontWeight: 500,
-                    cursor: "pointer", alignSelf: "center",
-                    display: "inline-flex", alignItems: "center", gap: 3,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"}
-                  onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}
-                >
-                  {t("checkin.manualEntry")} <I.ChevronRight size={12} />
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        )}
       </div>
 
       {/* === STEP 2 · CONFIRM DETAILS (collapsible) === */}
@@ -644,6 +702,7 @@ export function FastCheckIn({ patient, onUpdate, onSendLink, sending, sentFlash 
               <div className="field">
                 <label className="label">{t("checkin.fullName")} <span className="req">*</span></label>
                 <input
+                  ref={fullNameRef}
                   className={"input" + (errors.name ? " invalid" : "")}
                   value={patient.name || ""}
                   onChange={e => update("name", e.target.value)}

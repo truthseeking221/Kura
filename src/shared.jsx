@@ -1,6 +1,7 @@
 // === Shared widgets and constants used across Center and Modals ===
 import React, { useState, useEffect, useRef } from "react";
 import { I } from "./icons";
+import { useLang } from "./i18n";
 
 // === Fuzzy name match (Dice's coefficient on bigrams) ===
 // Returns a similarity score 0..1.
@@ -527,6 +528,367 @@ export function MultiSelectSearch({ value, onChange, options, placeholder, inval
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAT TIMELINE — Check-in → Sample → First → Final
+// Logic:
+//   - Internal-only orders → estimate from longest internal TAT
+//   - Outsourced present  → final waits for longest outsourced TAT
+//                           first results may arrive earlier from internals
+//   - Outsourced lines flagged subtly with "Outsourced" / "External lab"
+// ============================================================
+export const TAT_DEFAULTS = {
+  // Internal lab/imaging hours
+  cbc: 1, glucose: 1, lipid: 2, urinalysis: 1, preg: 1, esr: 1,
+  electro: 2, "xray-chest": 1, "xray-lumbar": 1, "xray-knee": 1,
+  "us-abd": 2, "ecg-12": 1, "vit-bp": 0,
+  // Outsourced (sent to external lab)
+  hba1c: 24, lft: 24, kft: 24, ferritin: 36, ptinr: 8,
+  covid: 8, stool: 36, "vit-d": 48, "vit-b12": 48, ana: 72,
+  "ct-head": 6, "mri-knee": 24, "us-thyroid": 4, "us-preg": 2,
+  tsh: 24,
+};
+export const TAT_OUTSOURCED = new Set([
+  "hba1c", "lft", "kft", "ferritin", "ptinr", "covid", "stool",
+  "vit-d", "vit-b12", "ana", "mri-knee", "ct-head", "tsh",
+]);
+
+function fmtTatHours(h) {
+  if (h == null) return "—";
+  if (h < 1) return "< 1h";
+  if (h < 24) return Math.round(h) + "h";
+  const d = h / 24;
+  return (Math.round(d * 10) / 10).toString().replace(/\.0$/, "") + "d";
+}
+
+export function computeTatPlan(items) {
+  // items: cart items (kind: lab/imaging/etc)
+  const labLike = items.filter(i => i.kind === "lab" || i.kind === "imaging");
+  if (labLike.length === 0) return null;
+  const enriched = labLike.map(i => ({
+    id: i.id, name: i.name, kind: i.kind,
+    hours: TAT_DEFAULTS[i.id] ?? 2,
+    outsourced: TAT_OUTSOURCED.has(i.id),
+  }));
+  const internal = enriched.filter(e => !e.outsourced);
+  const outsourced = enriched.filter(e => e.outsourced);
+  const internalMax = internal.reduce((m, e) => Math.max(m, e.hours), 0);
+  const outsourcedMax = outsourced.reduce((m, e) => Math.max(m, e.hours), 0);
+  const firstResultHours = internal.length > 0 ? internalMax : outsourcedMax;
+  const finalResultHours = Math.max(internalMax, outsourcedMax);
+  const splitFirstAndFinal = internal.length > 0 && outsourced.length > 0;
+  return {
+    items: enriched,
+    internal, outsourced,
+    firstResultHours,
+    finalResultHours,
+    splitFirstAndFinal,
+  };
+}
+
+// status: not_started | current | completed | delayed | estimated
+function TatStep({ icon, label, status, hint, badge }) {
+  const tone = {
+    completed: { dot: "var(--success-500)", ring: "var(--success-500)", text: "var(--ink-900)" },
+    current:   { dot: "var(--brand-500)",   ring: "var(--brand-500)",   text: "var(--ink-900)" },
+    delayed:   { dot: "var(--danger-500)",  ring: "var(--danger-500)",  text: "var(--danger-600)" },
+    estimated: { dot: "var(--ink-300)",     ring: "var(--ink-300)",     text: "var(--ink-600)" },
+    not_started: { dot: "var(--ink-200)",   ring: "var(--ink-200)",     text: "var(--ink-400)" },
+  }[status] || { dot: "var(--ink-200)", ring: "var(--ink-200)", text: "var(--ink-400)" };
+  const Ico = icon;
+  return (
+    <div className="tat-step">
+      <div className="tat-step-dot" style={{
+        borderColor: tone.ring,
+        background: status === "completed" ? tone.dot : "var(--surface)",
+        color: status === "completed" ? "white" : tone.dot,
+      }}>
+        {status === "completed" ? <I.Check size={10} strokeWidth={3} /> : <Ico size={10} />}
+        {status === "current" && <span className="tat-step-pulse" style={{ borderColor: tone.dot }} />}
+      </div>
+      <div className="tat-step-meta" style={{ color: tone.text }}>
+        <div className="tat-step-label">{label}</div>
+        {hint && <div className="tat-step-hint">{hint}</div>}
+      </div>
+      {badge && <span className="tat-step-badge">{badge}</span>}
+    </div>
+  );
+}
+
+export function TatTimeline({ patient }) {
+  const t = useLang();
+  const cart = patient.cart;
+  const items = cart?.items || [];
+  const plan = computeTatPlan(items);
+
+  // Where are we right now?
+  const checkedIn = !!(patient.idScanned || patient.identity?.verified);
+  const sampleCollected = patient.sampleCollectedAt || patient.handoffStates?.[2] === "in-progress" || patient.handoffStates?.[2] === "done" || patient.handoffStates?.[3] === "in-progress" || patient.handoffStates?.[3] === "done";
+  const firstResultsIn = (patient.labTests || []).some(lt => lt.status === "complete" || lt.status === "in-progress");
+  const finalResultsIn = (patient.labTests || []).length > 0 && (patient.labTests || []).every(lt => lt.status === "complete");
+
+  // statuses
+  const stepCheckin = checkedIn ? "completed" : "current";
+  const stepSample = !checkedIn ? "not_started" : sampleCollected ? "completed" : "current";
+  const stepFirst = !sampleCollected ? "not_started" : firstResultsIn ? "completed" : "current";
+  const stepFinal = !firstResultsIn ? "not_started" : finalResultsIn ? "completed" : (plan?.splitFirstAndFinal ? "estimated" : "current");
+
+  const showOutsourcedNote = plan?.outsourced.length > 0;
+
+  return (
+    <div className="card tat-card">
+      <div className="card-head" style={{ paddingBottom: 4 }}>
+        <div>
+          <h2>{t("tat.title")}</h2>
+          <p className="sub">{t("tat.sub")}</p>
+        </div>
+        {plan && (
+          <div className="tat-summary">
+            {plan.splitFirstAndFinal ? (
+              <>
+                <span className="tat-summary-pill tat-pill-first">
+                  <I.Clock size={10} /> {t("tat.firstIn", { time: fmtTatHours(plan.firstResultHours) })}
+                </span>
+                <span className="tat-summary-pill tat-pill-final">
+                  <I.Clock size={10} /> {t("tat.finalIn", { time: fmtTatHours(plan.finalResultHours) })}
+                </span>
+              </>
+            ) : (
+              <span className="tat-summary-pill tat-pill-final">
+                <I.Clock size={10} /> {t("tat.allIn", { time: fmtTatHours(plan.finalResultHours) })}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 12 }}>
+        <div className="tat-timeline">
+          <TatStep icon={I.User}          label={t("tat.checkin")}      status={stepCheckin} />
+          <div className="tat-rail" />
+          <TatStep icon={I.FlaskConical}  label={t("tat.sample")}       status={stepSample} />
+          <div className="tat-rail" />
+          <TatStep
+            icon={I.Activity}
+            label={t("tat.firstResult")}
+            status={stepFirst}
+            hint={plan && plan.internal.length > 0 ? t("tat.fromInternal") : (plan ? t("tat.fromOutsourced") : null)}
+            badge={plan && plan.internal.length > 0 && stepFirst !== "completed" ? `~ ${fmtTatHours(plan.firstResultHours)}` : null}
+          />
+          <div className="tat-rail" />
+          <TatStep
+            icon={I.Check}
+            label={t("tat.finalResult")}
+            status={stepFinal}
+            hint={plan && plan.splitFirstAndFinal ? t("tat.afterOutsourced") : null}
+            badge={plan && stepFinal !== "completed" ? `~ ${fmtTatHours(plan.finalResultHours)}` : null}
+          />
+        </div>
+
+        {plan && plan.splitFirstAndFinal && (
+          <div className="tat-note">
+            <I.Info size={11} />
+            <span>{t("tat.mixedNote")}</span>
+          </div>
+        )}
+
+        {showOutsourcedNote && (
+          <div className="tat-outsourced-list">
+            <div className="tat-outsourced-head">{t("tat.outsourcedHead")}</div>
+            <div className="tat-outsourced-chips">
+              {plan.outsourced.map(o => (
+                <span key={o.id} className="tat-outsourced-chip">
+                  <I.Globe size={9} /> {o.name}
+                  <span className="tat-outsourced-time">{fmtTatHours(o.hours)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!plan && (
+          <div className="tat-empty">{t("tat.empty")}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// TELECONSULTATION BOOKING
+// Patient state shape: patient.teleconsult = { status, slot, by }
+//   status: "notBooked" | "pending" | "booked" | "completed" | "cancelled"
+// ============================================================
+const SLOT_OPTIONS = [
+  { id: "today_pm",  labelKey: "telecon.slot.todayPm",  hint: "Today · 14:00–14:30" },
+  { id: "today_eve", labelKey: "telecon.slot.todayEve", hint: "Today · 17:30–18:00" },
+  { id: "tom_am",    labelKey: "telecon.slot.tomAm",    hint: "Tomorrow · 09:00–09:30" },
+  { id: "tom_pm",    labelKey: "telecon.slot.tomPm",    hint: "Tomorrow · 15:00–15:30" },
+];
+
+function TeleconStatusPill({ status }) {
+  const t = useLang();
+  const map = {
+    notBooked:  { color: "var(--ink-500)", bg: "var(--surface-2)",   border: "var(--border)",        labelKey: "telecon.status.notBooked",  Ico: I.Calendar },
+    pending:    { color: "var(--warn-600)", bg: "var(--warn-50)",    border: "var(--warn-500)",      labelKey: "telecon.status.pending",    Ico: I.Clock },
+    booked:     { color: "var(--success-600)", bg: "var(--success-50)", border: "var(--success-500)", labelKey: "telecon.status.booked",     Ico: I.CheckCircle },
+    completed:  { color: "var(--ink-700)", bg: "var(--ink-50)",      border: "var(--border)",        labelKey: "telecon.status.completed",  Ico: I.Check },
+    cancelled:  { color: "var(--danger-600)", bg: "var(--danger-50)", border: "var(--danger-500)",   labelKey: "telecon.status.cancelled",  Ico: I.XCircle },
+  };
+  const m = map[status] || map.notBooked;
+  const Ico = m.Ico;
+  return (
+    <span className="telecon-status-pill" style={{ color: m.color, background: m.bg, borderColor: m.border }}>
+      <Ico size={10} /> {t(m.labelKey)}
+    </span>
+  );
+}
+
+export function TeleconsultCard({ patient, onUpdate, onPushToast }) {
+  const t = useLang();
+  const tc = patient.teleconsult || { status: "notBooked", slot: null, by: null };
+  const [expanded, setExpanded] = React.useState(tc.status === "notBooked");
+  const [pickedSlot, setPickedSlot] = React.useState(null);
+  const [booking, setBooking] = React.useState(false);
+
+  const reset = () => onUpdate({ ...patient, teleconsult: { status: "notBooked", slot: null, by: null } });
+  const confirmBook = (slotId, by = "nurse") => {
+    setBooking(true);
+    setTimeout(() => {
+      setBooking(false);
+      onUpdate({
+        ...patient,
+        teleconsult: {
+          status: "booked",
+          slot: SLOT_OPTIONS.find(s => s.id === slotId) || { id: slotId, hint: slotId },
+          by,
+          bookedAt: new Date().toISOString(),
+        },
+      });
+      onPushToast?.(t("telecon.toastBooked"));
+      setPickedSlot(null);
+      setExpanded(false);
+    }, 600);
+  };
+  const sendToPhone = () => {
+    onUpdate({
+      ...patient,
+      teleconsult: { status: "pending", slot: null, by: "patient", sentAt: new Date().toISOString() },
+    });
+    onPushToast?.(t("telecon.toastSent"));
+  };
+  const cancel = () => {
+    onUpdate({ ...patient, teleconsult: { ...tc, status: "cancelled" } });
+    onPushToast?.(t("telecon.toastCancelled"), "error");
+  };
+
+  return (
+    <div className="card telecon-card">
+      <div className="card-head" style={{ paddingBottom: 4 }}>
+        <div>
+          <h2 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <I.Video size={15} style={{ color: "var(--brand-600)" }} />
+            {t("telecon.title")}
+          </h2>
+          <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <TeleconStatusPill status={tc.status} />
+            {tc.slot?.hint && <span className="telecon-slot-hint">{tc.slot.hint}</span>}
+            {tc.by && tc.status === "booked" && <span style={{ color: "var(--ink-400)", fontSize: 11 }}>· {t("telecon.by." + tc.by)}</span>}
+          </p>
+        </div>
+        {tc.status === "booked" && (
+          <button className="btn btn-ghost btn-sm" onClick={cancel} style={{ color: "var(--danger-600)" }}>
+            <I.X size={11} /> {t("telecon.cancel")}
+          </button>
+        )}
+        {tc.status === "cancelled" && (
+          <button className="btn btn-ghost btn-sm" onClick={reset}>
+            <I.RefreshCw size={11} /> {t("telecon.reopen")}
+          </button>
+        )}
+      </div>
+
+      <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 12 }}>
+        {tc.status === "notBooked" && (
+          <>
+            {!expanded ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => setExpanded(true)}>
+                  <I.Calendar size={12} /> {t("telecon.bookHere")}
+                </button>
+                <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={sendToPhone}>
+                  <I.Smartphone size={12} /> {t("telecon.sendToPhone")}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="telecon-slots">
+                  {SLOT_OPTIONS.map(s => {
+                    const active = pickedSlot === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setPickedSlot(s.id)}
+                        className={"telecon-slot" + (active ? " active" : "")}
+                      >
+                        <div className="telecon-slot-label">{t(s.labelKey)}</div>
+                        <div className="telecon-slot-time">{s.hint}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setExpanded(false); setPickedSlot(null); }}>
+                    {t("modal.cancel")}
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1, justifyContent: "center" }}
+                    onClick={() => pickedSlot && confirmBook(pickedSlot, "nurse")}
+                    disabled={!pickedSlot || booking}
+                  >
+                    {booking ? <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> : <I.Video size={12} />}
+                    {t("telecon.confirmBook")}
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+        {tc.status === "pending" && (
+          <div className="telecon-pending">
+            <I.Smartphone size={14} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 650, color: "var(--ink-900)" }}>{t("telecon.pendingTitle")}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 1 }}>{t("telecon.pendingBody")}</div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => confirmBook(SLOT_OPTIONS[0].id, "patient")} title={t("telecon.simulateConfirm")}>
+              <I.Sparkles size={11} /> {t("telecon.simulate")}
+            </button>
+          </div>
+        )}
+        {tc.status === "booked" && (
+          <div className="telecon-booked">
+            <div className="telecon-booked-ico"><I.Video size={16} /></div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="telecon-booked-title">{t("telecon.bookedTitle")}</div>
+              <div className="telecon-booked-time">{tc.slot?.hint || "—"}</div>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => onPushToast?.(t("telecon.joinedToast"))}>
+              <I.Video size={11} /> {t("telecon.join")}
+            </button>
+          </div>
+        )}
+        {tc.status === "cancelled" && (
+          <div className="telecon-cancelled">
+            <I.XCircle size={13} /> {t("telecon.cancelledBody")}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

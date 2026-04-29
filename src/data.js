@@ -1,5 +1,58 @@
 // === Kura Reception — seed data ===
 
+// === Blank-state factory (dev tester) ===
+// Returns a patient stripped to first-arrival, no PII captured yet.
+// Preserves id/queueNumber/avatarColor so the row stays in the queue.
+export function blankPatient(id = "p-blank", queueNumber = "Q-000", avatarColor = "av-blue") {
+  return {
+    id, queueNumber, avatarColor,
+    name: "", initials: "—",
+    gender: "—", sexAtBirth: "",
+    age: 0, dob: "",
+    arrivedAt: "just now",
+    arrivedRaw: "Today, just now",
+    status: { tone: "info", label: "Awaiting check-in" },
+    visitReason: [],
+    language: "Khmer",          // default Khmer for blank/manual flow
+    countryCode: "+855",
+    phoneNumber: "",
+    mobile: "",
+    telegramHandle: "",
+    telegramVerified: false,
+    commMethod: "sms",
+    otpVerified: false,
+    pwaSentAt: null,
+    idScanned: false,
+    idNumber: "",
+    payer: "direct",
+    documents: { id: "pending", consent: "pending", insurance: "pending", receipt: "pending" },
+    pwaProgress: 0,
+    pwaLog: [],
+    services: [],
+    cart: {
+      items: [],
+      promos: {},
+      splits: null,
+      ccy: "USD",
+      payment: { method: null, status: "idle", tendered: "" },
+      pregnancyConsent: null,
+    },
+    visitDetails: {
+      chiefComplaint: "", medicalHistory: "", medications: "",
+      allergies: "", notes: "",
+    },
+    visitDetailsAuthors: {},
+    labTests: [],
+    insurance: [],
+    priorResults: [],
+    teleconsult: { status: "notBooked", slot: null, by: null },
+    handoff: 0,
+    handoffStates: ["in-progress", "pending", "pending", "pending"],
+    identity: { verified: false },
+    manualEntry: false,
+  };
+}
+
 export const initialPatients = [
   {
     id: "p1",
@@ -75,6 +128,7 @@ export const initialPatients = [
       { id: "pr-2", testId: "hba1c", testName: "HbA1c (Diabetes)", visitDate: "2026-01-14", status: "complete", price: 11, sensitive: true },
       { id: "pr-3", testId: "cbc", testName: "Complete Blood Count (CBC)", visitDate: "2025-10-04", status: "complete", price: 8, sensitive: false },
     ],
+    teleconsult: { status: "booked", slot: { id: "tom_am", hint: "Tomorrow · 09:00–09:30" }, by: "nurse", bookedAt: "2026-04-29T08:30:00Z" },
     handoff: 1,
     handoffStates: ["new","in-progress","pending","pending"],
     identity: { verified: true },
