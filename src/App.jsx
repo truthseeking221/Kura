@@ -302,16 +302,14 @@ export default function App() {
       <ConfirmConsentModal open={consentOpen} onClose={() => setConsentOpen(false)} onConfirm={unblockConsent} patient={active} />
       <ToastStack toasts={toasts} onClose={closeToast} />
 
-      {/* === Dev-only blank-state tester === */}
-      {import.meta.env.DEV && (
-        <DebugBlankStateButton
-          onReset={() => {
-            const reset = blankPatient(active.id, active.queueNumber, active.avatarColor);
-            updatePatient(reset);
-            pushToast("Blank state · cleared all patient data");
-          }}
-        />
-      )}
+      {/* === Blank-state tester === */}
+      <DebugBlankStateButton
+        onReset={() => {
+          const reset = blankPatient(active.id, active.queueNumber, active.avatarColor);
+          updatePatient(reset);
+          pushToast("Blank state · cleared all patient data");
+        }}
+      />
     </div>
     </LangProvider>
   );
