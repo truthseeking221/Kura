@@ -10,6 +10,7 @@ import {
   KHR_RATE,
 } from "./data";
 import { VisitReasonPills, VISIT_REASONS, AuthorBadge, fuzzyNameScore, playDrawerDing, DisabledTooltip } from "./shared";
+import { DateInput } from "./DateInput";
 
 // ============================================================
 // VISIT DETAILS — Round 10 #4 Figma rebuild (185:14415)
@@ -782,7 +783,7 @@ function InsuranceForm({ initial, patient, onSave, onCancel, t }) {
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
               <label className="label">{t("ins.expiry")} <span className="req">*</span></label>
-              <input className="input" value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="MM/YYYY" />
+              <DateInput value={expiry} onChange={setExpiry} format="MM/YYYY" />
             </div>
           </div>
 

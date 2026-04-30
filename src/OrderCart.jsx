@@ -3,7 +3,7 @@
 // payment (KHQR + Cash), pregnancy consent gate, primary CTA "Check in & confirm order"
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
-import { QRGlyph, mockInsurerDecide, playDrawerDing, Kbd, useKeydown, isTypingTarget, DisabledTooltip, TatCompact } from "./shared";
+import { QRGlyph, mockInsurerDecide, playDrawerDing, DisabledTooltip, TatCompact } from "./shared";
 import { useLang } from "./i18n";
 
 const KHR_RATE = 4100;
@@ -53,13 +53,73 @@ export const ORDER_CATALOG = [
   { id: "tele-mh",      kind: "telecon", name: "Telecon — Mental health (45m)",price: 35 },
 ];
 
+function KindGlyph({ kind, size = 14, strokeWidth = 1.75 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+
+  const glyphs = {
+    visit: (
+      <>
+        <path d="M6.5 4.5v4.2a4.5 4.5 0 0 0 9 0V4.5" />
+        <path d="M6.5 4.5H5" />
+        <path d="M15.5 4.5H17" />
+        <path d="M11 13.2v1.6a4 4 0 0 0 8 0v-.6" />
+        <circle cx="19" cy="12.2" r="1.8" />
+      </>
+    ),
+    lab: (
+      <>
+        <path d="M9 3.5h6" />
+        <path d="M10 3.5v5.8l-4 8.2A2.1 2.1 0 0 0 7.9 20.5h8.2a2.1 2.1 0 0 0 1.9-3l-4-8.2V3.5" />
+        <path d="M8.2 15h7.6" />
+      </>
+    ),
+    imaging: (
+      <>
+        <path d="M8 5H6.5A1.5 1.5 0 0 0 5 6.5V8" />
+        <path d="M16 5h1.5A1.5 1.5 0 0 1 19 6.5V8" />
+        <path d="M19 16v1.5a1.5 1.5 0 0 1-1.5 1.5H16" />
+        <path d="M8 19H6.5A1.5 1.5 0 0 1 5 17.5V16" />
+        <path d="M8.7 12h6.6" />
+      </>
+    ),
+    ecg: (
+      <>
+        <path d="M4 12h3.4l2-5 4 10 2-5H20" />
+      </>
+    ),
+    vitals: (
+      <>
+        <path d="M19 8.8c0-2.1-1.5-3.8-3.6-3.8-1.4 0-2.5.7-3.4 1.8C11.1 5.7 10 5 8.6 5 6.5 5 5 6.7 5 8.8c0 3.1 3.1 5.6 7 9.2 3.9-3.6 7-6.1 7-9.2Z" />
+      </>
+    ),
+    telecon: (
+      <>
+        <rect x="4.8" y="7" width="10.5" height="9.5" rx="2" />
+        <path d="m15.3 10.2 4-2.2v7.5l-4-2.2" />
+      </>
+    ),
+  };
+
+  return <svg {...common}>{glyphs[kind] || glyphs.lab}</svg>;
+}
+
 const KIND_META = {
-  visit:   { labelKey: "cart.kind.visit",   icon: "Stethoscope",  color: "#9b6cff" },
-  lab:     { labelKey: "cart.kind.lab",     icon: "FlaskConical", color: "#06a07a" },
-  imaging: { labelKey: "cart.kind.imaging", icon: "Scan",         color: "#d97757" },
-  ecg:     { labelKey: "cart.kind.ecg",     icon: "Activity",     color: "#d83a3a" },
-  vitals:  { labelKey: "cart.kind.vitals",  icon: "Heart",        color: "#2087d6" },
-  telecon: { labelKey: "cart.kind.telecon", icon: "Video",        color: "#7a45ec" },
+  visit:   { labelKey: "cart.kind.visit",   color: "#3a78a6", bg: "#edf6fb" },
+  lab:     { labelKey: "cart.kind.lab",     color: "#168873", bg: "#edf8f5" },
+  imaging: { labelKey: "cart.kind.imaging", color: "#bc7243", bg: "#fff3ec" },
+  ecg:     { labelKey: "cart.kind.ecg",     color: "#af5b64", bg: "#fff2f4" },
+  vitals:  { labelKey: "cart.kind.vitals",  color: "#756aa3", bg: "#f5f2fa" },
+  telecon: { labelKey: "cart.kind.telecon", color: "#2f836c", bg: "#eff8f4" },
 };
 const KIND_ORDER = ["visit", "lab", "imaging", "ecg", "vitals", "telecon"];
 
@@ -107,7 +167,7 @@ function preAnalyticReqs(item) {
 }
 
 // === Cart shape ===
-function deriveCart(patient) {
+export function deriveCart(patient) {
   if (patient.cart && Array.isArray(patient.cart.items)) {
     const c = patient.cart;
     if (!c.promos) {
@@ -139,14 +199,14 @@ function deriveCart(patient) {
   };
 }
 
-function persistCart(patient, onUpdate, next) {
+export function persistCart(patient, onUpdate, next) {
   const labTests = next.items.filter(i => i.kind === "lab").map(i => ({
     id: i.id, name: i.name, price: i.price, status: i.status || "pending",
   }));
   onUpdate({ ...patient, cart: next, labTests });
 }
 
-function cartTotals(cart) {
+export function cartTotals(cart) {
   const subtotal = cart.items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
   const promos = cart.promos || {};
   const breakdown = [];
@@ -184,6 +244,79 @@ function cartTotals(cart) {
     insCoverage, insPatient, corpTotal, directTotal,
     patientDue: Math.max(0, patientDue),
     insTotalRaw,
+  };
+}
+
+// === Shared payment hook — used by OrderCart (steps 1–4) and Step5 main ===
+//   Encapsulates: tendered UI state, method/ccy setters, confirm helpers, and
+//   the KHQR auto-confirm timer. Returns the full prop set PaymentArea expects.
+//
+//   Note on double-mounting: when both the cart rail and Step5 main mount this
+//   hook, the KHQR auto-confirm timer fires from both — but the confirm action
+//   is idempotent (no-op if status is already "confirmed"). `tendered` is local
+//   per-consumer; on Step 5 we hide the cart's PaymentArea so only one mount
+//   has live state at a time.
+export function useCartPayment(patient, onUpdate, onPushToast) {
+  const tFn = useLang();
+  const cart = useMemo(() => deriveCart(patient), [patient]);
+  const totals = cartTotals(cart);
+  const [tendered, setTendered] = useState(cart.payment.tendered || "");
+  const setCart = (next) => persistCart(patient, onUpdate, next);
+
+  const setCcy = (ccy) => setCart({ ...cart, ccy });
+  const setMethod = (m) =>
+    setCart({ ...cart, payment: { ...cart.payment, method: m, status: m === "khqr" ? "waiting" : "idle" } });
+
+  const tenderedNum = parseFloat(tendered) || 0;
+  const change = tenderedNum - totals.patientDue;
+  const cashOk = tenderedNum >= totals.patientDue && totals.patientDue > 0;
+
+  const confirmKhqr = () => {
+    if (cart.payment.status === "confirmed") return;
+    setCart({
+      ...cart,
+      payment: { ...cart.payment, status: "confirmed", method: "khqr",
+                 receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) },
+    });
+    onPushToast?.(tFn("cart.pay.khqrReceived"));
+  };
+
+  // Mock Bakong webhook auto-confirm
+  useEffect(() => {
+    if (cart.payment.method !== "khqr") return;
+    if (cart.payment.status !== "waiting") return;
+    const id = setTimeout(() => {
+      const latest = patient.cart;
+      if (latest?.payment?.method === "khqr" && latest.payment?.status === "waiting") {
+        confirmKhqr();
+      }
+    }, 5000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.payment.method, cart.payment.status]);
+
+  const confirmCash = () => {
+    if (cart.payment.status === "confirmed") return;
+    const tenderedInUSD = (cart.ccy || "USD") === "KHR" ? tenderedNum / KHR_RATE : tenderedNum;
+    const dinged = playDrawerDing();
+    setCart({
+      ...cart,
+      payment: { ...cart.payment, status: "confirmed", method: "cash", tendered,
+                 change: tenderedInUSD - totals.patientDue,
+                 receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) },
+    });
+    onPushToast?.(dinged ? tFn("cart.pay.drawerDing") : tFn("cart.pay.cashRecorded"));
+  };
+
+  return {
+    cart, totals,
+    tendered, setTendered,
+    onMethod: setMethod,
+    onCcyToggle: setCcy,
+    onConfirmCash: confirmCash,
+    onConfirmKhqr: confirmKhqr,
+    change, cashOk, tenderedNum,
+    itemCount: cart.items.length,
   };
 }
 
@@ -236,281 +369,6 @@ function KHQRGraphic({ size = 148 }) {
   );
 }
 
-// === Add Order Modal ===
-function AddOrderModal({ open, existingIds, onAdd, onClose, ccy }) {
-  const t = useLang();
-  const [kind, setKind] = useState("lab");
-  const [q, setQ] = useState("");
-  const [picked, setPicked] = useState(new Set());
-  const [highlight, setHighlight] = useState(0);
-  const searchRef = useRef(null);
-  const listRef = useRef(null);
-
-  useEffect(() => { if (open) { setPicked(new Set()); setQ(""); setKind("lab"); setHighlight(0); } }, [open]);
-  // Reset highlight whenever the visible list changes
-  useEffect(() => { setHighlight(0); }, [kind, q]);
-
-  // Compute filtered list (must be before hotkey effect that closes over it)
-  const filtered = ORDER_CATALOG.filter(c =>
-    c.kind === kind && (!q || c.name.toLowerCase().includes(q.toLowerCase()))
-  );
-  // Selectable = visible AND not already in cart
-  const selectable = filtered.filter(c => !existingIds.has(c.id));
-
-  const toggle = (id) => {
-    setPicked(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const handleAdd = () => onAdd(ORDER_CATALOG.filter(c => picked.has(c.id)));
-
-  // Scroll the highlighted row into view whenever it changes
-  useEffect(() => {
-    if (!open) return;
-    const el = listRef.current?.querySelector(`[data-row-idx="${highlight}"]`);
-    if (el) el.scrollIntoView({ block: "nearest" });
-  }, [highlight, open, kind, q]);
-
-  // Modal-scoped keyboard handler
-  useKeydown((e) => {
-    if (!open) return;
-    const k = e.key;
-    const mod = e.metaKey || e.ctrlKey;
-    const inSearch = document.activeElement === searchRef.current;
-
-    // Close
-    if (k === "Escape") { e.preventDefault(); onClose(); return; }
-
-    // Navigation — first ↓ from the search input HANDS focus to the list
-    // (so subsequent Space toggles the row instead of inserting a literal space).
-    // ↑ from the first row hands focus BACK to the search input (so the nurse
-    // can keep typing without reaching for the mouse or pressing "/").
-    if (k === "ArrowDown") {
-      e.preventDefault();
-      if (inSearch) {
-        searchRef.current?.blur();
-        // Highlight is already at 0 (reset on every q/kind change). Don't move it
-        // — the visual ring on row 0 *is* the feedback that focus left the input.
-      } else {
-        setHighlight(h => Math.min(h + 1, Math.max(0, filtered.length - 1)));
-      }
-      return;
-    }
-    if (k === "ArrowUp") {
-      e.preventDefault();
-      if (inSearch) {
-        // ↑ from search just blurs into the list (no movement).
-        searchRef.current?.blur();
-      } else if (highlight === 0) {
-        // ↑ from the top of the list returns to search.
-        searchRef.current?.focus();
-      } else {
-        setHighlight(h => Math.max(h - 1, 0));
-      }
-      return;
-    }
-
-    // Space → toggle highlighted row. Skipped while in the search input (so the
-    // nurse can type space-containing test names like "Blood Glucose").
-    if (k === " " && !inSearch) {
-      const c = filtered[highlight];
-      if (c && !existingIds.has(c.id)) { e.preventDefault(); toggle(c.id); }
-      return;
-    }
-
-    // Enter → commit picks (or highlighted row if no picks); Shift+Enter → mark & continue
-    if (k === "Enter") {
-      e.preventDefault();
-      if (e.shiftKey) {
-        // Mark highlighted, clear search, refocus, keep modal open
-        const c = filtered[highlight];
-        if (c && !existingIds.has(c.id)) {
-          toggle(c.id);
-          setQ("");
-          setTimeout(() => searchRef.current?.focus(), 0);
-        }
-        return;
-      }
-      // Plain Enter
-      if (picked.size > 0) {
-        handleAdd();
-      } else {
-        const c = filtered[highlight];
-        if (c && !existingIds.has(c.id)) onAdd([c]);
-      }
-      return;
-    }
-
-    // ⌘/Ctrl+A → select all visible (selectable) rows
-    if (mod && (k === "a" || k === "A")) {
-      e.preventDefault();
-      setPicked(prev => {
-        const next = new Set(prev);
-        const allSelected = selectable.length > 0 && selectable.every(c => next.has(c.id));
-        if (allSelected) selectable.forEach(c => next.delete(c.id));
-        else selectable.forEach(c => next.add(c.id));
-        return next;
-      });
-      return;
-    }
-
-    // Number keys 1..6 → jump category tab. Only fires when the search input is
-    // NOT focused (so "1" inside a query like "vit-b12" doesn't switch tabs).
-    if (!mod && !e.shiftKey && /^[1-6]$/.test(k) && !inSearch) {
-      const idx = parseInt(k, 10) - 1;
-      if (KIND_ORDER[idx]) { e.preventDefault(); setKind(KIND_ORDER[idx]); }
-      return;
-    }
-
-    // "/" → focus search (when not already focused)
-    if (k === "/" && !inSearch && !mod) {
-      e.preventDefault();
-      searchRef.current?.focus();
-      return;
-    }
-  }, [open, filtered, highlight, picked, q, kind, existingIds]);
-
-  if (!open) return null;
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 720, maxHeight: "82vh", display: "flex", flexDirection: "column", padding: 0 }} role="dialog" aria-modal="true" aria-label={t("cart.addModal.title")}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{t("cart.addModal.title")}</h3>
-            <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>{t("cart.addModal.sub", { ccy: ccy || "USD" })}</div>
-          </div>
-          <button onClick={onClose} className="icon-btn"><I.X size={16} /></button>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "10px 20px", borderBottom: "1px solid var(--border)" }}>
-          {KIND_ORDER.map((k, i) => {
-            const m = KIND_META[k];
-            const Ico = I[m.icon];
-            const active = kind === k;
-            return (
-              <button key={k} type="button" onClick={() => setKind(k)}
-                title={t("hotkey.tip.tabKey", { n: i + 1 })}
-                style={{
-                  background: active ? "var(--brand-50)" : "transparent",
-                  color: active ? "var(--brand-700)" : "var(--ink-600)",
-                  border: "1px solid " + (active ? "var(--brand-200)" : "transparent"),
-                  borderRadius: 6, padding: "6px 12px",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  whiteSpace: "nowrap",
-                }}>
-                <Ico size={13} /> {t(m.labelKey)}
-                <span className="kbd-tab-num" aria-hidden="true">{i + 1}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)" }}>
-          <div className="search" style={{ height: 36 }}>
-            <I.Search size={14} />
-            <input
-              ref={searchRef}
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder={t("cart.addModal.search", { kind: t(KIND_META[kind].labelKey).toLowerCase() })}
-              autoFocus
-              aria-keyshortcuts="ArrowDown ArrowUp Enter Shift+Enter Escape"
-            />
-          </div>
-        </div>
-        <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 240 }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--ink-500)", fontSize: 13 }}>
-              {t("cart.addModal.noMatch", { kind: t(KIND_META[kind].labelKey) })}
-            </div>
-          ) : filtered.map((c, idx) => {
-            const inCart = existingIds.has(c.id);
-            const isPicked = picked.has(c.id);
-            const isHighlight = idx === highlight;
-            const tags = preAnalyticReqs(c);
-            return (
-              <button
-                key={c.id}
-                type="button"
-                data-row-idx={idx}
-                onClick={() => { setHighlight(idx); if (!inCart) toggle(c.id); }}
-                onMouseEnter={() => setHighlight(idx)}
-                disabled={inCart}
-                className={"add-modal-row" + (isHighlight ? " is-highlight" : "")}
-                style={{
-                  width: "100%",
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 12px",
-                  background: isPicked ? "var(--brand-50)" : (isHighlight ? "var(--surface-2)" : "transparent"),
-                  border: "1px solid " + (isPicked ? "var(--brand-200)" : (isHighlight ? "var(--brand-200)" : "transparent")),
-                  borderRadius: 7, cursor: inCart ? "default" : "pointer",
-                  opacity: inCart ? 0.55 : 1, textAlign: "left", marginBottom: 2,
-                  outline: "none",
-                }}>
-                <div style={{
-                  width: 18, height: 18, borderRadius: 4,
-                  border: "1.5px solid " + (isPicked ? "var(--brand-500)" : "var(--ink-300)"),
-                  background: isPicked || inCart ? "var(--brand-500)" : "white",
-                  display: "grid", placeItems: "center", flexShrink: 0,
-                }}>
-                  {(isPicked || inCart) && <I.Check size={11} strokeWidth={3} style={{ color: "white" }} />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-900)" }}>
-                    {c.name}
-                    {inCart && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--ink-500)", fontWeight: 500 }}>· {t("cart.addModal.inCart")}</span>}
-                  </div>
-                  {tags.length > 0 && (
-                    <div style={{ display: "flex", gap: 4, marginTop: 3 }}>
-                      {tags.map(tag => (
-                        <span key={tag} style={{
-                          fontSize: 10, fontWeight: 600, color: PRE_ANALYTIC_QS[tag].color,
-                          background: PRE_ANALYTIC_QS[tag].color + "15",
-                          padding: "1px 6px", borderRadius: 3,
-                        }}>{t(PRE_ANALYTIC_QS[tag].labelKey)}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-700)", fontVariantNumeric: "tabular-nums" }}>
-                  {c.price === 0 ? "—" : fmtCcy(c.price, ccy || "USD")}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="add-modal-foot" style={{ padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
-          <div className="kbd-strip" aria-hidden="true">
-            <span><Kbd>↑</Kbd><Kbd>↓</Kbd> {t("hint.navigate")}</span>
-            <span className="kbd-strip-sep">·</span>
-            <span><Kbd>Space</Kbd> {t("hint.select")}</span>
-            <span className="kbd-strip-sep">·</span>
-            <span><Kbd>↵</Kbd> {t("hint.add")}</span>
-            <span className="kbd-strip-sep">·</span>
-            <span><Kbd>⇧</Kbd><Kbd>↵</Kbd> {t("hint.addNext")}</span>
-            <span className="kbd-strip-sep">·</span>
-            <span><Kbd>/</Kbd> {t("hint.search")}</span>
-            <span className="kbd-strip-sep">·</span>
-            <span><Kbd>Esc</Kbd> {t("hint.close")}</span>
-          </div>
-          <div className="add-modal-foot-row">
-            <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
-              {picked.size === 0 ? t("cart.addModal.noneSelected") : t("cart.addModal.selectedCount", { n: picked.size })}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")} <Kbd>Esc</Kbd></button>
-              <button className="btn btn-primary" onClick={handleAdd} disabled={picked.size === 0}>
-                <I.Plus size={14} /> {t("cart.addModal.addToCart")} <Kbd>↵</Kbd>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // === Bill Split Modal ===
 function BillSplitModal({ open, cart, onClose, onSave }) {
@@ -544,15 +402,14 @@ function BillSplitModal({ open, cart, onClose, onSave }) {
             </div>
             {draft.items.map(item => {
               const meta = KIND_META[item.kind] || KIND_META.lab;
-              const Ico = I[meta.icon];
               return (
                 <div key={item.id} style={{
                   display: "grid", gridTemplateColumns: "auto 1fr auto",
                   alignItems: "center", gap: 10,
                   padding: "8px 0", borderBottom: "1px solid var(--border)",
                 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 6, background: meta.color + "18", color: meta.color, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <Ico size={13} />
+                  <div style={{ width: 26, height: 26, borderRadius: 6, background: meta.bg, color: meta.color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <KindGlyph kind={item.kind} size={14} strokeWidth={1.75} />
                   </div>
                   <div>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-900)" }}>{item.name}</div>
@@ -736,7 +593,6 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 //   Validation / policy info collapses to small badge icons that expand inline on click.
 function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, hideValidationLabel }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
-  const Ico = I[meta.icon];
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
   const requiresValidation = item.kind === "imaging";
   const validationState = item.validationState || "idle"; // idle | sending | sent | signed
@@ -750,14 +606,13 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
                                    "warn";
 
   return (
-    <div className="cart-line cart-line-compact" data-payer={item.payer}>
+    <div className={"cart-line cart-line-compact" + (isLast ? " is-last" : "")} data-payer={item.payer}>
       <div
         className="cart-line-row"
         title={rowTitle}
-        style={{ borderBottom: isLast ? "none" : "1px solid var(--border)" }}
       >
-        <div className="cart-line-ico" style={{ background: meta.color + "18", color: meta.color }}>
-          <Ico size={11} />
+        <div className="cart-line-ico" style={{ background: meta.bg, color: meta.color }}>
+          <KindGlyph kind={item.kind} size={14} strokeWidth={1.75} />
         </div>
         <div className="cart-line-name">
           <span className="cart-line-name-text">{item.name}</span>
@@ -846,7 +701,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
 }
 
 // === Payment Area ===
-function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t }) {
+export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t }) {
   const ccy = cart.ccy || "USD";
   const status = cart.payment.status;
   const method = cart.payment.method;
@@ -1115,11 +970,13 @@ function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggl
 }
 
 // === Main OrderCart ===
-export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete }) {
+//   The cart is the always-visible rail for Steps 1–4. It owns payment (KHQR /
+//   Cash) and the Complete check-in CTA — there is no longer a separate Step 5
+//   panel that mirrors it.
+export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1 }) {
   const t = useLang();
   const cart = useMemo(() => deriveCart(patient), [patient]);
   const totals = cartTotals(cart);
-  const [addOpen, setAddOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [promoError, setPromoError] = useState("");
@@ -1128,6 +985,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const [pendingPregItems, setPendingPregItems] = useState(null);
   // Round 12 #1 — collapse state per kind. Resets on reload (no persistence by design).
   const [collapsedKinds, setCollapsedKinds] = useState(() => new Set());
+  const [billExpanded, setBillExpanded] = useState(false);
   const toggleKindCollapsed = (kind) => {
     setCollapsedKinds(prev => {
       const next = new Set(prev);
@@ -1138,60 +996,12 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
 
   const setCart = (next) => persistCart(patient, onUpdate, next);
 
-  // Open the Add Test modal from anywhere via keyboard.
-  // We deliberately AVOID Cmd/Ctrl+T (the browser owns that for "new tab" — preventDefault
-  // can't reclaim it on most platforms). Two options that ARE free:
-  //   • Plain "t"   when no text field is focused (Linear / GitHub-style single-key)
-  //   • Alt+T       always — works even while typing, never conflicts with the browser
-  useKeydown((e) => {
-    if (addOpen) return;
-    const overlays = document.querySelectorAll(".modal-overlay");
-    if (overlays.length > 0) return;
-
-    const altT = e.altKey && (e.key === "t" || e.key === "T" || e.code === "KeyT");
-    const plainT = !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey
-                   && (e.key === "t" || e.key === "T")
-                   && !isTypingTarget();
-    if (altT || plainT) {
-      e.preventDefault();
-      setAddOpen(true);
-    }
-  }, [addOpen]);
-
   const itemCount = cart.items.length;
   const grouped = {};
   cart.items.forEach(i => { (grouped[i.kind] = grouped[i.kind] || []).push(i); });
 
   const PREG_GATE_KINDS = new Set(["imaging"]);
   const itemNeedsPregGate = (c) => patient.sexAtBirth === "Female" && PREG_GATE_KINDS.has(c.kind);
-
-  const commitAdditions = (additions) => {
-    if (additions.length === 0) {
-      onPushToast?.(t("cart.alreadyInCart"));
-      setAddOpen(false);
-      return;
-    }
-    setCart({ ...cart, items: [...cart.items, ...additions] });
-    onPushToast?.(t("cart.addedN", { n: additions.length }));
-    setAddOpen(false);
-  };
-
-  const handleAdd = (newItems) => {
-    const existing = new Set(cart.items.map(i => i.id));
-    const additions = newItems.filter(c => !existing.has(c.id)).map(c => ({
-      id: c.id, kind: c.kind, name: c.name, price: c.price, qty: 1,
-      payer: patient.payer || "direct", status: "pending",
-      fasting: c.fasting, alcohol: c.alcohol, drugs: c.drugs, vaccine: c.vaccine,
-    }));
-    const needsGate = additions.some(itemNeedsPregGate);
-    if (needsGate && !cart.pregnancyConsent) {
-      setPendingPregItems(additions);
-      setPregOpen(true);
-      setAddOpen(false);
-      return;
-    }
-    commitAdditions(additions);
-  };
 
   const handlePregConsent = (consent) => {
     setCart({ ...cart, pregnancyConsent: consent, items: [...cart.items, ...(pendingPregItems || [])] });
@@ -1206,6 +1016,30 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   };
 
   const removeItem = (id) => setCart({ ...cart, items: cart.items.filter(i => i.id !== id) });
+
+  // === Clear all — drops every removable item (auto items like the visit fee stay).
+  //   Two-click confirm: first click arms it, second click commits. Esc disarms.
+  const [clearArmed, setClearArmed] = useState(false);
+  const clearArmTimer = useRef(0);
+  const removableCount = cart.items.filter(i => !i.auto).length;
+  const handleClearAll = () => {
+    if (!clearArmed) {
+      setClearArmed(true);
+      window.clearTimeout(clearArmTimer.current);
+      clearArmTimer.current = window.setTimeout(() => setClearArmed(false), 3500);
+      return;
+    }
+    window.clearTimeout(clearArmTimer.current);
+    setClearArmed(false);
+    setCart({ ...cart, items: cart.items.filter(i => i.auto) });
+    onPushToast?.(t("cart.clear.toast", { n: removableCount }), "success");
+  };
+  useEffect(() => {
+    if (!clearArmed) return;
+    const onKey = (e) => { if (e.key === "Escape") setClearArmed(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [clearArmed]);
 
   // === Patient-side validation for imaging (chain of custody) ===
   const sendValidation = (id) => {
@@ -1332,27 +1166,47 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
         display: "flex", flexDirection: "column", gap: "var(--gap)",
       }}>
         <div className="card order-cart" style={{ display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "calc(100vh - 100px)" }}>
-          {/* Header */}
-          <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid var(--border)" }}>
-            <div className="between" style={{ marginBottom: 4, gap: 8 }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                <I.ShoppingCart size={15} style={{ color: "var(--brand-600)", flexShrink: 0 }} />
-                <h2 style={{ margin: 0, fontSize: "var(--font-lg)", fontWeight: 700, color: "var(--ink-900)", whiteSpace: "nowrap" }}>{t("cart.title")}</h2>
-              </div>
-              <span style={{ fontSize: 11, color: "var(--ink-500)", fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
-                {t("cart.itemCount", { n: itemCount })}
-              </span>
+          {/* === HEADER (clean) === */}
+          <div className="cart-hd2">
+            <div className="cart-hd2-ico"><I.ShoppingCart size={16} strokeWidth={2} /></div>
+            <div className="cart-hd2-text">
+              <h2 className="cart-hd2-title">{t("cart.title")}</h2>
+              {patient.name && (
+                <div className="cart-hd2-sub">
+                  {patient.name}
+                  {patient.queueNumber && <> · {patient.queueNumber}</>}
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11.5, color: "var(--ink-600)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {patient.name} · {patient.queueNumber || "—"}
+            <div className="cart-hd2-meta">
+              <div className="cart-hd2-count">
+                {itemCount > 0 && <>{itemCount} <span>{itemCount === 1 ? "item" : "items"}</span></>}
+              </div>
+              {removableCount > 0 && (
+                <button
+                  type="button"
+                  className={"cart-hd2-clear" + (clearArmed ? " is-armed" : "")}
+                  onClick={handleClearAll}
+                  onBlur={() => clearArmed && setClearArmed(false)}
+                  title={clearArmed ? t("cart.clear.armed.title") : t("cart.clear.title")}
+                >
+                  {clearArmed
+                    ? <><I.AlertCircle size={10} /> {t("cart.clear.armed")}</>
+                    : <><I.Trash size={10} /> {t("cart.clear")}</>}
+                </button>
+              )}
             </div>
           </div>
 
           {/* Items */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "4px 16px", minHeight: 100 }}>
+          <div className="cart-items-scroll">
             {itemCount === 0 ? (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
-                {t("cart.empty")}
+              <div className="cart-empty">
+                <I.ShoppingCart size={22} className="cart-empty-ico" />
+                <div className="cart-empty-title">{t("cart.empty.title")}</div>
+                <div className="cart-empty-sub">
+                  {identityComplete ? t("cart.empty.gotoStep4") : t("cart.empty.completeIdentity")}
+                </div>
               </div>
             ) : KIND_ORDER.map(kind => {
               const items = grouped[kind];
@@ -1369,22 +1223,21 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                     aria-expanded={!isCollapsed}
                     aria-controls={`cart-group-body-${kind}`}
                     title={isCollapsed ? t("cart.group.expand") : t("cart.group.collapse")}
+                    style={{ "--group-color": meta.color }}
                   >
                     <I.ChevronDown
-                      size={12}
-                      strokeWidth={2.5}
+                      size={11}
+                      strokeWidth={2.25}
                       className={"cart-group-chev" + (isCollapsed ? " is-collapsed" : "")}
-                      style={{ color: meta.color }}
                     />
-                    <span className="cart-group-label" style={{ color: meta.color }}>
-                      <span className="cart-group-dot" style={{ background: meta.color }} />
+                    <span className="cart-group-label">
                       {t(meta.labelKey)}
-                      <span className="cart-group-count">{items.length}</span>
                     </span>
+                    <span className="cart-group-count">{items.length}</span>
                     <span className="cart-group-sub">{fmtCcy(groupSub, cart.ccy || "USD")}</span>
                   </button>
                   {!isCollapsed && (
-                    <div id={`cart-group-body-${kind}`}>
+                    <div id={`cart-group-body-${kind}`} className="cart-group-body">
                       {items.map((item, idx) => (
                         <CartLine
                           key={item.id}
@@ -1402,22 +1255,50 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                 </div>
               );
             })}
-            <button className="btn btn-ghost" onClick={() => setAddOpen(true)}
-              title={t("hotkey.tip.openAdd")}
-              style={{ width: "100%", marginTop: 10, marginBottom: 10, borderStyle: "dashed", height: 34, fontSize: 12, fontWeight: 600, color: "var(--brand-600)" }}>
-              <I.Plus size={13} /> {t("cart.addTests")}
-              <Kbd>T</Kbd>
-            </button>
           </div>
 
           {/* v9 §3 — Hide promo / totals / split / payment / TAT entirely when
              cart is empty. Receptionist isn't distracted by a $0.00 row.
              Reappears as soon as the first item lands in the cart. */}
           {itemCount > 0 && (<>
-          {/* Promo + totals + split */}
-          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", background: "var(--surface-2)" }}>
+          {/* Billing summary — collapsed by default to give items more room */}
+          <div style={{ borderTop: "1px solid var(--border)", background: "var(--surface-2)" }}>
+            {/* Always-visible: Patient pays total + expand toggle */}
+            <button
+              type="button"
+              onClick={() => setBillExpanded(o => !o)}
+              style={{
+                width: "100%",
+                display: "grid",
+                /* mirror the cart-group-head layout: label (1fr), price (auto),
+                   then a trailing 18px column for the chevron — keeps the price
+                   in the same column as line-item prices */
+                gridTemplateColumns: "1fr auto 18px",
+                alignItems: "center",
+                gap: 9,
+                padding: "9px 14px",
+                background: "transparent", border: "none", cursor: "pointer",
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-900)", textAlign: "left" }}>{t("cart.patientPays")}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "var(--ink-900)" }}>
+                {fmtCcy(totals.patientDue, cart.ccy)}
+              </span>
+              <I.ChevronDown
+                size={13}
+                strokeWidth={2.25}
+                style={{
+                  color: "var(--ink-400)",
+                  justifySelf: "center",
+                  transform: billExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.15s ease",
+                }}
+              />
+            </button>
+
+            {/* Applied promo chips — always visible so nurses know what's active */}
             {Object.keys(cart.promos || {}).length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 16px 8px" }}>
                 {Object.entries(cart.promos).map(([code, p]) => (
                   <div key={code} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 8px", borderRadius: 5, background: "var(--success-50)", border: "1px solid var(--success-200, #a7f3d0)" }}>
                     <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, minWidth: 0 }}>
@@ -1432,83 +1313,85 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                 ))}
               </div>
             )}
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ display: "flex", gap: 4 }}>
-                <div style={{ flex: 1, position: "relative" }}>
-                  <I.Tag size={11} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--ink-400)" }} />
-                  <input className="input" value={promoInput}
-                    onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
-                    placeholder={Object.keys(cart.promos || {}).length > 0 ? t("cart.promo.addAnother") : t("cart.promo.placeholder")}
-                    style={{ height: 28, fontSize: 11.5, padding: "0 8px 0 26px", textTransform: "uppercase", borderColor: promoError ? "var(--danger-500)" : undefined }}
-                    onKeyDown={e => { if (e.key === "Enter") applyPromo(); }} />
-                </div>
-                <button type="button" onClick={applyPromo} disabled={!promoInput.trim()}
-                  style={{
-                    height: 28, padding: "0 10px",
-                    border: "1px solid var(--border-strong)",
-                    background: promoInput.trim() ? "var(--brand-50)" : "var(--surface-2)",
-                    color: promoInput.trim() ? "var(--brand-700)" : "var(--ink-400)",
-                    borderRadius: 5, fontSize: 11.5, fontWeight: 650,
-                    cursor: promoInput.trim() ? "pointer" : "not-allowed",
-                  }}>{t("cart.promo.apply")}</button>
-              </div>
-              {promoError ? (
-                <div style={{ fontSize: 10.5, color: "var(--danger-500)", marginTop: 3, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                  <I.AlertCircle size={10} /> {promoError}
-                </div>
-              ) : Object.keys(cart.promos || {}).length === 0 && (
-                <div style={{ fontSize: 10, color: "var(--ink-400)", marginTop: 3 }}>{t("cart.promo.hint")}</div>
-              )}
-            </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-600)" }}>
-                <span>{t("cart.subtotal")}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCcy(totals.subtotal, cart.ccy)}</span>
-              </div>
-              {totals.breakdown.map(b => (
-                <div key={b.code} style={{ display: "flex", justifyContent: "space-between", color: "var(--success-700, #047857)", fontSize: 11 }}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>{b.code}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>−{fmtCcy(b.amount, cart.ccy)}</span>
+            {/* Expanded: full breakdown + promo input + split */}
+            {billExpanded && (
+              <div style={{ padding: "0 16px 10px", borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12, paddingTop: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-600)" }}>
+                    <span>{t("cart.subtotal")}</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtCcy(totals.subtotal, cart.ccy)}</span>
+                  </div>
+                  {totals.breakdown.map(b => (
+                    <div key={b.code} style={{ display: "flex", justifyContent: "space-between", color: "var(--success-700, #047857)", fontSize: 11 }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>{b.code}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>−{fmtCcy(b.amount, cart.ccy)}</span>
+                    </div>
+                  ))}
+                  {totals.insTotalRaw > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-500)", fontSize: 11 }}>
+                      <span>{t("cart.insCovers")}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>−{fmtCcy(totals.insCoverage, cart.ccy)}</span>
+                    </div>
+                  )}
+                  {totals.corpTotal > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-500)", fontSize: 11 }}>
+                      <span>{t("cart.corpCovers")}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>−{fmtCcy(totals.corpTotal, cart.ccy)}</span>
+                    </div>
+                  )}
                 </div>
-              ))}
-              {totals.insTotalRaw > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-500)", fontSize: 11 }}>
-                  <span>{t("cart.insCovers")}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>−{fmtCcy(totals.insCoverage, cart.ccy)}</span>
-                </div>
-              )}
-              {totals.corpTotal > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-500)", fontSize: 11 }}>
-                  <span>{t("cart.corpCovers")}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>−{fmtCcy(totals.corpTotal, cart.ccy)}</span>
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid var(--border-strong)", marginTop: 4, fontWeight: 700, fontSize: 13.5, color: "var(--ink-900)", gap: 8 }}>
-                <span style={{ whiteSpace: "nowrap" }}>{t("cart.patientPays")}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtCcy(totals.patientDue, cart.ccy)}</span>
-              </div>
-            </div>
 
-            {payerChips.length > 1 && (
-              <div style={{ marginTop: 8, padding: "6px 8px", borderRadius: 5, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                <span style={{ fontSize: 10.5, color: "var(--ink-500)", fontWeight: 600, marginRight: 4 }}>{t("cart.split.label")}</span>
-                {payerChips.map((c, i) => (
-                  <span key={i} style={{
-                    fontSize: 10.5, fontWeight: 600, color: c.color,
-                    background: c.color + "15",
-                    padding: "1px 5px", borderRadius: 3,
-                    fontVariantNumeric: "tabular-nums",
-                  }}>{c.label} {fmtCcy(c.amount, cart.ccy)}</span>
-                ))}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ flex: 1, position: "relative" }}>
+                      <I.Tag size={11} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--ink-400)" }} />
+                      <input className="input" value={promoInput}
+                        onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
+                        placeholder={Object.keys(cart.promos || {}).length > 0 ? t("cart.promo.addAnother") : t("cart.promo.placeholder")}
+                        style={{ height: 28, fontSize: 11.5, padding: "0 8px 0 26px", textTransform: "uppercase", borderColor: promoError ? "var(--danger-500)" : undefined }}
+                        onKeyDown={e => { if (e.key === "Enter") applyPromo(); }} />
+                    </div>
+                    <button type="button" onClick={applyPromo} disabled={!promoInput.trim()}
+                      style={{
+                        height: 28, padding: "0 10px",
+                        border: "1px solid var(--border-strong)",
+                        background: promoInput.trim() ? "var(--brand-50)" : "var(--surface-2)",
+                        color: promoInput.trim() ? "var(--brand-700)" : "var(--ink-400)",
+                        borderRadius: 5, fontSize: 11.5, fontWeight: 650,
+                        cursor: promoInput.trim() ? "pointer" : "not-allowed",
+                      }}>{t("cart.promo.apply")}</button>
+                  </div>
+                  {promoError ? (
+                    <div style={{ fontSize: 10.5, color: "var(--danger-500)", marginTop: 3, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      <I.AlertCircle size={10} /> {promoError}
+                    </div>
+                  ) : Object.keys(cart.promos || {}).length === 0 && (
+                    <div style={{ fontSize: 10, color: "var(--ink-400)", marginTop: 3 }}>{t("cart.promo.hint")}</div>
+                  )}
+                </div>
+
+                {payerChips.length > 1 && (
+                  <div style={{ marginTop: 8, padding: "6px 8px", borderRadius: 5, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-500)", fontWeight: 600, marginRight: 4 }}>{t("cart.split.label")}</span>
+                    {payerChips.map((c, i) => (
+                      <span key={i} style={{
+                        fontSize: 10.5, fontWeight: 600, color: c.color,
+                        background: c.color + "15",
+                        padding: "1px 5px", borderRadius: 3,
+                        fontVariantNumeric: "tabular-nums",
+                      }}>{c.label} {fmtCcy(c.amount, cart.ccy)}</span>
+                    ))}
+                  </div>
+                )}
+
+                <button className="btn btn-ghost" onClick={() => setSplitOpen(true)}
+                  style={{ width: "100%", marginTop: 8, height: 28, fontSize: 11.5, fontWeight: 600, color: "var(--ink-700)" }}
+                  disabled={itemCount === 0}>
+                  <I.Split size={12} /> {isSplit ? t("cart.split.edit") : t("cart.split.bill")}
+                </button>
               </div>
             )}
-
-            <button className="btn btn-ghost" onClick={() => setSplitOpen(true)}
-              style={{ width: "100%", marginTop: 8, height: 28, fontSize: 11.5, fontWeight: 600, color: "var(--ink-700)" }}
-              disabled={itemCount === 0}>
-              <I.Split size={12} /> {isSplit ? t("cart.split.edit") : t("cart.split.bill")}
-            </button>
           </div>
 
           {/* === Chain-of-custody banner (imaging not yet validated by patient) === */}
@@ -1552,6 +1435,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             </div>
           )}
 
+          {/* Cart owns payment for the whole flow — there's no separate Step 5 panel. */}
           <PaymentArea
             cart={cart}
             totals={totals}
@@ -1569,9 +1453,8 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
           />
           </>)}
 
-          {/* === Round 9 #1: Primary CTA — Cart is the primary CTA === */}
-          {/* Round 12 #2: wrap in DisabledTooltip — list precise missing requirements. */}
-          {cart.payment.status !== "confirmed" && (
+          {/* Primary CTA — hidden when cart is empty (would be a misleading dead button). */}
+          {itemCount > 0 && cart.payment.status !== "confirmed" && (
             <div style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
               <DisabledTooltip
                 block
@@ -1603,7 +1486,6 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
         </div>
       </div>
 
-      <AddOrderModal open={addOpen} existingIds={new Set(cart.items.map(i => i.id))} ccy={cart.ccy || "USD"} onClose={() => setAddOpen(false)} onAdd={handleAdd} />
       <BillSplitModal open={splitOpen} cart={cart} onClose={() => setSplitOpen(false)} onSave={(next) => { setCart(next); setSplitOpen(false); onPushToast?.(t("cart.split.applied")); }} />
       <PregnancyConsentModal open={pregOpen} patient={patient} pendingItems={pendingPregItems || []} onConfirm={handlePregConsent} onCancel={handlePregCancel} />
     </>

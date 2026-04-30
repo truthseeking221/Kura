@@ -851,7 +851,7 @@ export const TatTimeline = TatCompact;
 // Patient state shape: patient.teleconsult = { status, slot, by }
 //   status: "notBooked" | "pending" | "booked" | "completed" | "cancelled"
 // ============================================================
-const SLOT_OPTIONS = [
+export const SLOT_OPTIONS = [
   // etaHours = approximate hours from "now" until the slot starts.
   // Used by v9 §8 to grey slots earlier than the cart's TAT estimate.
   { id: "today_pm",  labelKey: "telecon.slot.todayPm",  hint: "Today · 14:00–14:30",     etaHours: 6 },

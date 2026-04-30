@@ -4,6 +4,7 @@ import { I } from "./icons";
 import { useLang } from "./i18n";
 import { NotificationsPanel, PillMenu, UserMenu } from "./Notifications";
 import { stations, shifts } from "./data";
+import kuraLogo from "./assets/kura-logo.svg";
 
 const LANGUAGES = ["Khmer", "English", "Vietnamese", "Thai", "French", "Korean"];
 
@@ -22,7 +23,9 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
   return (
     <aside className={"sidebar" + (collapsed ? " collapsed" : "")}>
       <div className="brand">
-        <div className="brand-mark">K</div>
+        <div className="brand-mark">
+          <img className="brand-logo" src={kuraLogo} alt="Kura" />
+        </div>
         {!collapsed && (
           <div className="brand-text">Kura <span className="sub">Reception</span></div>
         )}
@@ -155,7 +158,7 @@ function SearchBar({ patients = [], onSearch }) {
   };
 
   return (
-    <div className="search-wrap" ref={wrapRef} style={{ flex: 1, maxWidth: 460, marginLeft: "auto", position: "relative" }}>
+    <div className="search-wrap topbar-search-wrap" ref={wrapRef}>
       <div className={"search" + (open && results.length > 0 ? " search-active" : "")}>
         <I.Search size={15} style={{ color: "var(--ink-400)", flexShrink: 0 }} />
         <input
@@ -251,8 +254,6 @@ export function Topbar({
   return (
     <header className="topbar">
       <div className="row" style={{ gap: 12 }}>
-        <h1>{t("topbar.title")}</h1>
-
         <div className="dropdown-anchor">
           <button
             className="pill-select"

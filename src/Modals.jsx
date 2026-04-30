@@ -1,8 +1,9 @@
 // === Modals + Toasts ===
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { I } from "./icons";
 import { CountryCodeSelect, VisitReasonPills, VISIT_REASONS, Kbd, MOD_LABEL } from "./shared";
 import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
+import { DateInput } from "./DateInput";
 
 export function NewWalkInModal({ open, onClose, onCreate }) {
   const t = useLang();
@@ -61,7 +62,14 @@ export function NewWalkInModal({ open, onClose, onCreate }) {
             <div className="field">
               <label className="label">{t("checkin.dob")} <span className="req">*</span></label>
               <div className="input-wrap">
-                <input className={"input" + (errors.dob ? " invalid" : "")} value={form.dob} onChange={e => set("dob", e.target.value)} placeholder={t("checkin.dob.placeholder")} style={{ paddingRight: 32 }} />
+                <DateInput
+                  className={"input" + (errors.dob ? " invalid" : "")}
+                  value={form.dob}
+                  onChange={(v) => set("dob", v)}
+                  format={t("checkin.dob.placeholder")}
+                  padRight={32}
+                  style={{ paddingRight: 32 }}
+                />
                 <I.Calendar size={16} className="rico" />
               </div>
               {errors.dob && <div className="help error">{errors.dob}</div>}
@@ -279,14 +287,77 @@ export function HotkeyCheatsheetModal({ open, onClose }) {
   );
 }
 
+// Exit animation duration — must stay in sync with `--toast-exit-ms` in styles.css.
+const TOAST_EXIT_MS = 240;
+
 export function ToastStack({ toasts, onClose }) {
+  // Local mirror of `toasts` so a removed toast can play its exit animation
+  // before unmounting. Each item carries a `leaving` flag.
+  const [items, setItems] = useState([]);
+  const exitTimers = useRef(new Map());
+
+  // Diff incoming `toasts` against local items: append new ones, mark missing
+  // ones as `leaving` (kept in DOM until the exit animation finishes).
+  useEffect(() => {
+    const incomingIds = new Set(toasts.map(t => t.id));
+    setItems(prev => {
+      const seen = new Set();
+      let changed = false;
+      const next = prev.map(it => {
+        seen.add(it.id);
+        if (!incomingIds.has(it.id) && !it.leaving) {
+          changed = true;
+          return { ...it, leaving: true };
+        }
+        return it;
+      });
+      for (const t of toasts) {
+        if (!seen.has(t.id)) {
+          next.push({ ...t, leaving: false });
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [toasts]);
+
+  // Schedule the actual unmount once a toast is marked leaving.
+  useEffect(() => {
+    items.forEach(it => {
+      if (it.leaving && !exitTimers.current.has(it.id)) {
+        const tid = setTimeout(() => {
+          setItems(curr => curr.filter(x => x.id !== it.id));
+          exitTimers.current.delete(it.id);
+        }, TOAST_EXIT_MS);
+        exitTimers.current.set(it.id, tid);
+      }
+    });
+  }, [items]);
+
+  useEffect(() => () => {
+    exitTimers.current.forEach(t => clearTimeout(t));
+    exitTimers.current.clear();
+  }, []);
+
   return (
     <div className="toast-stack">
-      {toasts.map(t => (
-        <div key={t.id} className={"toast " + (t.tone || "success")}>
-          {t.tone === "error" ? <I.AlertCircle size={18} className="t-ico" /> : <I.CheckCircle size={18} className="t-ico" />}
-          <span>{t.text}</span>
-          <button className="t-close" onClick={() => onClose(t.id)}><I.X size={14} /></button>
+      {items.map(t => (
+        <div key={t.id} className={"toast-row" + (t.leaving ? " is-leaving" : "")}>
+          <div className={"toast " + (t.tone || "success")} role="status">
+            <span className="t-ico-wrap">
+              {t.tone === "error"
+                ? <I.AlertCircle size={15} className="t-ico" strokeWidth={2.4} />
+                : <I.Check size={15} className="t-ico" strokeWidth={3} />}
+            </span>
+            <span className="t-text">{t.text}</span>
+            <button
+              className="t-close"
+              onClick={() => onClose(t.id)}
+              aria-label="Dismiss"
+            >
+              <I.X size={13} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
       ))}
     </div>
