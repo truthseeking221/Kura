@@ -350,7 +350,20 @@ export function ToastStack({ toasts, onClose }) {
                 : <I.Check size={15} className="t-ico" strokeWidth={3} />}
             </span>
             <span className="t-text">{t.text}</span>
+            {t.actionLabel && t.onAction && (
+              <button
+                type="button"
+                className="t-action"
+                onClick={() => {
+                  t.onAction();
+                  onClose(t.id);
+                }}
+              >
+                {t.actionLabel}
+              </button>
+            )}
             <button
+              type="button"
               className="t-close"
               onClick={() => onClose(t.id)}
               aria-label="Dismiss"

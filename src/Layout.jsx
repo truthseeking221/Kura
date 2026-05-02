@@ -8,8 +8,10 @@ import kuraLogo from "./assets/kura-logo.svg";
 
 const LANGUAGES = ["Khmer", "English", "Vietnamese", "Thai", "French", "Korean"];
 
-export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange }) {
+export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange, mobileOpen = false, onMobileClose }) {
   const t = useLang();
+  const sidebarRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
   const items = [
     { id: "reception", key: "nav.reception", icon: "Home" },
     { id: "queue",     key: "nav.queue",     icon: "Users" },
@@ -20,8 +22,32 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
     { id: "reports",   key: "nav.reports",   icon: "BarChart" },
     { id: "settings",  key: "nav.settings",  icon: "Settings" },
   ];
+  // On mobile, picking a nav item should close the drawer so the user lands
+  // on the new screen with full viewport. Desktop ignores onMobileClose.
+  const handleNav = (id) => {
+    onNavigate(id);
+    if (onMobileClose) onMobileClose();
+  };
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
+  useEffect(() => {
+    if (!isMobile || !mobileOpen) return;
+    const first = sidebarRef.current?.querySelector("button, select");
+    first?.focus?.();
+  }, [isMobile, mobileOpen]);
+  const hiddenOnMobile = isMobile && !mobileOpen;
   return (
-    <aside className={"sidebar" + (collapsed ? " collapsed" : "")}>
+    <aside
+      ref={sidebarRef}
+      className={"sidebar" + (collapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}
+      aria-hidden={hiddenOnMobile ? "true" : undefined}
+      inert={hiddenOnMobile ? "" : undefined}
+    >
       <div className="brand">
         <div className="brand-mark">
           <img className="brand-logo" src={kuraLogo} alt="Kura" />
@@ -33,16 +59,19 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
       <nav className="nav">
         {items.map(it => {
           const Ico = I[it.icon];
+          const isActive = active === it.id;
           return (
-            <div
+            <button
+              type="button"
               key={it.id}
-              className={"nav-item" + (active === it.id ? " active" : "")}
-              onClick={() => onNavigate(it.id)}
+              className={"nav-item" + (isActive ? " active" : "")}
+              onClick={() => handleNav(it.id)}
               title={collapsed ? t(it.key) : ""}
+              aria-current={isActive ? "page" : undefined}
             >
               <Ico size={18} />
               {!collapsed && <span>{t(it.key)}</span>}
-            </div>
+            </button>
           );
         })}
       </nav>
@@ -171,8 +200,10 @@ function SearchBar({ patients = [], onSearch }) {
         />
         {query ? (
           <button
+            type="button"
+            aria-label="Clear patient search"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--ink-400)", display: "flex" }}
-            onMouseDown={e => { e.preventDefault(); setQuery(""); setOpen(false); }}
+            onClick={() => { setQuery(""); setOpen(false); inputRef.current?.focus(); }}
           >
             <I.X size={13} />
           </button>
@@ -185,10 +216,11 @@ function SearchBar({ patients = [], onSearch }) {
         <div className="search-dropdown">
           <div className="search-dropdown-label">Patients</div>
           {results.map((p, i) => (
-            <div
+            <button
+              type="button"
               key={p.id}
-              className={"search-result" + (i === cursor ? " hovered" : "")}
-              onMouseDown={e => { e.preventDefault(); commit(p); }}
+              className={"topbar-search-result" + (i === cursor ? " hovered" : "")}
+              onClick={() => commit(p)}
               onMouseEnter={() => setCursor(i)}
             >
               <div className={"avatar av-sm " + p.avatarColor}>{p.initials}</div>
@@ -204,7 +236,7 @@ function SearchBar({ patients = [], onSearch }) {
               }}>
                 {p.status.label}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -221,6 +253,8 @@ function SearchBar({ patients = [], onSearch }) {
 }
 
 export function Topbar({
+  onMenuClick,
+  menuButtonRef,
   onNewWalkIn,
   notifications,
   station,
@@ -253,7 +287,21 @@ export function Topbar({
 
   return (
     <header className="topbar">
-      <div className="row" style={{ gap: 12 }}>
+      {/* Mobile menu trigger — desktop hides via CSS so this slot reverts
+         to the regular flex flow without disturbing the existing layout. */}
+      {onMenuClick && (
+          <button
+            type="button"
+            ref={menuButtonRef}
+            className="mobile-menu-btn"
+          aria-label="Open navigation"
+          onClick={onMenuClick}
+        >
+          <I.Menu size={18} />
+        </button>
+      )}
+      <div className="topbar-title-mobile">Reception</div>
+      <div className="row topbar-pill-row" style={{ gap: 12 }}>
         <div className="dropdown-anchor">
           <button
             className="pill-select"
@@ -329,8 +377,8 @@ export function Topbar({
         />
       </div>
 
-      <button className="btn btn-primary" onClick={onNewWalkIn}>
-        <I.Plus size={16} /> {t("topbar.newWalkin")}
+      <button className="btn btn-primary topbar-walkin-btn" onClick={onNewWalkIn} aria-label={t("topbar.newWalkin")}>
+        <I.Plus size={16} /> <span className="topbar-walkin-label">{t("topbar.newWalkin")}</span>
       </button>
     </header>
   );

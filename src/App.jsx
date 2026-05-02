@@ -8,11 +8,12 @@
 //
 //   Each patient owns its own wizardStep + completedSteps so multi-patient context works.
 //
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { I } from "./icons";
 import { initialPatients, initialNotifications, blankPatient } from "./data";
 import { Sidebar, Topbar, GoalBar } from "./Layout";
-import { OrderCart } from "./OrderCart";
+import { OrderCart, deriveCart, cartTotals, ORDER_CATALOG, paymentAfterPaidEdit } from "./OrderCart";
+import { AddTestsPanel } from "./AddTestsPanel";
 import { useKeydown, isTypingTarget } from "./shared";
 import {
   NewWalkInModal,
@@ -20,7 +21,7 @@ import {
   ToastStack,
 } from "./Modals";
 import { LangProvider, useLang } from "./i18n";
-import { WizardProgress, PatientHeader, useWizardGate } from "./Wizard";
+import { WizardProgress, PatientHeader, useWizardGate, canNavigateToStep } from "./Wizard";
 import { Step1Identity, Step2Review, Step3Insurance, Step4Orders } from "./Steps";
 
 export default function App() {
@@ -38,11 +39,26 @@ function AppShell() {
   const [activeNav, setActiveNav] = useState("reception");
   const [uiLang, setUiLang] = useState("English");
 
+  // Mobile-only navigation + cart sheet state. Desktop keeps its sticky rail
+  // and never opens these — they are gated by CSS @media (max-width: 767px).
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
+  // Sheet mode lets the dock surface 3 entry points without leaving the sheet:
+  //   add  → AddTestsPanel embedded; nurse can capture an order from anywhere
+  //   cart → OrderCart items + payment + CTA (default)
+  //   pay  → OrderCart but auto-scrolls payment area into view on entry
+  const [sheetMode, setSheetMode] = useState("cart");
+
   // Per-patient wizard step (default to inferred step on first load)
   const [wizardStepMap, setWizardStepMap] = useState({});
 
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
+  // Paid-edit safety: any attempt to mutate the cart after payment.status
+  // === "confirmed" is intercepted and queued here. The resolution prompt
+  // gives the nurse three explicit choices: supplemental, void & recompute,
+  // or cancel. Falsy = no prompt active.
+  const [paidEditPending, setPaidEditPending] = useState(null);
 
   const [station, setStation] = useState("PSC-01");
   const [shift, setShift] = useState("morning");
@@ -50,9 +66,27 @@ function AppShell() {
 
   const [toasts, setToasts] = useState([]);
   const toastIdRef = useRef(1);
+  const dockSummaryRef = useRef(null);
+  const cartSheetRef = useRef(null);
+  const cartSheetCloseRef = useRef(null);
+  const lastDockFocusRef = useRef(null);
+  const mobileMenuButtonRef = useRef(null);
 
   const active = patients.find(p => p.id === activeId) || patients[0];
   const gate = useWizardGate(active);
+
+  // Cart summary for the mobile bottom-bar (hidden on desktop via CSS).
+  const activeCart = useMemo(() => deriveCart(active), [active]);
+  const activeTotals = cartTotals(activeCart);
+  const activeItemCount = activeCart.items.length;
+  const cartPaid = activeCart.payment?.status === "confirmed";
+  const activeLinePayers = activeCart.items.map(i => i.payer || active.payer || "direct");
+  const hasInsurancePaidLines = activeLinePayers.includes("insurance");
+  const payerReadyForPayment =
+    gate.step3Done ||
+    (activeItemCount > 0 &&
+      activeLinePayers.every(Boolean) &&
+      (!hasInsurancePaidLines || (active.insurance || []).length > 0));
 
   // Infer initial step from gate (resume where they left off).
   // Step 4 is the final step; payment is taken in the cart rail.
@@ -64,6 +98,177 @@ function AppShell() {
   };
   const currentStep = wizardStepMap[activeId] ?? inferStep(gate);
   const setCurrentStep = (n) => setWizardStepMap(m => ({ ...m, [activeId]: n }));
+  const createBlankReceptionSlot = () => {
+    const id = "p-blank-" + Date.now();
+    const queueNumber = "Q-" + String(43 + patients.length).padStart(3, "0");
+    const colors = ["av-blue", "av-teal", "av-purple", "av-amber", "av-pink", "av-green"];
+    const next = blankPatient(id, queueNumber, colors[patients.length % colors.length]);
+    setPatients(ps => [next, ...ps]);
+    setActiveId(id);
+    setWizardStepMap(m => ({ ...m, [id]: 1 }));
+    setCartSheetOpen(false);
+    setSheetMode("cart");
+    return next;
+  };
+
+  // Close mobile cart sheet when navigating between patients or wizard steps.
+  // The mobile bottom-bar still shows the latest summary, but the open sheet
+  // would otherwise feel "stuck" after a context switch.
+  useEffect(() => {
+    setCartSheetOpen(false);
+    setMobileNavOpen(false);
+    setSheetMode("cart");
+  }, [activeId, currentStep]);
+
+  // Centralised guard so any cart mutation (add/remove) routes through one
+  // safety check after payment is confirmed. `apply(mode)` is the caller's
+  // mutation closure where mode is one of:
+  //   "normal"       — payment was not confirmed; just apply
+  //   "supplemental" — keep previous receipt as reference, collect delta
+  //   "void"         — void the receipt and force recollection
+  const requestPaidEdit = (description, apply) => {
+    setPaidEditPending({ description, apply });
+  };
+  const guardCartEdit = (active, description, apply) => {
+    if (active.cart?.payment?.status === "confirmed") {
+      requestPaidEdit(description, apply);
+    } else {
+      apply("normal");
+    }
+  };
+  const resolvePaidEdit = (mode) => {
+    if (paidEditPending?.apply) paidEditPending.apply(mode);
+    if (mode === "void") pushToast("Receipt voided — recollect payment", "error");
+    else if (mode === "supplemental") pushToast("Payment adjustment created", "success");
+    setPaidEditPending(null);
+  };
+  const cancelPaidEdit = () => setPaidEditPending(null);
+
+  // === addBulk: shared "add tests to cart" handler ===
+  // Step 4 has its own copy of this; the dock's Add tab needs a parallel one
+  // so the nurse can stage orders from anywhere. Logic mirrors Step4Orders,
+  // but routes through guardCartEdit so adding to a paid visit is safe.
+  const addBulk = (items) => {
+    const cart = active.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" } };
+    const inCartIds = new Set((cart.items || []).map(i => i.id));
+    const fresh = items.filter(i => !inCartIds.has(i.testId || i.id));
+    if (fresh.length === 0) {
+      pushToast("Already in cart", "error");
+      return;
+    }
+    const apply = (mode) => {
+      const additions = fresh.map(item => {
+        const id = item.testId || item.id;
+        const c = ORDER_CATALOG.find(c => c.id === id) || {};
+        return {
+          id, kind: item.kind || c.kind || "lab", name: item.name || c.name,
+          price: item.price ?? c.price, qty: 1, payer: active.payer || "direct", status: "pending",
+          supplemental: mode === "supplemental" ? true : undefined,
+        };
+      });
+      const nextPayment = paymentAfterPaidEdit(cart.payment, mode);
+      updatePatient({ ...active, cart: { ...cart, items: [...(cart.items || []), ...additions], payment: nextPayment } });
+      return additions.map(item => item.id);
+    };
+    if (active.cart?.payment?.status === "confirmed") {
+      requestPaidEdit(`Add ${fresh.length} order${fresh.length === 1 ? "" : "s"} to a paid visit?`, apply);
+      return { deferred: true };
+    }
+    const addedIds = apply("normal");
+    return {
+      ids: addedIds,
+      undo: () => {
+        setPatients(ps => ps.map(p => {
+          if (p.id !== active.id) return p;
+          const latestCart = p.cart || cart;
+          return {
+            ...p,
+            cart: {
+              ...latestCart,
+              items: (latestCart.items || []).filter(item => !addedIds.includes(item.id)),
+            },
+          };
+        }));
+      },
+    };
+  };
+
+  // Open the sheet on a specific tab. Used by the dock CTA / row tap.
+  const openSheet = (mode = "cart") => {
+    lastDockFocusRef.current = document.activeElement;
+    setSheetMode(mode);
+    setCartSheetOpen(true);
+  };
+  const closeSheet = () => {
+    setCartSheetOpen(false);
+    window.setTimeout(() => {
+      const target = lastDockFocusRef.current?.isConnected ? lastDockFocusRef.current : dockSummaryRef.current;
+      target?.focus?.();
+    }, 0);
+  };
+  const closeMobileNav = () => {
+    setMobileNavOpen(false);
+    window.setTimeout(() => mobileMenuButtonRef.current?.focus?.(), 0);
+  };
+
+  // Escape closes mobile drawers without affecting any other key handlers.
+  useEffect(() => {
+    if (!mobileNavOpen && !cartSheetOpen) return;
+    const handler = (e) => {
+      if (e.key !== "Escape") return;
+      if (mobileNavOpen) closeMobileNav();
+      if (cartSheetOpen) closeSheet();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [mobileNavOpen, cartSheetOpen]);
+
+  useEffect(() => {
+    document.body.classList.toggle("is-mobile-overlay-open", mobileNavOpen || cartSheetOpen);
+    return () => document.body.classList.remove("is-mobile-overlay-open");
+  }, [mobileNavOpen, cartSheetOpen]);
+
+  useEffect(() => {
+    if (!cartSheetOpen) return;
+    const focusTimer = window.setTimeout(() => {
+      cartSheetCloseRef.current?.focus?.();
+    }, 0);
+    const trap = (e) => {
+      if (e.key !== "Tab") return;
+      const root = cartSheetRef.current;
+      if (!root) return;
+      const focusable = Array.from(root.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter(el => el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", trap);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", trap);
+    };
+  }, [cartSheetOpen]);
+
+  // When the sheet opens in Pay mode, auto-scroll the payment region into
+  // view so the nurse doesn't have to hunt for it past the items list.
+  useEffect(() => {
+    if (!cartSheetOpen || (sheetMode !== "pay" && sheetMode !== "receipt")) return;
+    const t = setTimeout(() => {
+      if (sheetMode === "pay" && document.querySelector(".mobile-cart-sheet .cart-primary-cta:disabled")) return;
+      const payArea = document.querySelector(".mobile-cart-sheet .pay-confirmed, .mobile-cart-sheet .cart-pay-cash, .mobile-cart-sheet .cart-payment-methods, .mobile-cart-sheet [data-cart-payment]");
+      payArea?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [cartSheetOpen, sheetMode]);
 
   const updatePatient = (next) => {
     setPatients(ps => ps.map(p => p.id === next.id ? next : p));
@@ -80,9 +285,9 @@ function AppShell() {
     setCheatsheetOpen(true);
   }, []);
 
-  const pushToast = (text, tone = "success") => {
+  const pushToast = (text, tone = "success", options = {}) => {
     const id = toastIdRef.current++;
-    setToasts(ts => [...ts, { id, text, tone }]);
+    setToasts(ts => [...ts, { id, text, tone, ...options }]);
     setTimeout(() => setToasts(ts => ts.filter(t => t.id !== id)), 3500);
   };
   const closeToast = (id) => setToasts(ts => ts.filter(t => t.id !== id));
@@ -175,13 +380,7 @@ function AppShell() {
   };
 
   const handleStepClick = (n) => {
-    // Allow navigation only to completed steps or current/next-available
-    if (n < currentStep) return setCurrentStep(n);
-    if (n === currentStep) return;
-    if (n === currentStep + 1) {
-      const stepDoneKey = "step" + currentStep + "Done";
-      if (gate[stepDoneKey]) setCurrentStep(n);
-    }
+    if (canNavigateToStep(n, currentStep, gate)) setCurrentStep(n);
   };
 
   const handleNext = () => {
@@ -193,12 +392,144 @@ function AppShell() {
 
   // CTA: complete check-in — fired from the cart rail once payment is confirmed.
   const handleCheckIn = () => {
+    if (!cartReadyForCheckIn) {
+      openSheet("receipt");
+      pushToast("Resolve blockers before check-in", "error");
+      return;
+    }
     pushToast(`${active.name} checked in · ${active.queueNumber}`, "success");
-    updatePatient({ ...active, status: { tone: "success", label: "Checked in" } });
+    updatePatient({
+      ...active,
+      checkedInAt: new Date().toISOString(),
+      status: { tone: "success", label: "Checked in" },
+    });
+    createBlankReceptionSlot();
+  };
+  const handleNextPatient = () => {
+    const next = createBlankReceptionSlot();
+    pushToast(`Ready for new patient · ${next.queueNumber}`, "success");
+  };
+
+  // Mobile bottom dock — semantic states the nurse can see at a glance.
+  // Test ordering is deliberately a persistent quick action, independent
+  // from the state-aware CTA. A nurse should never have to navigate to Step 4
+  // just to open the test menu on a phone.
+  // The CTA action is decoupled from the row tap: tapping the row always
+  // opens the sheet; the CTA does the next correct action for the state.
+  //
+  //   empty       → row tap / CTA opens the Add tab directly.
+  //   review-gate → has items but verification missing.
+  //                 row tap = open cart so nurse sees the blocker;
+  //                 CTA "Review" = jump to the missing review/payer step.
+  //   pay         → has items, ready to pay.
+  //                 row tap = open cart; CTA "Pay" = payment tab.
+  //   waiting     → KHQR or cash mid-flow.
+  //                 row tap = open cart; CTA "Waiting…" disabled.
+  //   paid        → payment confirmed, ready to check in.
+  //                 row tap = receipt; CTA "Check in" calls handleCheckIn.
+  //   done        → checked in; CTA moves to the next patient.
+  //
+  const isContactVerified = !!(active.otpVerified || active.telegramVerified);
+  const pendingValidationCount = activeCart.items.filter(i => i.kind === "imaging" && (i.validationState || "idle") !== "signed").length;
+  const cartReadyForPayment = activeItemCount > 0 && gate.step2Done && payerReadyForPayment && pendingValidationCount === 0;
+  const cartReadyForCheckIn = cartPaid && cartReadyForPayment;
+  const isCheckedIn = !!active.checkedInAt || active.status?.label === "Checked in";
+  const paymentWaiting = activeCart.payment?.status === "waiting";
+  const reviewTargetStep = !gate.step2Done ? 2 : (!payerReadyForPayment ? 3 : 4);
+  const blockerCopy = !gate.step2Done
+    ? "Review patient before payment"
+    : !payerReadyForPayment
+      ? "Select payer before payment"
+      : pendingValidationCount > 0
+        ? "Resolve consent before payment"
+        : "Review order before payment";
+  let dockState;
+  if (isCheckedIn) dockState = "done";
+  else if (activeItemCount === 0) dockState = "empty";
+  else if (cartPaid) dockState = "paid";
+  else if (paymentWaiting) dockState = "waiting";
+  else if (!cartReadyForPayment) dockState = "review-gate";
+  else dockState = "pay";
+
+  let cartBarTitle, cartBarSub, cartBarCta, dockCtaDisabled = false;
+  if (dockState === "done") {
+    cartBarTitle = `Checked in · ${active.queueNumber}`;
+    cartBarSub = activeCart.payment?.receiptId ? `Receipt ${activeCart.payment.receiptId}` : "Receipt sent";
+    cartBarCta = "Next";
+  } else if (dockState === "empty") {
+    cartBarTitle = "Order tests";
+    cartBarSub = "Search menu, packages, previous";
+    cartBarCta = "Add";
+  } else if (dockState === "review-gate") {
+    cartBarTitle = `${activeItemCount} order${activeItemCount === 1 ? "" : "s"} · $${activeTotals.total.toFixed(2)}`;
+    cartBarSub = blockerCopy;
+    cartBarCta = "Review";
+  } else if (dockState === "waiting") {
+    cartBarTitle = `${activeItemCount} order${activeItemCount === 1 ? "" : "s"} · $${activeTotals.total.toFixed(2)}`;
+    cartBarSub = "Waiting for payment…";
+    cartBarCta = "Waiting…";
+    dockCtaDisabled = true;
+  } else if (dockState === "paid") {
+    cartBarTitle = cartReadyForCheckIn ? "Paid · receipt ready" : "Paid · needs review";
+    cartBarSub = `${activeItemCount} order${activeItemCount === 1 ? "" : "s"} · $${activeTotals.total.toFixed(2)}`;
+    cartBarCta = "Check in";
+  } else {
+    // dockState === "pay"
+    cartBarTitle = `${activeItemCount} order${activeItemCount === 1 ? "" : "s"} · $${activeTotals.total.toFixed(2)}`;
+    cartBarSub = activeTotals.discount > 0 ? `Saved $${activeTotals.discount.toFixed(2)}` : "Ready to pay";
+    cartBarCta = "Pay";
+  }
+
+  // What happens when the nurse taps the CTA — depends on the state.
+  // Row taps (the summary area) always open the sheet so the nurse can see
+  // the cart, even if the CTA does something else.
+  const handleDockRowTap = () => {
+    if (dockState === "empty") {
+      // Empty cart: open sheet directly in Add tab so the nurse can search/
+      // pick a test without leaving their current step. Step 4 still works
+      // as the wizard's order workspace, but is no longer the only path.
+      openSheet("add");
+    } else if (dockState === "paid" || dockState === "done") {
+      openSheet("receipt"); // shows receipt + lets nurse review blockers/check-in
+    } else {
+      openSheet("cart");
+    }
+  };
+  const handleDockCta = (e) => {
+    e.stopPropagation();
+    if (dockState === "empty") {
+      openSheet("add");
+    } else if (dockState === "done") {
+      handleNextPatient();
+    } else if (dockState === "review-gate") {
+      // Missing identity/contact or payer needs the wizard. Consent/order
+      // blockers stay in the cart so the nurse sees the exact row.
+      if (pendingValidationCount > 0) openSheet("cart");
+      else if (currentStep !== reviewTargetStep) setCurrentStep(reviewTargetStep);
+      else openSheet("cart");
+    } else if (dockState === "paid") {
+      // Direct check-in when ready. Fall back to opening the receipt view
+      // if something else is missing so the nurse sees the exact blocker.
+      if (cartReadyForCheckIn) handleCheckIn();
+      else openSheet("receipt");
+    } else if (dockState === "pay") {
+      openSheet("pay"); // lands on payment area
+    } else {
+      openSheet("cart");
+    }
   };
 
   return (
-    <div className="app app-v2" data-screen-label="Reception">
+    <div
+      className={
+        "app app-v2"
+        + (mobileNavOpen ? " mobile-nav-open" : "")
+        + (cartSheetOpen ? " mobile-cart-open" : "")
+      }
+      data-screen-label="Reception"
+      data-cart-count={activeItemCount}
+      data-cart-paid={cartPaid ? "true" : "false"}
+    >
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed(c => !c)}
@@ -206,9 +537,21 @@ function AppShell() {
         onNavigate={handleNavigate}
         lang={uiLang}
         onLangChange={setUiLang}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={closeMobileNav}
       />
-      <div className="main">
+      {mobileNavOpen && (
+        <button
+          type="button"
+          className="mobile-nav-scrim"
+          aria-label="Close navigation"
+          onClick={closeMobileNav}
+        />
+      )}
+      <div className="main" inert={mobileNavOpen ? "" : undefined}>
         <Topbar
+          onMenuClick={() => setMobileNavOpen(true)}
+          menuButtonRef={mobileMenuButtonRef}
           onNewWalkIn={() => setWalkInOpen(true)}
           notifications={notifs.filter(n => !n.read).length}
           station={station}
@@ -224,7 +567,7 @@ function AppShell() {
           onSearch={handleSearch}
         />
 
-        <PatientHeader patient={active} gate={gate} />
+        <PatientHeader patient={active} gate={gate} currentStep={currentStep} onStepClick={handleStepClick} />
 
         <WizardProgress
           currentStep={currentStep}
@@ -273,19 +616,183 @@ function AppShell() {
                 onPrev={handlePrev}
                 onPushToast={pushToast}
                 gate={gate}
+                requestPaidEdit={requestPaidEdit}
               />
             )}
           </div>
 
-          <div className="wizard-cart-rail">
-            <OrderCart
-              patient={active}
-              onUpdate={updatePatient}
-              onPushToast={pushToast}
-              onCheckIn={handleCheckIn}
-              identityComplete={gate.step2Done}
-              currentStep={currentStep}
+          <div className={"wizard-cart-rail" + (cartSheetOpen ? " is-open" : "")}>
+            {/* Mobile bottom dock — desktop hides via CSS.
+               Two tap targets: row (summary) opens the sheet, CTA does the
+               state-correct next action. The dock is non-interactive on
+               desktop so this stays clean for keyboard users on the rail. */}
+            <div
+              className={"mobile-cart-bar mobile-cart-bar-state-" + dockState}
+              data-dock-state={dockState}
+            >
+              <button
+                type="button"
+                className="mobile-cart-bar-add"
+                onClick={(e) => { e.stopPropagation(); openSheet("add"); }}
+                aria-expanded={cartSheetOpen && sheetMode === "add"}
+                aria-controls="mobile-cart-sheet"
+                aria-label="Add orders"
+                title="Add orders"
+              >
+                <I.Plus size={20} strokeWidth={2.7} />
+              </button>
+              <button
+                type="button"
+                ref={dockSummaryRef}
+                className="mobile-cart-bar-summary"
+                onClick={handleDockRowTap}
+                aria-expanded={cartSheetOpen}
+                aria-controls="mobile-cart-sheet"
+                aria-label={`${cartBarTitle}. ${cartBarSub}. Open order cart.`}
+              >
+                <span className="mobile-cart-bar-icon" aria-hidden="true">
+                  <I.ShoppingCart size={16} />
+                  {activeItemCount > 0 && (
+                    <span className="mobile-cart-bar-count">{activeItemCount}</span>
+                  )}
+                </span>
+                <span className="mobile-cart-bar-text">
+                  <span className="mobile-cart-bar-title">{cartBarTitle}</span>
+                  <span className="mobile-cart-bar-sub">{cartBarSub}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="mobile-cart-bar-cta"
+                onClick={handleDockCta}
+                disabled={dockCtaDisabled}
+                aria-label={cartBarCta}
+              >
+                {cartBarCta}
+              </button>
+            </div>
+
+            {/* Scrim is rendered always so the fade transition stays clean;
+               CSS hides it unless the sheet is open. */}
+            <button
+              type="button"
+              className="mobile-cart-scrim"
+              aria-label="Close cart"
+              tabIndex={cartSheetOpen ? 0 : -1}
+              onClick={closeSheet}
             />
+
+            <div
+              id="mobile-cart-sheet"
+              ref={cartSheetRef}
+              className={"mobile-cart-sheet mobile-cart-sheet-mode-" + sheetMode}
+              role={cartSheetOpen ? "dialog" : undefined}
+              aria-modal={cartSheetOpen ? "true" : undefined}
+              aria-label="Order cart"
+              aria-hidden={cartSheetOpen ? undefined : "true"}
+              inert={cartSheetOpen ? undefined : ""}
+            >
+              <div className="mobile-cart-sheet-head">
+                <div className="mobile-cart-grabber" aria-hidden="true" />
+                {/* Tab strip — Add, Cart, Pay, Receipt match the mobile dock modes. */}
+                <div className="mobile-cart-tabs" role="tablist" aria-label="Cart sections">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sheetMode === "add"}
+                    className={"mobile-cart-tab" + (sheetMode === "add" ? " is-active" : "")}
+                    onClick={() => setSheetMode("add")}
+                  >
+                    <I.Plus size={13} /> Add
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sheetMode === "cart"}
+                    data-mobile-cart-tab="cart"
+                    className={"mobile-cart-tab" + (sheetMode === "cart" ? " is-active" : "")}
+                    onClick={() => setSheetMode("cart")}
+                  >
+                    <I.ShoppingCart size={13} /> Cart
+                    {activeItemCount > 0 && (
+                      <span className="mobile-cart-tab-count">{activeItemCount}</span>
+                    )}
+                  </button>
+	                  <button
+	                    type="button"
+	                    role="tab"
+	                    aria-selected={sheetMode === "pay"}
+	                    className={"mobile-cart-tab" + (sheetMode === "pay" ? " is-active" : "")}
+	                    onClick={() => setSheetMode("pay")}
+	                    disabled={activeItemCount === 0 || cartPaid || !cartReadyForPayment}
+	                  >
+	                    <I.CreditCard size={13} /> Pay
+	                  </button>
+	                  <button
+	                    type="button"
+	                    role="tab"
+	                    aria-selected={sheetMode === "receipt"}
+	                    className={"mobile-cart-tab" + (sheetMode === "receipt" ? " is-active" : "")}
+	                    onClick={() => setSheetMode("receipt")}
+	                    disabled={!cartPaid && !isCheckedIn}
+	                  >
+	                    <I.Receipt size={13} /> Receipt
+	                  </button>
+	                  <button
+	                    type="button"
+	                    ref={cartSheetCloseRef}
+	                    className="mobile-cart-sheet-close"
+	                    aria-label="Close cart"
+	                    onClick={closeSheet}
+	                  >
+                    <I.X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Add tab — embeds the same AddTestsPanel Step 4 uses, so a
+                 nurse can stage orders from any step without navigating. */}
+              {sheetMode === "add" && (
+                <div className="mobile-cart-sheet-body mobile-cart-sheet-body-add">
+                  <AddTestsPanel
+                    patient={active}
+                    onAdd={addBulk}
+	                    onPushToast={pushToast}
+	                    ccy={activeCart.ccy || "USD"}
+	                    onCcyToggle={(next) => guardCartEdit(active, `Change receipt currency to ${next} on a paid visit?`, (mode) => {
+	                      updatePatient({
+	                        ...active,
+	                        cart: {
+	                          ...activeCart,
+	                          ccy: next,
+	                          payment: paymentAfterPaidEdit(activeCart.payment, mode),
+	                        },
+	                      });
+	                    })}
+	                  />
+	                </div>
+	              )}
+
+              {/* Cart + Pay both render the OrderCart — Pay just auto-scrolls
+                 to the payment region on mode entry (handled by the cart's
+                 internal layout: items first, payment area below). */}
+	              {(sheetMode === "cart" || sheetMode === "pay" || sheetMode === "receipt") && (
+	                <div className="mobile-cart-sheet-body">
+	                  <OrderCart
+                    patient={active}
+                    onUpdate={updatePatient}
+                    onPushToast={pushToast}
+                    onCheckIn={handleCheckIn}
+                    identityComplete={gate.step2Done}
+	                    currentStep={currentStep}
+                    requestPaidEdit={requestPaidEdit}
+	                    onOpenAdd={() => setSheetMode("add")}
+                    onOpenPay={() => setSheetMode("pay")}
+	                    payerReady={payerReadyForPayment}
+	                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -294,6 +801,7 @@ function AppShell() {
 
       <NewWalkInModal open={walkInOpen} onClose={() => setWalkInOpen(false)} onCreate={handleCreateWalkIn} />
       <HotkeyCheatsheetModal open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
+      <PaidEditModal pending={paidEditPending} onResolve={resolvePaidEdit} onCancel={cancelPaidEdit} />
       <ToastStack toasts={toasts} onClose={closeToast} />
 
       {/* Dev tester */}
@@ -309,6 +817,62 @@ function AppShell() {
   );
 }
 
+// === PaidEditModal — safety net for editing a paid cart ===
+//   Shown when the nurse tries to add or remove an item after payment was
+//   already confirmed. Three explicit choices keep receipts honest:
+//     - Supplemental: keep the existing receipt, append the change.
+//     - Void & recompute: drop payment.confirmed back to idle.
+//     - Cancel: do nothing, the visit stays as it was.
+function PaidEditModal({ pending, onResolve, onCancel }) {
+  if (!pending) return null;
+  return (
+    <div className="modal-overlay" onClick={onCancel} role="presentation">
+      <div className="modal paid-edit-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="paid-edit-title">
+        <div className="modal-head">
+          <h2 id="paid-edit-title" className="modal-title">
+            <I.AlertTriangle size={16} style={{ color: "var(--warn-600)", marginRight: 6, verticalAlign: "-3px" }} />
+            Visit already paid
+          </h2>
+        </div>
+        <div className="modal-body" style={{ padding: "10px 16px 14px" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--ink-700)", lineHeight: 1.5 }}>
+            {pending.description || "You're editing a paid cart."} What should happen to the receipt?
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: "100%", justifyContent: "flex-start", height: 48 }}
+              onClick={() => onResolve("supplemental")}
+            >
+              <I.Plus size={14} />
+              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+                <strong>Create payment adjustment</strong>
+                <small style={{ fontSize: 11, opacity: 0.85, fontWeight: 500 }}>Keep prior receipt, collect or resolve the difference</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger-ghost"
+              style={{ width: "100%", justifyContent: "flex-start", height: 48 }}
+              onClick={() => onResolve("void")}
+            >
+              <I.RotateCcw size={14} />
+              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+                <strong>Void receipt &amp; recompute</strong>
+                <small style={{ fontSize: 11, opacity: 0.85, fontWeight: 500 }}>Recollect payment for the new total</small>
+              </span>
+            </button>
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DebugBlankStateButton({ onReset }) {
   return (
     <button
@@ -316,8 +880,10 @@ function DebugBlankStateButton({ onReset }) {
       onClick={onReset}
       className="debug-blank-btn"
       title="Reset to first-arrival blank state (dev only)"
+      aria-label="Test blank state"
     >
       <I.Sparkles size={12} />
+      <span className="debug-blank-chip">DEV</span>
       <span>Test blank state</span>
     </button>
   );

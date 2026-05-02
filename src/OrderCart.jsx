@@ -8,6 +8,60 @@ import { useLang } from "./i18n";
 
 const KHR_RATE = 4100;
 const fmtCcy = (usd, ccy) => ccy === "KHR" ? "៛" + Math.round(usd * KHR_RATE).toLocaleString() : "$" + usd.toFixed(2);
+const receiptId = () => "R-" + Math.floor(10000 + Math.random() * 90000);
+
+export function paymentDueAmount(cart, totals) {
+  const previousPaid = Number(cart.payment?.previousPaidAmount || 0);
+  if (cart.payment?.supplementalDue) return Math.max(0, totals.patientDue - previousPaid);
+  return totals.patientDue;
+}
+
+export function paymentAfterPaidEdit(payment = {}, mode = "normal") {
+  if (mode === "normal") return payment;
+  const previousReceiptId = payment.receiptId || payment.previousReceiptId;
+  const previousPaidAmount = Number(payment.amount || payment.previousPaidAmount || 0);
+  const base = {
+    ...payment,
+    status: "idle",
+    method: null,
+    tendered: "",
+    change: 0,
+    receiptId: null,
+    confirmedAt: null,
+    amount: null,
+  };
+  if (mode === "void") {
+    return {
+      ...base,
+      supplementalDue: false,
+      previousReceiptId: null,
+      previousPaidAmount: 0,
+      voidedReceiptId: previousReceiptId,
+      voidedAt: new Date().toISOString(),
+    };
+  }
+  return {
+    ...base,
+    supplementalDue: true,
+    previousReceiptId,
+    previousPaidAmount,
+  };
+}
+
+function confirmedPayment(cart, method, amount, ccy, extra = {}) {
+  return {
+    ...cart.payment,
+    ...extra,
+    status: "confirmed",
+    method,
+    receiptId: receiptId(),
+    confirmedAt: new Date().toISOString(),
+    amount,
+    currency: ccy,
+    cashier: "Linh Nguyen",
+    supplementalDue: false,
+  };
+}
 
 // === Master order catalogue ===
 export const ORDER_CATALOG = [
@@ -262,21 +316,21 @@ export function useCartPayment(patient, onUpdate, onPushToast) {
   const totals = cartTotals(cart);
   const [tendered, setTendered] = useState(cart.payment.tendered || "");
   const setCart = (next) => persistCart(patient, onUpdate, next);
+  const due = paymentDueAmount(cart, totals);
 
   const setCcy = (ccy) => setCart({ ...cart, ccy });
   const setMethod = (m) =>
     setCart({ ...cart, payment: { ...cart.payment, method: m, status: m === "khqr" ? "waiting" : "idle" } });
 
   const tenderedNum = parseFloat(tendered) || 0;
-  const change = tenderedNum - totals.patientDue;
-  const cashOk = tenderedNum >= totals.patientDue && totals.patientDue > 0;
+  const change = tenderedNum - due;
+  const cashOk = tenderedNum >= due && due > 0;
 
   const confirmKhqr = () => {
     if (cart.payment.status === "confirmed") return;
     setCart({
       ...cart,
-      payment: { ...cart.payment, status: "confirmed", method: "khqr",
-                 receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) },
+      payment: confirmedPayment(cart, "khqr", due, cart.ccy || "USD"),
     });
     onPushToast?.(tFn("cart.pay.khqrReceived"));
   };
@@ -301,9 +355,10 @@ export function useCartPayment(patient, onUpdate, onPushToast) {
     const dinged = playDrawerDing();
     setCart({
       ...cart,
-      payment: { ...cart.payment, status: "confirmed", method: "cash", tendered,
-                 change: tenderedInUSD - totals.patientDue,
-                 receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) },
+      payment: confirmedPayment(cart, "cash", due, cart.ccy || "USD", {
+        tendered,
+        change: tenderedInUSD - due,
+      }),
     });
     onPushToast?.(dinged ? tFn("cart.pay.drawerDing") : tFn("cart.pay.cashRecorded"));
   };
@@ -649,6 +704,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
           {item.price === 0 ? "—" : fmtCcy((item.price || 0) * (item.qty || 1), ccy)}
         </div>
         <button
+          type="button"
           onClick={onRemove}
           disabled={item.auto}
           className={"cart-line-remove" + (item.auto ? " disabled" : "")}
@@ -701,11 +757,11 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
 }
 
 // === Payment Area ===
-export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t }) {
+export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t, paymentReady = true, paymentReasons = [] }) {
   const ccy = cart.ccy || "USD";
   const status = cart.payment.status;
   const method = cart.payment.method;
-  const due = totals.patientDue;
+  const due = paymentDueAmount(cart, totals);
   const dueLabel = fmtCcy(due, ccy);
 
   // v9 §10 — KHQR CFD-driven flow.
@@ -744,6 +800,12 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
 
   if (status === "confirmed") {
     const methodLabel = method === "cash" ? t("cart.pay.cash") : "KHQR";
+    const confirmedAt = cart.payment.confirmedAt ? new Date(cart.payment.confirmedAt) : null;
+    const confirmedTime = confirmedAt && !Number.isNaN(confirmedAt.getTime())
+      ? confirmedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "—";
+    const paidAmount = Number(cart.payment.amount ?? due);
+    const paidCurrency = cart.payment.currency || ccy;
     return (
       <div className="pay-confirmed">
         <div className="pay-confirmed-head">
@@ -753,14 +815,14 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="pay-confirmed-title">{t("cart.pay.confirmed")}</div>
             <div className="pay-confirmed-time">
-              {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {confirmedTime}
             </div>
           </div>
         </div>
         <dl className="pay-confirmed-grid">
           <div>
             <dt>{t("pay.amount")}</dt>
-            <dd className="pay-confirmed-amount">{fmtCcy(due, ccy)}</dd>
+            <dd className="pay-confirmed-amount">{fmtCcy(paidAmount, paidCurrency)}</dd>
           </div>
           <div>
             <dt>{t("pay.title")}</dt>
@@ -785,7 +847,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
 
   if (!method) {
     return (
-      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+      <div className="cart-payment-methods" style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
         <div className="between" style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 650, color: "var(--ink-500)" }}>
             {t("cart.pay.title")}
@@ -808,19 +870,20 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
         </div>
         {/* Round 12 #2 — payment methods get the same disabled-tooltip treatment. */}
         {(() => {
-          const payDisabled = itemCount === 0 || due === 0;
+          const payDisabled = itemCount === 0 || due === 0 || !paymentReady;
           const payReasons = [];
           if (itemCount === 0) payReasons.push(t("disabled.payment.empty"));
           else if (due === 0) payReasons.push(t("disabled.payment.zero"));
+          if (itemCount > 0 && due > 0 && !paymentReady) payReasons.push(...paymentReasons);
           const payProps = {
             disabled: payDisabled,
             title: t("disabled.payment.title"),
             reasons: payReasons,
           };
           return (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <div className="cart-payment-method-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
               <DisabledTooltip block {...payProps}>
-                <button onClick={() => onMethod("khqr")} disabled={payDisabled}
+                <button className="cart-payment-method-btn" onClick={() => onMethod("khqr")} disabled={payDisabled}
                   style={{
                     width: "100%",
                     padding: "10px 8px", border: "1.5px solid var(--border-strong)", borderRadius: 7, background: "var(--surface)",
@@ -833,7 +896,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
                 </button>
               </DisabledTooltip>
               <DisabledTooltip block {...payProps}>
-                <button onClick={() => onMethod("cash")} disabled={payDisabled}
+                <button className="cart-payment-method-btn" onClick={() => onMethod("cash")} disabled={payDisabled}
                   style={{
                     width: "100%",
                     padding: "10px 8px", border: "1.5px solid var(--border-strong)", borderRadius: 7, background: "var(--surface)",
@@ -932,7 +995,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
     const changeUSD = tenderedInUSD - due;
     const symbol = ccy === "KHR" ? "៛" : "$";
     return (
-      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+      <div className="cart-pay-cash" style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
         <div className="between" style={{ marginBottom: 8 }}>
           <button onClick={() => onMethod(null)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "var(--ink-600)", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}>
             <I.ChevronLeft size={12} /> {t("cart.pay.back")}
@@ -943,7 +1006,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
           <label style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-600)" }}>{t("cart.pay.tendered")} ({ccy})</label>
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--ink-500)", fontSize: 13, fontWeight: 600 }}>{symbol}</span>
-            <input className="input" value={tendered} onChange={e => setTendered(e.target.value.replace(/[^\d.]/g, ""))}
+            <input className="input cart-pay-cash-input" value={tendered} onChange={e => setTendered(e.target.value.replace(/[^\d.]/g, ""))}
               placeholder={ccy === "KHR" ? "0" : "0.00"} inputMode="decimal"
               style={{ height: 32, fontSize: 13, fontVariantNumeric: "tabular-nums", fontWeight: 600, paddingLeft: 24 }} />
           </div>
@@ -959,7 +1022,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
               {changeUSD < 0 ? "−" : ""}{fmtCcy(Math.abs(changeUSD), ccy)}
             </span>
           </div>
-          <button className="btn btn-primary" onClick={onConfirmCash} disabled={!(tenderedInUSD >= due && due > 0)} style={{ height: 34, marginTop: 2 }}>
+          <button className="btn btn-primary cart-pay-cash-confirm" onClick={onConfirmCash} disabled={!paymentReady || !(tenderedInUSD >= due && due > 0)} style={{ height: 34, marginTop: 2 }}>
             <I.Check size={14} /> {t("cart.pay.confirmCash")}
           </button>
         </div>
@@ -973,7 +1036,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
 //   The cart is the always-visible rail for Steps 1–4. It owns payment (KHQR /
 //   Cash) and the Complete check-in CTA — there is no longer a separate Step 5
 //   panel that mirrors it.
-export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1 }) {
+export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1, requestPaidEdit, onOpenAdd, onOpenPay, payerReady = true }) {
   const t = useLang();
   const cart = useMemo(() => deriveCart(patient), [patient]);
   const totals = cartTotals(cart);
@@ -997,8 +1060,17 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const setCart = (next) => persistCart(patient, onUpdate, next);
 
   const itemCount = cart.items.length;
+  const isPaid = cart.payment.status === "confirmed";
+  const isCheckedIn = !!patient.checkedInAt || patient.status?.label === "Checked in";
   const grouped = {};
   cart.items.forEach(i => { (grouped[i.kind] = grouped[i.kind] || []).push(i); });
+  const guardPaidCartEdit = (description, buildNext) => {
+    if (isPaid && requestPaidEdit) {
+      requestPaidEdit(description, (mode) => setCart(buildNext(mode)));
+      return;
+    }
+    setCart(buildNext("normal"));
+  };
 
   const PREG_GATE_KINDS = new Set(["imaging"]);
   const itemNeedsPregGate = (c) => patient.sexAtBirth === "Female" && PREG_GATE_KINDS.has(c.kind);
@@ -1015,7 +1087,14 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     onPushToast?.(t("cart.preg.cancelled"), "error");
   };
 
-  const removeItem = (id) => setCart({ ...cart, items: cart.items.filter(i => i.id !== id) });
+  const removeItem = (id) => {
+    const item = cart.items.find(i => i.id === id);
+    guardPaidCartEdit(`Remove ${item?.name || "this order"} from a paid visit?`, (mode) => ({
+      ...cart,
+      items: cart.items.filter(i => i.id !== id),
+      payment: paymentAfterPaidEdit(cart.payment, mode),
+    }));
+  };
 
   // === Clear all — drops every removable item (auto items like the visit fee stay).
   //   Two-click confirm: first click arms it, second click commits. Esc disarms.
@@ -1031,7 +1110,11 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     }
     window.clearTimeout(clearArmTimer.current);
     setClearArmed(false);
-    setCart({ ...cart, items: cart.items.filter(i => i.auto) });
+    guardPaidCartEdit(`Clear ${removableCount} order${removableCount === 1 ? "" : "s"} from a paid visit?`, (mode) => ({
+      ...cart,
+      items: cart.items.filter(i => i.auto),
+      payment: paymentAfterPaidEdit(cart.payment, mode),
+    }));
     onPushToast?.(t("cart.clear.toast", { n: removableCount }), "success");
   };
   useEffect(() => {
@@ -1086,24 +1169,39 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     if (collision) { setPromoError(collision.reason); return; }
     setPromoError("");
     setPromoInput("");
-    setCart({ ...cart, promos: { ...promos, [code]: promo } });
+    guardPaidCartEdit(`Apply ${promo.label} to a paid visit?`, (mode) => ({
+      ...cart,
+      promos: { ...promos, [code]: promo },
+      payment: paymentAfterPaidEdit(cart.payment, mode),
+    }));
     onPushToast?.(t("cart.promo.applied", { label: promo.label }));
   };
   const removePromo = (code) => {
     const promos = { ...(cart.promos || {}) };
     delete promos[code];
-    setCart({ ...cart, promos });
+    guardPaidCartEdit(`Remove promo ${code} from a paid visit?`, (mode) => ({
+      ...cart,
+      promos,
+      payment: paymentAfterPaidEdit(cart.payment, mode),
+    }));
   };
 
-  const setCcy = (ccy) => setCart({ ...cart, ccy });
+  const setCcy = (ccy) => {
+    guardPaidCartEdit(`Change receipt currency to ${ccy} on a paid visit?`, (mode) => ({
+      ...cart,
+      ccy,
+      payment: paymentAfterPaidEdit(cart.payment, mode),
+    }));
+  };
   const setMethod = (m) => setCart({ ...cart, payment: { ...cart.payment, method: m, status: m === "khqr" ? "waiting" : "idle" } });
 
+  const paymentDue = paymentDueAmount(cart, totals);
   const tenderedNum = parseFloat(tendered) || 0;
-  const change = tenderedNum - totals.patientDue;
-  const cashOk = tenderedNum >= totals.patientDue && totals.patientDue > 0;
+  const change = tenderedNum - paymentDue;
+  const cashOk = tenderedNum >= paymentDue && paymentDue > 0;
 
   const confirmKhqr = () => {
-    setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", method: "khqr", receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
+    setCart({ ...cart, payment: confirmedPayment(cart, "khqr", paymentDue, cart.ccy || "USD") });
     onPushToast?.(t("cart.pay.khqrReceived"));
   };
 
@@ -1126,7 +1224,10 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     const tenderedInUSD = (cart.ccy || "USD") === "KHR" ? tenderedNum / KHR_RATE : tenderedNum;
     // Cash-drawer ding (Web Audio mock)
     const dinged = playDrawerDing();
-    setCart({ ...cart, payment: { ...cart.payment, status: "confirmed", method: "cash", tendered, change: tenderedInUSD - totals.patientDue, receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } });
+    setCart({ ...cart, payment: confirmedPayment(cart, "cash", paymentDue, cart.ccy || "USD", {
+      tendered,
+      change: tenderedInUSD - paymentDue,
+    }) });
     onPushToast?.(dinged ? t("cart.pay.drawerDing") : t("cart.pay.cashRecorded"));
   };
 
@@ -1144,24 +1245,57 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     amount: s.sub,
   }));
 
-  // === Primary CTA (Round 9 #1) — Round 12 #2: strictly gated on verified contact ===
-  // Verification (mobile OTP or Telegram) is REQUIRED — no override path.
+  // === Primary CTA (Round 14 — Take payment vs Check in split) ===
+  //   Before payment confirmed → "Take payment" CTA (focuses payment area on
+  //   mobile where it's offscreen below).
+  //   After payment confirmed   → "Check in patient" CTA (calls onCheckIn).
+  //   Splitting these two avoids the prior "Check in & confirm order" label
+  //   which mis-implied a nurse could check in before paying.
+  //   Verification (mobile OTP or Telegram) is REQUIRED for both states.
   const hasName = !!patient.name;
   const hasDob  = !!patient.dob;
   const isVerified = !!(patient.otpVerified || patient.telegramVerified);
-  const ctaDisabled = !(hasName && hasDob && isVerified);
-  const ctaLabel = itemCount === 0
-    ? t("cart.cta.checkInOnly")
-    : t("cart.cta.checkInConfirm");
+  const hasPendingValidations = pendingValidations.length > 0;
+  const ctaDisabled = !(hasName && hasDob && isVerified && payerReady) || hasPendingValidations;
+  const isPaymentWaiting = cart.payment.status === "waiting";
   // Build the precise list of what's missing — feeds the disabled tooltip.
   const ctaReasons = [];
   if (!isVerified) ctaReasons.push(t("disabled.checkin.contact"));
   if (!hasDob)     ctaReasons.push(t("disabled.checkin.dob"));
   if (!hasName)    ctaReasons.push(t("disabled.checkin.name"));
+  if (!payerReady)  ctaReasons.push(t("disabled.checkin.payer"));
+  if (hasPendingValidations) ctaReasons.push(t("disabled.checkin.validation"));
+  const mobileBlockers = [];
+  if (!hasName || !hasDob) mobileBlockers.push("Complete identity");
+  if (!isVerified) mobileBlockers.push("Verify contact");
+  if (!payerReady) mobileBlockers.push("Choose payer");
+  if (hasPendingValidations) {
+    mobileBlockers.push(`Complete consent${pendingValidations.length > 1 ? ` (${pendingValidations.length})` : ""}`);
+  }
+  const mobileSummaryTone =
+    itemCount === 0 ? "empty" :
+    isCheckedIn ? "done" :
+    isPaid ? (ctaDisabled ? "blocked" : "paid") :
+    isPaymentWaiting ? "waiting" :
+    ctaDisabled ? "blocked" :
+    "ready";
+  const mobileSummaryTitle =
+    itemCount === 0 ? "Add orders" :
+    isCheckedIn ? "Checked in" :
+    isPaid ? (ctaDisabled ? "Resolve check-in" : "Ready to check in") :
+    isPaymentWaiting ? "Payment in progress" :
+    ctaDisabled ? "Resolve blockers" :
+    "Ready to pay";
+  const mobileSummarySub =
+    itemCount === 0 ? "Search tests, services, or packages." :
+    isCheckedIn ? `${patient.name || "Patient"} · ${patient.queueNumber || "checked in"}` :
+    ctaDisabled ? (mobileBlockers.length ? mobileBlockers.join(" · ") : "Review required details") :
+    isPaid ? (cart.payment.receiptId ? `Receipt ${cart.payment.receiptId} is ready.` : "Receipt is ready.") :
+    `${itemCount} order${itemCount === 1 ? "" : "s"} ready to collect.`;
 
   return (
     <>
-      <div style={{
+      <div className="order-cart-shell" style={{
         position: "sticky", top: "var(--gap)",
         display: "flex", flexDirection: "column", gap: "var(--gap)",
       }}>
@@ -1197,6 +1331,18 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               )}
             </div>
           </div>
+          <div className={"cart-mobile-summary cart-mobile-summary-" + mobileSummaryTone}>
+            <div className="cart-mobile-summary-copy">
+              <div className="cart-mobile-summary-title">{mobileSummaryTitle}</div>
+              <div className="cart-mobile-summary-sub">{mobileSummarySub}</div>
+            </div>
+            {itemCount > 0 && (
+              <div className="cart-mobile-summary-total">
+                <span className="cart-mobile-summary-total-label">Total due</span>
+                <span className="cart-mobile-summary-total-amount">{fmtCcy(totals.patientDue, cart.ccy)}</span>
+              </div>
+            )}
+          </div>
 
           {/* Items */}
           <div className="cart-items-scroll">
@@ -1204,9 +1350,12 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               <div className="cart-empty">
                 <I.ShoppingCart size={22} className="cart-empty-ico" />
                 <div className="cart-empty-title">{t("cart.empty.title")}</div>
-                <div className="cart-empty-sub">
-                  {identityComplete ? t("cart.empty.gotoStep4") : t("cart.empty.completeIdentity")}
-                </div>
+                <div className="cart-empty-sub">{t("cart.empty.addSub")}</div>
+                {onOpenAdd && (
+                  <button type="button" className="btn btn-secondary btn-sm cart-empty-action" onClick={onOpenAdd}>
+                    <I.Plus size={12} /> {t("cart.empty.addFirst")}
+                  </button>
+                )}
               </div>
             ) : KIND_ORDER.map(kind => {
               const items = grouped[kind];
@@ -1262,36 +1411,23 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
              Reappears as soon as the first item lands in the cart. */}
           {itemCount > 0 && (<>
           {/* Billing summary — collapsed by default to give items more room */}
-          <div style={{ borderTop: "1px solid var(--border)", background: "var(--surface-2)" }}>
+          <div className="cart-billing-summary" style={{ borderTop: "1px solid var(--border)", background: "var(--surface-2)" }}>
             {/* Always-visible: Patient pays total + expand toggle */}
             <button
               type="button"
               onClick={() => setBillExpanded(o => !o)}
-              style={{
-                width: "100%",
-                display: "grid",
-                /* mirror the cart-group-head layout: label (1fr), price (auto),
-                   then a trailing 18px column for the chevron — keeps the price
-                   in the same column as line-item prices */
-                gridTemplateColumns: "1fr auto 18px",
-                alignItems: "center",
-                gap: 9,
-                padding: "9px 14px",
-                background: "transparent", border: "none", cursor: "pointer",
-              }}
+              className="cart-total-toggle"
             >
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-900)", textAlign: "left" }}>{t("cart.patientPays")}</span>
-              <span style={{ fontSize: 13.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "var(--ink-900)" }}>
+              <span className="cart-total-label">{t("cart.patientPays")}</span>
+              <span className="cart-total-amount">
                 {fmtCcy(totals.patientDue, cart.ccy)}
               </span>
               <I.ChevronDown
                 size={13}
                 strokeWidth={2.25}
+                className="cart-total-chev"
                 style={{
-                  color: "var(--ink-400)",
-                  justifySelf: "center",
                   transform: billExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.15s ease",
                 }}
               />
             </button>
@@ -1396,7 +1532,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
 
           {/* === Chain-of-custody banner (imaging not yet validated by patient) === */}
           {pendingValidations.length > 0 && cart.payment.status !== "confirmed" && (
-            <div style={{
+            <div className="cart-validation-banner" style={{
               padding: "10px 16px", borderTop: "1px solid var(--border)",
               background: "var(--warn-50)",
             }}>
@@ -1450,12 +1586,59 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             tenderedNum={tenderedNum}
             itemCount={itemCount}
             t={t}
+            paymentReady={!ctaDisabled}
+            paymentReasons={ctaReasons}
           />
           </>)}
 
-          {/* Primary CTA — hidden when cart is empty (would be a misleading dead button). */}
-          {itemCount > 0 && cart.payment.status !== "confirmed" && (
-            <div style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
+          {/* Primary CTA — split into two semantic actions, mutually exclusive:
+             Pre-payment → "Take payment" disabled hint or scrolls payment area into view
+             Post-payment → "Check in patient" actually performs the check-in
+             Empty cart → no CTA shown (would be a misleading dead button).
+             KHQR waiting → "Waiting for payment…" disabled. */}
+          {itemCount > 0 && !isPaid && (
+            <div className="cart-primary-cta-wrap" style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
+              {isPaymentWaiting ? (
+                <button
+                  className="btn btn-primary cart-primary-cta"
+                  disabled
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  <I.Clock size={15} /> {t("cart.cta.waitingPayment")}
+                </button>
+              ) : (
+                <DisabledTooltip
+                  block
+                  disabled={ctaDisabled}
+                  title={t("disabled.checkin.title")}
+                  reasons={ctaReasons}
+                  hint={t("disabled.checkin.hint")}
+                >
+                  <button
+                    className="btn btn-primary cart-primary-cta"
+                    disabled={ctaDisabled}
+                    onClick={() => {
+                      if (onOpenPay) {
+                        onOpenPay();
+                        return;
+                      }
+                      // Scroll the payment area into view — useful on mobile
+                      // where the cart sheet may not fully expose it yet.
+                      const payArea = document.querySelector(".cart-payment, .cart-payment-methods, [data-cart-payment]");
+                      payArea?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+                    }}
+                    style={{ width: "100%", justifyContent: "center" }}
+                  >
+                    {ctaDisabled
+                      ? <><I.AlertCircle size={15} /> {t("cart.cta.resolveBeforePayment")}</>
+                      : <><I.CreditCard size={15} /> {t("cart.cta.takePayment")}</>}
+                  </button>
+                </DisabledTooltip>
+              )}
+            </div>
+          )}
+          {itemCount > 0 && isPaid && !isCheckedIn && (
+            <div className="cart-primary-cta-wrap" style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
               <DisabledTooltip
                 block
                 disabled={ctaDisabled}
@@ -1464,14 +1647,22 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                 hint={t("disabled.checkin.hint")}
               >
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary cart-primary-cta cart-primary-cta-checkin"
                   onClick={onCheckIn}
                   disabled={ctaDisabled}
-                  style={{ width: "100%", justifyContent: "center", height: 40, fontSize: 13, fontWeight: 650 }}
+                  style={{ width: "100%", justifyContent: "center" }}
                 >
-                  <I.Check size={15} /> {ctaLabel}
+                  <I.Check size={15} /> {t("cart.cta.checkInOnly")}
                 </button>
               </DisabledTooltip>
+            </div>
+          )}
+          {itemCount > 0 && isCheckedIn && (
+            <div className="cart-primary-cta-wrap" style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
+              <div className="cart-checkin-done">
+                <I.CheckCircle size={18} />
+                <span>Patient checked in</span>
+              </div>
             </div>
           )}
 
@@ -1486,7 +1677,19 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
         </div>
       </div>
 
-      <BillSplitModal open={splitOpen} cart={cart} onClose={() => setSplitOpen(false)} onSave={(next) => { setCart(next); setSplitOpen(false); onPushToast?.(t("cart.split.applied")); }} />
+      <BillSplitModal
+        open={splitOpen}
+        cart={cart}
+        onClose={() => setSplitOpen(false)}
+        onSave={(next) => {
+          guardPaidCartEdit("Change payer split on a paid visit?", (mode) => ({
+            ...next,
+            payment: paymentAfterPaidEdit(cart.payment, mode),
+          }));
+          setSplitOpen(false);
+          onPushToast?.(t("cart.split.applied"));
+        }}
+      />
       <PregnancyConsentModal open={pregOpen} patient={patient} pendingItems={pendingPregItems || []} onConfirm={handlePregConsent} onCancel={handlePregCancel} />
     </>
   );

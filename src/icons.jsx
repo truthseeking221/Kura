@@ -20,6 +20,7 @@ export const Icon = ({ children, size = 16, className = "ico", strokeWidth = 1.7
 );
 
 export const I = {
+  Menu: (p) => <Icon {...p}><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></Icon>,
   Home: (p) => <Icon {...p}><path d="M3 12 12 3l9 9"/><path d="M5 10v10h14V10"/></Icon>,
   Users: (p) => <Icon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Icon>,
   User: (p) => <Icon {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>,

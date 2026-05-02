@@ -44,8 +44,48 @@ const FLY_KIND_DOT = {
 };
 let _bumpTimer = 0;
 
+function isMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches;
+}
+
+function firstVisible(candidates) {
+  return candidates.find(el => {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) || candidates.find(Boolean) || null;
+}
+
+function getMobileCartTab() {
+  return document.querySelector('.mobile-cart-sheet:not([aria-hidden]) [data-mobile-cart-tab="cart"]');
+}
+
+function getFlyTarget() {
+  if (isMobileViewport()) {
+    return firstVisible([
+      getMobileCartTab(),
+      document.querySelector(".mobile-cart-bar:not([hidden]) .mobile-cart-bar-icon"),
+      document.querySelector(".mobile-cart-bar:not([hidden]) .mobile-cart-bar-summary"),
+    ]);
+  }
+  return document.querySelector(".cart-hd2-ico");
+}
+
+function getBumpTarget() {
+  if (isMobileViewport()) {
+    return firstVisible([
+      getMobileCartTab(),
+      document.querySelector(".mobile-cart-bar:not([hidden]) .mobile-cart-bar-icon"),
+      document.querySelector(".mobile-cart-bar:not([hidden]) .mobile-cart-bar-summary"),
+    ]);
+  }
+  return document.querySelector(".order-cart");
+}
+
 function bumpCart() {
-  const el = document.querySelector(".order-cart");
+  // Bump whichever cart surface is actually visible: the Cart tab while
+  // the mobile sheet is open, the dock when closed, or the desktop cart.
+  const el = getBumpTarget();
   if (!el) return;
   el.classList.remove("is-receiving");
   // force reflow so the animation replays even on rapid successive bumps
@@ -56,7 +96,13 @@ function bumpCart() {
 }
 
 function flyToCart(sourceEl, { name, kind }) {
-  const target = document.querySelector(".cart-hd2-ico");
+  // Pick the animation target based on what the nurse can actually see:
+  //   - mobile sheet open      → Cart tab in the bottom sheet header
+  //   - mobile sheet closed    → dock icon at the bottom of the screen
+  //   - desktop                → sticky cart rail icon
+  // Falling back through the list lets the same panel work in all three
+  // contexts without the ghost flying offscreen.
+  const target = getFlyTarget();
   if (!sourceEl || !target) { bumpCart(); return; }
 
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -312,18 +358,32 @@ function BundleRow({ bundle, ccy, inCart, onAddBundle }) {
 }
 
 // === TestRow — the universal row ===
-function TestRow({ row, picked, highlighted, onTogglePick, onAdd, whyOpen, onToggleWhy, t, ccy }) {
+function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onAdd, whyOpen, onToggleWhy, t, ccy }) {
   const { id, name, price, inCart, badges } = row;
   const hasReason = !!badges.reason || !!badges.details;
+  const rowInteractive = rowClickEnabled && !inCart;
+  const handleRowPick = () => {
+    if (rowInteractive) onTogglePick(id);
+  };
   return (
     <div
       data-row-id={id}
-      className={"atp-row" + (picked ? " is-picked" : "") + (inCart ? " is-incart" : "") + (highlighted ? " is-highlighted" : "")}
+      className={"atp-row" + (picked ? " is-picked" : "") + (inCart ? " is-incart" : "") + (highlighted ? " is-highlighted" : "") + (!rowClickEnabled ? " is-row-click-disabled" : "")}
+      role={rowInteractive ? "button" : undefined}
+      tabIndex={rowInteractive ? 0 : undefined}
+      onClick={rowInteractive ? handleRowPick : undefined}
+      onKeyDown={rowInteractive ? ((e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          handleRowPick();
+        }
+      }) : undefined}
     >
       <button
         type="button"
         className="atp-check"
-        onClick={() => !inCart && onTogglePick(id)}
+        onClick={(e) => { e.stopPropagation(); !inCart && onTogglePick(id); }}
         disabled={inCart}
         aria-checked={picked}
         role="checkbox"
@@ -346,7 +406,7 @@ function TestRow({ row, picked, highlighted, onTogglePick, onAdd, whyOpen, onTog
       {inCart ? (
         <span className="atp-incart"><I.Check size={10} strokeWidth={3} /> {t("atp.added")}</span>
       ) : (
-        <button type="button" className="atp-add-btn" onClick={() => onAdd(row)}>
+        <button type="button" className="atp-add-btn" onClick={(e) => { e.stopPropagation(); onAdd(row); }}>
           <I.Plus size={10} /> {t("atp.add")}
         </button>
       )}
@@ -355,7 +415,7 @@ function TestRow({ row, picked, highlighted, onTogglePick, onAdd, whyOpen, onTog
         <button
           type="button"
           className={"atp-why-btn" + (whyOpen ? " is-on" : "")}
-          onClick={() => onToggleWhy(id)}
+          onClick={(e) => { e.stopPropagation(); onToggleWhy(id); }}
           title={whyOpen ? "Hide reason" : "Show AI reason"}
           aria-expanded={whyOpen}
         >
@@ -399,8 +459,18 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const [picks, setPicks] = useState(new Set());
   const [whyOpenId, setWhyOpenId] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
+  const [rowClickEnabled, setRowClickEnabled] = useState(() => !isMobileViewport());
   const searchRef = useRef(null);
   const rowsRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setRowClickEnabled(!mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
 
   // If active view becomes hidden (e.g. after data update) reset to Lab.
   useEffect(() => {
@@ -446,12 +516,16 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const toggleWhy = useCallback((id) => {
     setWhyOpenId(prev => prev === id ? null : id);
   }, []);
+  const pushAddedToast = (text, result) => {
+    if (result?.deferred) return;
+    onPushToast?.(text, "success", result?.undo ? { actionLabel: "Undo", onAction: result.undo } : undefined);
+  };
 
   const addOne = (row) => {
     const sourceEl = rowsRef.current?.querySelector(`[data-row-id="${row.id}"]`);
     flyToCart(sourceEl, { name: row.name, kind: row.kind });
-    onAdd?.([{ testId: row.id, name: row.name, price: row.price, kind: row.kind }]);
-    onPushToast?.(`${row.name} added`, "success");
+    const result = onAdd?.([{ testId: row.id, name: row.name, price: row.price, kind: row.kind }]);
+    pushAddedToast(`${row.name} added`, result);
   };
   const addPicks = () => {
     if (picks.size === 0) return;
@@ -462,8 +536,8 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       if (i === 0) flyToCart(el, { name: it.name, kind: it.kind });
       else window.setTimeout(() => flyToCart(el, { name: it.name, kind: it.kind }), i * 75);
     });
-    onAdd?.(items);
-    onPushToast?.(`${items.length} test${items.length > 1 ? "s" : ""} added`, "success");
+    const result = onAdd?.(items);
+    pushAddedToast(`${items.length} test${items.length > 1 ? "s" : ""} added`, result);
     setPicks(new Set());
   };
   const orderSameAsLast = (e) => {
@@ -480,8 +554,8 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       const el = rowsRef.current?.querySelector(`[data-row-id="${it.testId}"]`) || fallback;
       window.setTimeout(() => flyToCart(el, { name: it.name, kind: it.kind }), i * 70);
     });
-    onAdd?.(items);
-    onPushToast?.(`${items.length} test${items.length > 1 ? "s" : ""} re-ordered`, "success");
+    const result = onAdd?.(items);
+    pushAddedToast(`${items.length} test${items.length > 1 ? "s" : ""} re-ordered`, result);
   };
 
   const addBundle = (bundle) => {
@@ -497,8 +571,8 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     items.forEach((it, i) => {
       window.setTimeout(() => flyToCart(sourceEl, { name: it.name, kind: it.kind }), i * 80);
     });
-    onAdd?.(items);
-    onPushToast?.(`${bundle.name} added · ${items.length} test${items.length > 1 ? "s" : ""}`, "success");
+    const result = onAdd?.(items);
+    pushAddedToast(`${bundle.name} added · ${items.length} test${items.length > 1 ? "s" : ""}`, result);
   };
 
   const activeView = VIEWS.find(v => v.id === view) || VIEWS[0];
@@ -654,7 +728,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
           <input
             ref={searchRef}
             type="text"
-            placeholder={`Search ${activeView.label.toLowerCase()}…`}
+            placeholder="Search test, service, package"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -733,6 +807,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
               row={row}
               picked={picks.has(row.id)}
               highlighted={highlightId === row.id}
+              rowClickEnabled={rowClickEnabled}
               onTogglePick={togglePick}
               onAdd={addOne}
               whyOpen={whyOpenId === row.id}

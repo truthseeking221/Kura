@@ -44,60 +44,80 @@ export function NotificationsPanel({ open, onClose, items, onMarkAllRead, onItem
   if (!open) return null;
   const unread = items.filter(n => !n.read).length;
   return (
-    <div className="dropdown-panel notif-panel" ref={ref} onClick={e => e.stopPropagation()}>
-      <div className="notif-head">
-        <div>
-          <div className="notif-title">{t("notif.title")}</div>
-          {unread > 0 && (
-            <div className="notif-sub">{unread} {t("notif.unread")}</div>
-          )}
-        </div>
-        {unread > 0 && (
-          <button className="link-btn" onClick={onMarkAllRead}>{t("notif.markAllRead")}</button>
-        )}
-      </div>
-      <div className="notif-body">
-        {items.length === 0 ? (
-          <div className="notif-empty">
-            <div className="notif-empty-ico"><I.CheckCircle size={22} /></div>
-            <div className="notif-empty-title">{t("notif.empty")}</div>
-            <div className="notif-empty-sub">{t("notif.emptySub")}</div>
+    <>
+      <button
+        type="button"
+        className="notif-mobile-scrim"
+        aria-label="Close notifications"
+        onClick={onClose}
+      />
+      <div
+        className="dropdown-panel notif-panel"
+        ref={ref}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-label={t("notif.title")}
+      >
+        <div className="notif-head">
+          <div className="notif-head-copy">
+            <div className="notif-title">{t("notif.title")}</div>
+            {unread > 0 && (
+              <div className="notif-sub">{unread} {t("notif.unread")}</div>
+            )}
           </div>
-        ) : items.map(n => {
-          const Ico = I[n.icon] || I.Bell;
-          return (
-            <div
-              key={n.id}
-              className={"notif-item" + (n.read ? "" : " unread")}
-              onClick={() => onItemClick && onItemClick(n)}
-            >
-              <div className="notif-item-ico" style={{ background: toneBg(n.tone), color: toneColor(n.tone) }}>
-                <Ico size={16} />
-              </div>
-              <div className="notif-item-body">
-                <div className="notif-item-title">{t(n.titleKey)}</div>
-                <div className="notif-item-text">{t(n.bodyKey, n.bodyParams)}</div>
-                <div className="notif-item-foot">
-                  <span className="notif-item-time">{t(n.timeKey, n.timeParams)}</span>
-                  {n.actionKey && (
-                    <button
-                      className="notif-action"
-                      onClick={(e) => { e.stopPropagation(); onItemAction && onItemAction(n); }}
-                    >
-                      {t(n.actionKey)} <I.ChevronRight size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-              {!n.read && <span className="notif-dot" />}
+          <div className="notif-head-actions">
+            {unread > 0 && (
+              <button type="button" className="link-btn notif-mark-read" onClick={onMarkAllRead}>{t("notif.markAllRead")}</button>
+            )}
+            <button type="button" className="notif-close" aria-label="Close notifications" onClick={onClose}>
+              <I.X size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="notif-body">
+          {items.length === 0 ? (
+            <div className="notif-empty">
+              <div className="notif-empty-ico"><I.CheckCircle size={22} /></div>
+              <div className="notif-empty-title">{t("notif.empty")}</div>
+              <div className="notif-empty-sub">{t("notif.emptySub")}</div>
             </div>
-          );
-        })}
+          ) : items.map(n => {
+            const Ico = I[n.icon] || I.Bell;
+            return (
+              <div
+                key={n.id}
+                className={"notif-item" + (n.read ? "" : " unread")}
+                onClick={() => onItemClick && onItemClick(n)}
+              >
+                <div className="notif-item-ico" style={{ background: toneBg(n.tone), color: toneColor(n.tone) }}>
+                  <Ico size={16} />
+                </div>
+                <div className="notif-item-body">
+                  <div className="notif-item-title">{t(n.titleKey)}</div>
+                  <div className="notif-item-text">{t(n.bodyKey, n.bodyParams)}</div>
+                  <div className="notif-item-foot">
+                    <span className="notif-item-time">{t(n.timeKey, n.timeParams)}</span>
+                    {n.actionKey && (
+                      <button
+                        type="button"
+                        className="notif-action"
+                        onClick={(e) => { e.stopPropagation(); onItemAction && onItemAction(n); }}
+                      >
+                        {t(n.actionKey)} <I.ChevronRight size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {!n.read && <span className="notif-dot" />}
+              </div>
+            );
+          })}
+        </div>
+        <div className="notif-foot">
+          <button type="button" className="link-btn" onClick={onClose}>{t("notif.viewAll")}</button>
+        </div>
       </div>
-      <div className="notif-foot">
-        <button className="link-btn" onClick={onClose}>{t("notif.viewAll")}</button>
-      </div>
-    </div>
+    </>
   );
 }
 

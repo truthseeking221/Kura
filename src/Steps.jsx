@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
 import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
-import { ORDER_CATALOG } from "./OrderCart";
+import { ORDER_CATALOG, paymentAfterPaidEdit } from "./OrderCart";
 import { DisabledTooltip, VisitReasonPills, VISIT_REASONS, AuthorBadge, SLOT_OPTIONS, computeTatPlan, fmtTatHours } from "./shared";
 import { LAB_CATALOG, LAB_CATEGORIES, INSURANCE_PROVIDERS } from "./data";
 import { AddTestsPanel } from "./AddTestsPanel";
@@ -31,9 +31,9 @@ const KHR_RATE = 4100;
 const fmtCcy = (usd, ccy = "USD") => ccy === "KHR" ? "៛" + Math.round(usd * KHR_RATE).toLocaleString() : "$" + usd.toFixed(2);
 
 // === Shared bits ===
-function StepShell({ title, subtitle, right, children }) {
+function StepShell({ title, subtitle, right, children, className = "" }) {
   return (
-    <div className="step-shell">
+    <div className={"step-shell" + (className ? " " + className : "")}>
       <header className="step-head">
         <div>
           <h1 className="step-title">{title}</h1>
@@ -46,10 +46,10 @@ function StepShell({ title, subtitle, right, children }) {
   );
 }
 
-function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, secondary }) {
+function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, secondary, className = "" }) {
   const t = useLang();
   return (
-    <div className="step-footer">
+    <div className={"step-footer" + (className ? " " + className : "")}>
       <div className="step-footer-left">
         {onPrev && (
           <button type="button" className="btn btn-ghost" onClick={onPrev}>
@@ -315,7 +315,6 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
             placeholder={t("step1.search.placeholder")}
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
-            autoFocus
           />
           {searchQ && (
             <button type="button" className="search-clear" onClick={() => setSearchQ("")}>
@@ -1003,6 +1002,8 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
                 </select>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel-national"
                   className="input"
                   value={patient.phoneNumber || ""}
                   onChange={e => update("phoneNumber", e.target.value.replace(/[^\d\s]/g, ""))}
@@ -1017,6 +1018,8 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
                         key={i}
                         className={"otp-box" + (otpCode[i] ? " has-val" : "")}
                         maxLength={1}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
                         value={otpCode[i] || ""}
                         onChange={e => {
                           const v = e.target.value.replace(/\D/g, "").slice(-1);
@@ -1357,9 +1360,9 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
 // =====================================================================
 // STEP 4 — AI Orders
 // =====================================================================
-export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate }) {
+export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate, requestPaidEdit }) {
   const t = useLang();
-  const cart = patient.cart || { items: [] };
+  const cart = patient.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" } };
   const inCartIds = useMemo(() => new Set(cart.items.map(i => i.id)), [cart.items]);
 
   // The unified AddTestsPanel calls onAdd with [{ testId, name, price, kind }, …].
@@ -1378,7 +1381,33 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate }) {
         price: item.price ?? c.price, qty: 1, payer: patient.payer || "direct", status: "pending",
       };
     });
-    onUpdate({ ...patient, cart: { ...cart, items: [...cart.items, ...additions] } });
+    const apply = (mode) => {
+      onUpdate({
+        ...patient,
+        cart: {
+          ...cart,
+          items: [...cart.items, ...additions],
+          payment: paymentAfterPaidEdit(cart.payment, mode),
+        },
+      });
+      return additions.map(item => item.id);
+    };
+    if (cart.payment?.status === "confirmed" && requestPaidEdit) {
+      requestPaidEdit(`Add ${fresh.length} order${fresh.length === 1 ? "" : "s"} to a paid visit?`, apply);
+      return { deferred: true };
+    } else {
+      const addedIds = apply("normal");
+      return {
+        ids: addedIds,
+        undo: () => onUpdate({
+          ...patient,
+          cart: {
+            ...cart,
+            items: (cart.items || []).filter(item => !addedIds.includes(item.id)),
+          },
+        }),
+      };
+    }
   };
 
   // Telehealth state — slot picker is inline; opens on Include / Reschedule / Add it back.
@@ -1417,7 +1446,7 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate }) {
   };
 
   return (
-    <StepShell title={t("step4.title")} subtitle={t("step4.sub")}>
+    <StepShell title={t("step4.title")} subtitle={t("step4.sub")} className="step-shell-orders">
 
       {/* Unified test picker — replaces AI suggestions + catalogue + previous-tests.
          Currency toggle is shared with the cart rail via patient.cart.ccy. */}
@@ -1426,7 +1455,21 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate }) {
         onAdd={addBulk}
         onPushToast={onPushToast}
         ccy={cart.ccy || "USD"}
-        onCcyToggle={(next) => onUpdate({ ...patient, cart: { ...cart, ccy: next } })}
+        onCcyToggle={(next) => {
+          const apply = (mode) => onUpdate({
+            ...patient,
+            cart: {
+              ...cart,
+              ccy: next,
+              payment: paymentAfterPaidEdit(cart.payment, mode),
+            },
+          });
+          if (cart.payment?.status === "confirmed" && requestPaidEdit) {
+            requestPaidEdit(`Change receipt currency to ${next} on a paid visit?`, apply);
+          } else {
+            apply("normal");
+          }
+        }}
       />
 
       {/* Telehealth — single-row decisive card with inline slot picker.
@@ -1593,7 +1636,7 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate }) {
       })()}
 
       {/* Final step — payment + check-in CTA live in the cart rail. */}
-      <StepFooter onPrev={onPrev} />
+      <StepFooter onPrev={onPrev} className="step-footer-orders" />
     </StepShell>
   );
 }

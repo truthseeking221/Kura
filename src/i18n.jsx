@@ -403,10 +403,12 @@ const en = {
   // Order Cart
   "cart.title": "Order Cart",
   "cart.itemCount": "{n} items",
-  "cart.empty": "No items yet. Tap Add tests to start.",
+  "cart.empty": "Add orders. Search tests, services, or packages.",
   "cart.empty.title": "No items yet",
-  "cart.empty.completeIdentity": "Complete identity, review, and insurance to start adding tests.",
-  "cart.empty.gotoStep4": "Add tests in Step 4 to build the order.",
+  "cart.empty.completeIdentity": "Add orders from the Add tab, then review patient before payment.",
+  "cart.empty.gotoStep4": "Use the Add tab to build the order.",
+  "cart.empty.addSub": "Search tests, services, or packages from the Add tab.",
+  "cart.empty.addFirst": "Add first order",
   "cart.editOrder": "Edit order",
   "cart.addTests": "Add tests",
   "cart.subtotal": "Subtotal",
@@ -466,6 +468,8 @@ const en = {
   "disabled.checkin.contact":  "Verified contact (verify mobile OTP or scan Telegram)",
   "disabled.checkin.dob":      "Date of birth",
   "disabled.checkin.name":     "Patient name",
+  "disabled.checkin.payer":    "Payer or direct pay decision",
+  "disabled.checkin.validation": "Resolve required consent or validation",
   "disabled.telecon.title":    "Teleconsult not available yet",
   "disabled.telecon.tests":    "Add lab or imaging tests first. Teleconsult is scheduled after results are available.",
   "disabled.intake.title":     "Cannot send the intake link",
@@ -557,6 +561,9 @@ const en = {
   "cart.preg.cancelled": "Imaging order cancelled — consent declined",
   "cart.cta.checkInConfirm": "Check in & confirm order",
   "cart.cta.checkInOnly": "Check in patient",
+  "cart.cta.takePayment": "Take payment",
+  "cart.cta.resolveBeforePayment": "Resolve before payment",
+  "cart.cta.waitingPayment": "Waiting for payment…",
   "cart.cta.completeFirst": "Complete patient details to check in",
 
   // Out-of-policy explanations from insurer API
@@ -768,6 +775,7 @@ const en = {
   "chip.insurance": "Insurance",
   "chip.payment": "Paid",
   "chip.paymentPending": "Payment pending",
+  "chip.ordersNeeded": "Orders needed",
 
   // Step 1
   "step1.title": "Capture identity",
@@ -1352,10 +1360,12 @@ const km = {
   // Order Cart
   "cart.title": "កន្ត្រកការបញ្ជា",
   "cart.itemCount": "{n} ធាតុ",
-  "cart.empty": "មិនទាន់មានធាតុ។ ចុច បន្ថែមការពិនិត្យ ដើម្បីចាប់ផ្តើម។",
+  "cart.empty": "បន្ថែមការបញ្ជា។ ស្វែងរកតេស្ត សេវា ឬកញ្ចប់។",
   "cart.empty.title": "មិនទាន់មានធាតុ",
-  "cart.empty.completeIdentity": "បំពេញអត្តសញ្ញាណ ការពិនិត្យ និងធានារ៉ាប់រងមុនបន្ថែមតេស្ត។",
-  "cart.empty.gotoStep4": "បន្ថែមតេស្តនៅជំហានទី 4 ដើម្បីបង្កើតបញ្ជាទិញ។",
+  "cart.empty.completeIdentity": "បន្ថែមការបញ្ជាពីផ្ទាំងបន្ថែម បន្ទាប់មកពិនិត្យអ្នកជំងឺមុនបង់ប្រាក់។",
+  "cart.empty.gotoStep4": "ប្រើផ្ទាំងបន្ថែមដើម្បីបង្កើតការបញ្ជា។",
+  "cart.empty.addSub": "ស្វែងរកតេស្ត សេវា ឬកញ្ចប់ពីផ្ទាំងបន្ថែម។",
+  "cart.empty.addFirst": "បន្ថែមការបញ្ជាដំបូង",
   "cart.editOrder": "កែបញ្ជា",
   "cart.addTests": "បន្ថែមការពិនិត្យ",
   "cart.subtotal": "សរុបរង",
@@ -1415,6 +1425,8 @@ const km = {
   "disabled.checkin.contact":  "ទំនាក់ទំនងបានផ្ទៀងផ្ទាត់ (OTP ឬ ស្កែន Telegram)",
   "disabled.checkin.dob":      "ថ្ងៃ​ខែ​កំណើត",
   "disabled.checkin.name":     "ឈ្មោះ​អ្នក​ជំងឺ",
+  "disabled.checkin.payer":    "ការសម្រេចចិត្តអ្នកបង់ប្រាក់ ឬបង់ផ្ទាល់",
+  "disabled.checkin.validation": "ដោះស្រាយការយល់ព្រម ឬការផ្ទៀងផ្ទាត់ដែលត្រូវការ",
   "disabled.telecon.title":    "មិន​អាច​កក់​ពិគ្រោះ​តាម​ទូរស័ព្ទ​នៅឡើយទេ",
   "disabled.telecon.tests":    "សូមបន្ថែម​ការ​ពិនិត្យមន្ទីរ​ឬ​ចិត្រា​មុន។ ពិគ្រោះ​តាម​ទូរស័ព្ទ​នឹង​កក់​បន្ទាប់​ពី​មាន​លទ្ធផល។",
   "disabled.intake.title":     "មិន​អាច​ផ្ញើ​តំណ​បំពេញ​ព័ត៌មាន",
@@ -1506,6 +1518,9 @@ const km = {
   "cart.preg.cancelled": "បាន​បោះបង់​ការ​បញ្ជា​ចិត្រាការ — ការ​យល់​ព្រម​ត្រូវ​បាន​បដិសេធ",
   "cart.cta.checkInConfirm": "ចុះ​ឈ្មោះ & បញ្ជាក់​ការ​បញ្ជា",
   "cart.cta.checkInOnly": "ចុះ​ឈ្មោះ​អ្នក​ជំងឺ",
+  "cart.cta.takePayment": "ទទួល​ការ​ទូទាត់",
+  "cart.cta.resolveBeforePayment": "ដោះស្រាយ​មុន​ទូទាត់",
+  "cart.cta.waitingPayment": "កំពុង​រង់ចាំ​ការ​ទូទាត់…",
   "cart.cta.completeFirst": "បំពេញ​ព័ត៌មាន​អ្នក​ជំងឺ​មុន​ចុះ​ឈ្មោះ",
 
   // Out-of-policy
@@ -1717,6 +1732,7 @@ const km = {
   "chip.insurance": "ធានារ៉ាប់រង",
   "chip.payment": "បានបង់",
   "chip.paymentPending": "មិនទាន់បង់",
+  "chip.ordersNeeded": "ត្រូវការ​បញ្ជាទិញ",
 
   "step1.title": "ចាប់យកអត្តសញ្ញាណ",
   "step1.sub": "ស្វែងរកអ្នកជំងឺចាស់ ឬជ្រើសវិធីចាប់យក។",

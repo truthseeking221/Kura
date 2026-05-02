@@ -199,6 +199,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 
 .nav { padding: 12px 12px; flex: 1; overflow: hidden; }
 .nav-item {
+  /* Now a real <button> for keyboard + screen-reader semantics; reset
+     browser defaults so the visual stays identical to the prior <div>. */
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
   display: flex; align-items: center; gap: 12px;
   height: 38px;
   padding: 0 12px;
@@ -210,6 +217,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
   overflow: hidden;
+}
+.nav-item:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: -1px;
 }
 .nav-item:hover { background: var(--ink-50); color: var(--ink-800); }
 .nav-item.active {
@@ -349,6 +360,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .search-result:last-child { border-radius: 0 0 8px 8px; }
 .search-result.hovered,
 .search-result:hover { background: var(--ink-50); }
+.topbar-search-result {
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  border: 0;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.topbar-search-result:last-child { border-radius: 0 0 8px 8px; }
+.topbar-search-result.hovered,
+.topbar-search-result:hover { background: var(--ink-50); }
 
 .avatar.av-sm {
   width: 28px; height: 28px;
@@ -613,6 +639,17 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   transition: border-color 0.15s, box-shadow 0.15s;
   width: 100%;
 }
+.select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' stroke='%236b7388' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  background-size: 11px 11px;
+}
+.select::-ms-expand { display: none; }
 .input::placeholder { color: var(--ink-400); }
 .input:focus, .select:focus {
   border-color: var(--brand-500);
@@ -1076,6 +1113,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-weight: 550;
   letter-spacing: -0.005em;
 }
+.toast .t-action {
+  margin-left: auto;
+  border: 0;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.toast .t-action:hover { background: var(--brand-100); }
 
 .toast .t-close {
   margin-left: 4px;
@@ -1225,6 +1274,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* Notifications panel */
+.notif-mobile-scrim { display: none; }
 .notif-panel {
   right: 0;
   width: 380px;
@@ -1235,6 +1285,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
 }
+.notif-head-copy { min-width: 0; }
+.notif-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.notif-close { display: none; }
 .notif-title {
   font-size: 14px; font-weight: 650; color: var(--ink-900);
   letter-spacing: -0.01em;
@@ -1932,48 +1990,17 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-size: 13px;
 }
 
-/* === Mobile responsive (under 768px) === */
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    z-index: 50;
-    width: 232px;
-    transform: translateX(-100%);
-    transition: transform 0.22s cubic-bezier(.4,0,.2,1);
-  }
-  .sidebar:not(.collapsed) {
-    transform: translateX(0);
-    box-shadow: var(--shadow-lg);
-  }
-  .sidebar.collapsed {
-    transform: translateX(-100%);
-  }
-  .app {
-    grid-template-columns: 1fr;
-  }
-  .topbar {
-    padding: 0 12px;
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 56px;
-    gap: 8px;
-  }
-  .topbar h1 { font-size: 15px; }
-  .topbar .pill-select { display: none; }
-  .topbar-search-wrap {
-    order: 2;
-    flex-basis: 100%;
-    min-width: 0;
-    max-width: none;
-  }
+/* === Legacy mobile (<=767px) — superseded by Mobile Responsive System
+       at the end of this file. Kept as a thin compatibility layer for
+       a few non-shell utilities (.workspace, .field-row, .reason-pill,
+       .pay-methods, .stub-grid) that pre-date the new system. The shell
+       rules (sidebar/topbar/cart) used to live here but caused conflicts
+       with the new bottom-sheet + drawer model and were removed. */
+@media (max-width: 767px) {
   .workspace.no-queue {
     grid-template-columns: 1fr !important;
     padding: 12px;
     gap: 12px;
-  }
-  .order-cart {
-    position: static !important;
-    max-height: none !important;
   }
   .field-row {
     grid-template-columns: 1fr !important;
@@ -2526,7 +2553,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
    ============================================================ */
 .debug-blank-btn {
   position: fixed;
-  right: 18px; bottom: 18px;
+  left: 18px; bottom: 18px;
   z-index: 100;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 12px;
@@ -2548,6 +2575,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   opacity: 1; transform: translateY(-1px);
 }
 .debug-blank-btn:active { transform: translateY(0); }
+.debug-blank-chip {
+  display: none;
+}
 .debug-blank-btn::before {
   content: "DEV"; display: inline-block;
   background: var(--brand-500); color: white;
@@ -3160,7 +3190,60 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 @media (max-width: 768px) {
   .vd-hero { padding: 16px; }
+  .vd-hero {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
   .vd-hero-illust { width: 72px; height: 72px; }
+  .vd-hero-copy { width: 100%; }
+  .vd-hero-divider { display: none; }
+  .vd-hero-cta {
+    grid-column: 1 / -1;
+    padding-top: 10px;
+    margin-top: 2px;
+    border-top: 1px dashed var(--border);
+  }
+  .vd-hero-channel {
+    align-items: flex-start;
+  }
+  .vd-hero-send,
+  .vd-hero-fillonbehalf {
+    min-height: 44px;
+  }
+  .vd-head-sub {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .vd-head-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .vd2-prompt {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+  .vd2-prompt-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .vd2-prompt-body {
+    width: 100%;
+  }
+  .vd2-prompt-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .vd2-prompt-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .vd2-complete-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .vd-fill-grid { grid-template-columns: 1fr; }
   .vd-fill-field:nth-child(1),
   .vd-fill-field:nth-child(2),
@@ -6217,6 +6300,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   line-height: 1.45;
   max-width: 220px;
 }
+.cart-mobile-summary {
+  display: none;
+}
 
 /* === Group (Visit fee / Lab tests / Imaging / etc.) === */
 /* `.cart-group` is also defined earlier in the file — these override later for v3 */
@@ -6391,6 +6477,59 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .order-cart .cart-line-row:hover .cart-line-remove.disabled {
   opacity: 0;
+}
+
+.order-cart .cart-total-toggle {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.order-cart .cart-total-toggle:focus-visible {
+  outline: 2px solid var(--brand-300, #93c5fd);
+  outline-offset: -2px;
+}
+.order-cart .cart-total-label {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-900);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.order-cart .cart-total-amount {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.order-cart .cart-total-chev {
+  justify-self: center;
+  color: var(--ink-400);
+  transition: transform 0.15s ease;
+}
+.cart-checkin-done {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--success-200, #a7f3d0);
+  border-radius: 10px;
+  background: var(--success-50);
+  color: var(--success-700, #047857);
+  font-size: 14px;
+  font-weight: 750;
 }
 
 /* Inline expand panels */
@@ -7182,6 +7321,24 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   display: inline-block;
   transform-origin: right center;
 }
+.mobile-cart-bar-icon.is-receiving {
+  animation: cart-receive-bump 520ms cubic-bezier(.34, 1.56, .64, 1);
+  transform-origin: center;
+}
+.mobile-cart-bar-icon.is-receiving .mobile-cart-bar-count {
+  animation: cart-receive-count 520ms cubic-bezier(.34, 1.56, .64, 1);
+}
+.mobile-cart-bar-summary.is-receiving {
+  animation: cart-receive-bump 520ms cubic-bezier(.34, 1.56, .64, 1);
+  transform-origin: center;
+}
+.mobile-cart-tab.is-receiving {
+  animation: cart-receive-bump 520ms cubic-bezier(.34, 1.56, .64, 1);
+  transform-origin: center;
+}
+.mobile-cart-tab.is-receiving .mobile-cart-tab-count {
+  animation: cart-receive-count 520ms cubic-bezier(.34, 1.56, .64, 1);
+}
 @keyframes cart-receive-bump {
   0%   { transform: scale(1) rotate(0); }
   35%  { transform: scale(1.18) rotate(-5deg); }
@@ -7196,5 +7353,1913 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 @media (prefers-reduced-motion: reduce) {
   .fly-ghost { display: none !important; }
   .order-cart.is-receiving .cart-hd2-ico,
-  .order-cart.is-receiving .cart-hd2-count { animation: none; }
+  .order-cart.is-receiving .cart-hd2-count,
+  .mobile-cart-bar-icon.is-receiving,
+  .mobile-cart-bar-icon.is-receiving .mobile-cart-bar-count,
+  .mobile-cart-bar-summary.is-receiving,
+  .mobile-cart-tab.is-receiving,
+  .mobile-cart-tab.is-receiving .mobile-cart-tab-count { animation: none; }
 }
+
+/* ================================================================
+   Mobile Responsive System
+   ----------------------------------------------------------------
+   All overrides for phones (<=767px) and tablets (768-1100px) live
+   here so desktop styling stays untouched and the responsive rules
+   are easy to audit. The phone block introduces a different shell:
+   collapsed sidebar drawer, compact topbar with a 2nd row search,
+   compact wizard progress, sticky bottom cart bar and a bottom
+   sheet for the OrderCart. Desktop is intentionally unchanged.
+   ================================================================ */
+
+/* Hide the mobile-only widgets on desktop / tablet by default. */
+.wiz-progress-mobile,
+.mobile-menu-btn,
+.topbar-title-mobile,
+.mobile-nav-scrim,
+.mobile-cart-bar,
+.mobile-cart-scrim,
+.mobile-cart-grabber,
+.mobile-cart-sheet-head,
+.mobile-cart-sheet-close,
+.mobile-step-scrim,
+.mobile-step-sheet,
+.patient-header-mobile-status {
+  display: none;
+}
+/* Desktop: the sheet wrapper exists in the DOM but is just a passthrough
+   container — let the OrderCart inside size itself normally. */
+.mobile-cart-sheet-body { display: contents; }
+
+/* Tablet — 768 to 1100 px.
+   The existing global rule already collapses .wizard-workspace to a
+   single column at 1100px. Cart inside the sheet container should
+   relax its own inline maxHeight so it never gets crushed. */
+@media (min-width: 768px) and (max-width: 1100px) {
+  .wizard-workspace {
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  .wizard-cart-rail {
+    position: static;
+  }
+  .wizard-cart-rail .order-cart-shell {
+    position: static !important;
+    top: auto !important;
+  }
+  .wizard-cart-rail .order-cart {
+    max-height: none !important;
+  }
+}
+
+/* Phone — 0 to 767 px.
+   Single column, drawer nav, bottom sheet cart, compact progress. */
+@media (max-width: 767px) {
+  :root {
+    --mobile-topbar-h: 56px;
+    --mobile-search-h: 48px;
+    --mobile-patient-h: 76px;
+    --mobile-progress-h: 46px;
+    --mobile-cart-bar-h: 72px;
+    --mobile-page-pad: 12px;
+    --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body, #root { min-height: 100%; }
+  body { background: var(--bg); overscroll-behavior-y: contain; }
+  body.is-mobile-overlay-open {
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  .app.app-v2 {
+    display: block;
+    min-height: 100dvh;
+  }
+
+  .app.app-v2.mobile-cart-open,
+  .app.app-v2.mobile-nav-open {
+    overflow: hidden;
+  }
+
+  .main {
+    display: block;
+    min-width: 0;
+    min-height: 100dvh;
+    padding-bottom: calc(var(--mobile-cart-bar-h) + var(--mobile-safe-bottom) + 12px);
+  }
+
+  /* === Sidebar as a drawer === */
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 120;
+    width: min(86vw, 320px);
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+    box-shadow: none;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar.collapsed {
+    /* On mobile the desktop "collapsed" toggle is irrelevant; we keep
+       the full-width drawer content so labels are readable. */
+    width: min(86vw, 320px);
+    transform: translateX(-100%);
+  }
+  .sidebar.mobile-open,
+  .sidebar.collapsed.mobile-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg, 0 24px 48px rgba(11, 20, 36, 0.18));
+  }
+  .sidebar .brand-text { display: block; }
+  .sidebar .nav-item span { display: inline; }
+  .sidebar.collapsed .brand-text,
+  .sidebar.collapsed .nav-item span { display: inline; }
+  .sidebar .collapse-btn { display: none; }
+
+  .mobile-nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    border: 0;
+    padding: 0;
+    background: rgba(11, 20, 36, 0.34);
+    cursor: pointer;
+    animation: scrim-fade 120ms ease-out;
+  }
+  @keyframes scrim-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* === Topbar with hamburger + 2nd-row full-width search === */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    min-height: var(--mobile-topbar-h);
+    height: auto;
+    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    gap: 8px;
+    align-items: center;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-menu-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--ink-700);
+    cursor: pointer;
+  }
+  .mobile-menu-btn:active { background: var(--ink-50); }
+  /* Keep a short orientation anchor on phone; full station/shift context
+     stays in the drawer. */
+  .topbar-title-mobile {
+    display: block;
+    min-width: 0;
+    flex: 1;
+    font-size: 13.5px;
+    font-weight: 750;
+    color: var(--ink-900);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+  /* Hide station/shift pills and the user meta on phone — they live
+     behind the menu where there's room. */
+  .topbar .topbar-pill-row { display: none; }
+  .topbar .user-chip {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 999px;
+  }
+  .topbar .user-chip .meta { display: none; }
+  .topbar .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .topbar-walkin-btn {
+    height: 40px;
+    padding: 0 10px;
+    min-width: 40px;
+    font-size: 12.5px;
+    border-radius: 9px;
+    gap: 0;
+  }
+  .topbar-walkin-label { display: none; }
+  @media (min-width: 375px) {
+    .topbar-walkin-btn {
+      gap: 6px;
+      padding: 0 12px;
+    }
+    .topbar-walkin-label {
+      display: inline-block;
+      font-size: 12.5px;
+      max-width: 27px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+  }
+
+  /* Search drops to its own row, fed by the topbar grid. */
+  .topbar-search-wrap {
+    grid-column: 1 / -1;
+    order: 10;
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+  .topbar-search-wrap .kbd { display: none; }
+  .search {
+    height: 40px;
+    border-radius: 9px;
+  }
+  .search-dropdown {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: calc(var(--mobile-topbar-h) + var(--mobile-search-h) + 4px);
+    width: auto;
+    max-height: min(420px, calc(100dvh - 132px));
+    overflow-y: auto;
+    border-radius: 12px;
+    z-index: 140;
+  }
+  .search-result,
+  .topbar-search-result {
+    min-height: 56px;
+    padding: 10px 12px;
+  }
+
+  /* Notifications on mobile are a contained center, not the desktop popover.
+     It sits below the full topbar/search stack and above the order dock so
+     the user never loses orientation or hits hidden content. */
+  .notif-mobile-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 129;
+    border: 0;
+    padding: 0;
+    background:
+      linear-gradient(180deg, rgba(11, 20, 36, 0.18), rgba(11, 20, 36, 0.34));
+    cursor: pointer;
+    animation: scrim-fade 120ms ease-out;
+  }
+  .dropdown-panel.notif-panel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: calc(var(--mobile-topbar-h) + var(--mobile-search-h) + 8px);
+    bottom: calc(var(--mobile-cart-bar-h) + var(--mobile-safe-bottom) + 12px);
+    width: auto;
+    max-width: none;
+    z-index: 150;
+    display: flex;
+    flex-direction: column;
+    border-radius: 18px;
+    border-color: rgba(213, 219, 232, 0.92);
+    background: var(--surface);
+    box-shadow:
+      0 18px 48px rgba(11, 20, 36, 0.22),
+      0 2px 8px rgba(11, 20, 36, 0.08);
+    animation: notif-mobile-in 180ms cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes notif-mobile-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .notif-panel .notif-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 14px 12px;
+    background: linear-gradient(180deg, var(--surface), rgba(248, 250, 252, 0.96));
+  }
+  .notif-panel .notif-head-copy {
+    flex: 1 1 140px;
+  }
+  .notif-panel .notif-title {
+    font-size: 18px;
+    font-weight: 780;
+    line-height: 1.15;
+  }
+  .notif-panel .notif-sub {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    margin-top: 6px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--brand-50);
+    color: var(--brand-700);
+    font-size: 12px;
+    font-weight: 680;
+  }
+  .notif-panel .notif-head-actions {
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .notif-panel .notif-mark-read {
+    min-height: 38px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 680;
+    white-space: nowrap;
+  }
+  .notif-close {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-500);
+    cursor: pointer;
+  }
+  .notif-close:active {
+    background: var(--ink-50);
+    color: var(--ink-800);
+  }
+  .notif-panel .notif-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: var(--surface-2);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink-300) transparent;
+  }
+  .notif-panel .notif-body::-webkit-scrollbar { width: 6px; }
+  .notif-panel .notif-body::-webkit-scrollbar-thumb {
+    background: var(--ink-300);
+    border-radius: 999px;
+  }
+  .notif-panel .notif-item {
+    flex: 0 0 auto;
+    min-height: 78px;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .notif-panel .notif-item:hover {
+    background: var(--surface);
+  }
+  .notif-panel .notif-item:active {
+    transform: translateY(1px);
+  }
+  .notif-panel .notif-item.unread {
+    border-color: var(--brand-200);
+    background:
+      linear-gradient(90deg, rgba(var(--brand-rgb), 0.065), transparent 42%),
+      var(--surface);
+  }
+  .notif-panel .notif-item-ico {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+  .notif-panel .notif-item-title {
+    padding-right: 18px;
+    font-size: 14px;
+    font-weight: 760;
+    line-height: 1.22;
+  }
+  .notif-panel .notif-item-text {
+    margin-top: 4px;
+    color: var(--ink-600);
+    font-size: 13px;
+    line-height: 1.36;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .notif-panel .notif-item-foot {
+    align-items: center;
+    min-height: 34px;
+    margin-top: 9px;
+  }
+  .notif-panel .notif-item-time {
+    font-size: 12px;
+    color: var(--ink-500);
+  }
+  .notif-panel .notif-action {
+    flex-shrink: 0;
+    min-height: 34px;
+    padding: 0 10px 0 11px;
+    border: 1px solid var(--brand-100);
+    border-radius: 999px;
+    background: var(--brand-50);
+    color: var(--brand-700);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .notif-panel .notif-dot {
+    top: 14px;
+    right: 13px;
+    width: 8px;
+    height: 8px;
+    box-shadow: 0 0 0 3px var(--surface);
+  }
+  .notif-panel .notif-foot {
+    flex-shrink: 0;
+    padding: 9px 10px calc(10px + var(--mobile-safe-bottom));
+    background: var(--surface);
+  }
+  .notif-panel .notif-foot .link-btn {
+    width: 100%;
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 13px;
+    font-weight: 720;
+  }
+  .notif-panel .notif-empty {
+    min-height: 260px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    border: 1px dashed var(--border);
+    border-radius: 15px;
+    background: var(--surface);
+  }
+
+  /* === PatientHeader compact === */
+  .patient-header {
+    position: sticky;
+    top: calc(var(--mobile-topbar-h) + var(--mobile-search-h));
+    z-index: 70;
+    padding: 9px 12px;
+    gap: 8px;
+    align-items: flex-start;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: nowrap;
+  }
+  .patient-header.is-step-sheet-open {
+    z-index: 180;
+  }
+  .patient-header-id {
+    gap: 9px;
+    min-width: 0;
+    flex: 1;
+  }
+  .patient-header-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+  }
+  .patient-header-meta { min-width: 0; }
+  .patient-header-name {
+    font-size: 14px;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .patient-header-sub {
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .patient-header-sub::-webkit-scrollbar { display: none; }
+  .patient-header-pill {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    padding: 2px 6px;
+  }
+  /* Hide the desktop 4-chip horizontal scroll block on mobile — replaced
+     by a single primary status pill + a tight secondary line below. */
+  .patient-header-chips {
+    display: none !important;
+  }
+  /* Single primary status — answers "what should I do next?" without the
+     nurse needing to interpret 4 separate chips. */
+  .patient-header-mobile-status {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-end;
+    flex: 0 0 auto;
+    margin-left: auto;
+    min-width: 0;
+  }
+  .ph-mstatus-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .patient-header-mobile-status-success .ph-mstatus-pill {
+    background: var(--success-50);
+    color: var(--success-700, #047857);
+    border-color: var(--success-200, #a7f3d0);
+  }
+  .patient-header-mobile-status-info .ph-mstatus-pill {
+    background: var(--brand-50);
+    color: var(--brand-700);
+    border-color: var(--brand-200);
+  }
+  .patient-header-mobile-status-warn .ph-mstatus-pill {
+    background: var(--warn-50);
+    color: var(--warn-700, #b45309);
+    border-color: var(--warn-200, #fde68a);
+  }
+  .patient-header-mobile-status-muted .ph-mstatus-pill {
+    background: var(--ink-50);
+    color: var(--ink-700);
+    border-color: var(--border);
+  }
+  .ph-mstatus-sub {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    max-width: 132px;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--ink-500);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ph-mstatus-ok { color: var(--ink-700); }
+  .ph-mstatus-pending { color: var(--ink-400); }
+  .ph-mstatus-dot { color: var(--ink-300); margin: 0 1px; }
+  .ph-step-switcher {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    max-width: min(46vw, 178px);
+    min-height: 28px;
+    margin: 0 -4px 0 0;
+    padding: 3px 4px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-500);
+    font-family: inherit;
+    font-size: 9.5px;
+    font-weight: 760;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .ph-step-switcher strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink-700);
+    font-size: 10px;
+    letter-spacing: 0.03em;
+  }
+  .ph-step-switcher:active {
+    background: var(--ink-50);
+  }
+  .ph-step-switcher:focus-visible {
+    outline: 2px solid var(--brand-300);
+    outline-offset: 1px;
+  }
+
+  .mobile-step-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    border: 0;
+    padding: 0;
+    background: rgba(11, 20, 36, 0.32);
+    cursor: pointer;
+    animation: scrim-fade 120ms ease-out;
+  }
+  .mobile-step-sheet {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + var(--mobile-safe-bottom));
+    z-index: 140;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: 0 18px 54px rgba(11, 20, 36, 0.24);
+  }
+  .mobile-step-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 12px 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .mobile-step-sheet-head div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mobile-step-sheet-head span {
+    font-size: 13px;
+    font-weight: 780;
+    color: var(--ink-900);
+  }
+  .mobile-step-sheet-head strong {
+    font-size: 11px;
+    font-weight: 680;
+    color: var(--ink-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-step-sheet-head button {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-2);
+    color: var(--ink-500);
+    cursor: pointer;
+  }
+  .mobile-step-list {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    max-height: min(58dvh, 360px);
+    overflow-y: auto;
+  }
+  .mobile-step-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 58px;
+    padding: 8px 10px 8px 8px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mobile-step-row:disabled {
+    cursor: default;
+  }
+  .mobile-step-row:not(:disabled):active {
+    background: var(--ink-50);
+  }
+  .mobile-step-row:focus-visible {
+    outline: 2px solid var(--brand-300);
+    outline-offset: -1px;
+  }
+  .mobile-step-row.is-current {
+    background: var(--brand-50);
+  }
+  .mobile-step-row.is-locked {
+    opacity: 0.58;
+  }
+  .mobile-step-mark {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-500);
+  }
+  .mobile-step-row.is-current .mobile-step-mark {
+    background: var(--brand-500);
+    color: white;
+    border-color: var(--brand-500);
+  }
+  .mobile-step-row.is-done .mobile-step-mark {
+    background: var(--success-50);
+    color: var(--success-600);
+    border-color: var(--success-200, #a7f3d0);
+  }
+  .mobile-step-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mobile-step-copy strong {
+    font-size: 13.5px;
+    font-weight: 760;
+    color: var(--ink-900);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-step-copy span {
+    font-size: 11.5px;
+    color: var(--ink-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-step-action {
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    color: var(--ink-500);
+    font-size: 12px;
+    font-weight: 720;
+  }
+  .mobile-step-row.is-current .mobile-step-action {
+    color: var(--brand-700);
+  }
+  .mobile-step-row.is-done .mobile-step-action {
+    color: var(--success-700, #047857);
+  }
+
+  /* === Wizard progress: patient header owns mobile orientation. === */
+  .wiz-progress,
+  .wiz-progress-desktop,
+  .wiz-progress-mobile { display: none; }
+  .wiz-mobile-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .wiz-mobile-copy span {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--ink-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .wiz-mobile-copy strong {
+    font-size: 13px;
+    color: var(--ink-900);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+  }
+  .wiz-mobile-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .wiz-mobile-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-500);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    transition: background 120ms, border-color 120ms, color 120ms;
+  }
+  .wiz-mobile-dot.is-current {
+    background: var(--brand-500);
+    color: white;
+    border-color: var(--brand-500);
+    box-shadow: 0 0 0 3px rgba(38, 140, 255, 0.16);
+  }
+  .wiz-mobile-dot.is-done {
+    background: var(--success-50);
+    color: var(--success-600);
+    border-color: var(--success-200, #a7f3d0);
+  }
+  .wiz-mobile-dot.is-locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .wiz-mobile-dot:disabled { cursor: not-allowed; }
+
+  /* === Workspace: single column, no right rail in flow === */
+  .wizard-workspace {
+    display: block;
+    grid-template-columns: 1fr;
+    padding: var(--mobile-page-pad);
+    max-width: none;
+    margin: 0;
+  }
+  .wizard-content {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  /* === Cart rail becomes the bottom-bar + sheet host === */
+  .wizard-cart-rail {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 100;
+    pointer-events: none;
+    top: auto !important;
+    align-self: auto;
+  }
+
+  /* Dock — split into a persistent test-menu action, a row tap
+     (summary), and a state-aware CTA button.
+     Show the bar by default; hide while sheet is open. */
+  .mobile-cart-bar {
+    display: grid;
+    pointer-events: auto;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + var(--mobile-safe-bottom));
+    min-height: 64px;
+    border: 1px solid var(--border-strong, var(--ink-200));
+    border-radius: 18px;
+    background: var(--surface);
+    box-shadow: 0 18px 46px rgba(11, 20, 36, 0.18);
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px;
+    transition: border-color 160ms, box-shadow 160ms;
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-paid {
+    border-color: var(--success-200, #a7f3d0);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-empty {
+    border-color: var(--border);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-review-gate {
+    border-color: var(--warn-200, #fde68a);
+    box-shadow: 0 18px 46px rgba(180, 83, 9, 0.14);
+  }
+
+  /* Persistent test-menu entry point. This is intentionally not tied to
+     cart state or wizard step: ordering tests is a parallel clinical task. */
+  .mobile-cart-bar-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--brand-200);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--brand-500) 7%, var(--surface));
+    color: var(--brand-700);
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-500) 7%, transparent);
+    transition: background 120ms, border-color 120ms, box-shadow 120ms, transform 80ms;
+  }
+  .mobile-cart-bar-add svg {
+    color: var(--brand-700);
+    flex-shrink: 0;
+  }
+  .mobile-cart-bar-add:hover {
+    background: var(--brand-50);
+    border-color: var(--brand-300);
+  }
+  .mobile-cart-bar-add:active {
+    transform: translateY(1px);
+    background: var(--brand-50);
+    border-color: var(--brand-300);
+  }
+  .mobile-cart-bar-add:focus-visible {
+    outline: 2px solid var(--brand-300);
+    outline-offset: 2px;
+  }
+
+  /* Summary area = row tap target. */
+  .mobile-cart-bar-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    min-height: 44px;
+    color: inherit;
+    transition: background 120ms;
+  }
+  .mobile-cart-bar-summary:active { background: var(--ink-50); }
+
+  .mobile-cart-bar-icon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--brand-500) 8%, transparent);
+    color: var(--brand-600);
+    flex-shrink: 0;
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-paid .mobile-cart-bar-icon {
+    background: var(--success-50);
+    color: var(--success-600);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-done .mobile-cart-bar-icon {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-empty .mobile-cart-bar-icon {
+    background: var(--ink-50);
+    color: var(--ink-500);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-review-gate .mobile-cart-bar-icon {
+    background: var(--warn-50);
+    color: var(--warn-600);
+  }
+  .mobile-cart-bar-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--brand-500);
+    color: white;
+    font-size: 9.5px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--surface);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-paid .mobile-cart-bar-count {
+    background: var(--success-500);
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-review-gate .mobile-cart-bar-count {
+    background: var(--warn-500);
+  }
+  .mobile-cart-bar-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mobile-cart-bar-title {
+    font-size: 13.5px;
+    font-weight: 760;
+    color: var(--ink-900);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.005em;
+  }
+  .mobile-cart-bar-sub {
+    font-size: 11.5px;
+    color: var(--ink-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* CTA button — separate tap target with own action per state. */
+  .mobile-cart-bar-cta {
+    height: 48px;
+    min-width: 78px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 0;
+    background: var(--brand-500);
+    color: white;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 760;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    align-self: center;
+    margin-right: 2px;
+    transition: background 120ms, transform 80ms;
+  }
+  .mobile-cart-bar-cta:active { transform: translateY(1px); }
+  .mobile-cart-bar-cta:disabled {
+    background: var(--ink-200);
+    color: var(--ink-500);
+    cursor: not-allowed;
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-paid .mobile-cart-bar-cta { background: var(--success-500); }
+  .mobile-cart-bar.mobile-cart-bar-state-paid .mobile-cart-bar-cta:hover { background: var(--success-600); }
+  .mobile-cart-bar.mobile-cart-bar-state-done .mobile-cart-bar-cta {
+    background: var(--ink-900);
+    color: white;
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-empty .mobile-cart-bar-cta {
+    background: var(--brand-500);
+    color: white;
+    border: 0;
+  }
+  .mobile-cart-bar.mobile-cart-bar-state-review-gate .mobile-cart-bar-cta {
+    background: var(--warn-50);
+    color: var(--warn-700, #92400e);
+    border: 1px solid var(--warn-300, #fcd34d);
+  }
+
+  .mobile-cart-scrim {
+    display: none;
+    pointer-events: auto;
+    position: fixed;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background: rgba(11, 20, 36, 0.36);
+    cursor: pointer;
+  }
+
+  .mobile-cart-sheet {
+    pointer-events: auto;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(88dvh, 760px);
+    max-height: 88dvh;
+    transform: translateY(100%);
+    transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+    background: var(--surface);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -18px 48px rgba(11, 20, 36, 0.26);
+    overflow: hidden;
+    padding-bottom: var(--mobile-safe-bottom);
+    display: flex;
+    flex-direction: column;
+  }
+  .mobile-cart-sheet[inert] {
+    pointer-events: none;
+  }
+  .wizard-cart-rail.is-open .mobile-cart-sheet {
+    transform: translateY(0);
+  }
+  .wizard-cart-rail.is-open .mobile-cart-scrim {
+    display: block;
+    animation: scrim-fade 120ms ease-out;
+  }
+  .wizard-cart-rail.is-open .mobile-cart-bar {
+    display: none;
+  }
+
+  .mobile-cart-grabber {
+    display: block;
+    width: 42px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--ink-200);
+    margin: 9px auto 6px;
+    flex-shrink: 0;
+  }
+
+  /* Sheet head — grabber + tab strip stay pinned when the body scrolls.
+     The strip itself is the dock's true entry point: 3 modes the nurse
+     can flip between without leaving the sheet. */
+  .mobile-cart-sheet-head {
+    display: block;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .mobile-cart-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) 44px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px 7px;
+    position: relative;
+  }
+  .mobile-cart-tab {
+    min-width: 0;
+    height: 34px;
+    padding: 0 5px;
+    background: var(--surface-2);
+    border: 1px solid transparent;
+    border-radius: 11px;
+    color: var(--ink-500);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 680;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    letter-spacing: -0.005em;
+    transition: color 120ms, border-color 120ms, background 120ms, box-shadow 120ms;
+  }
+  .mobile-cart-tab:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .mobile-cart-tab.is-active {
+    color: var(--brand-700);
+    background: var(--brand-50);
+    border-color: var(--brand-200);
+    box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.08);
+  }
+  .mobile-cart-tab:active:not(:disabled) {
+    background: var(--ink-50);
+  }
+  .mobile-cart-tab-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--brand-500);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .mobile-cart-tab.is-active .mobile-cart-tab-count {
+    background: var(--brand-600);
+  }
+  .mobile-cart-sheet-close {
+    width: 44px;
+    height: 38px;
+    border: 1px solid transparent;
+    background: var(--surface-2);
+    color: var(--ink-500);
+    border-radius: 12px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    margin-left: 0;
+  }
+  .mobile-cart-sheet-close:active {
+    background: var(--ink-50);
+    color: var(--ink-700);
+  }
+
+  /* Sheet body — single-mode container with its own scroll. The Add tab
+     hosts AddTestsPanel directly; Cart/Pay tabs host OrderCart. Override
+     the desktop's `display: contents` passthrough — on mobile the body
+     IS a real flex region with scroll. */
+  .mobile-cart-sheet-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-cart-sheet-body-add {
+    padding: 0;
+  }
+  /* AddTestsPanel inside the sheet — neutralise its own card frame so it
+     fills the sheet body cleanly. */
+  .mobile-cart-sheet-body-add > .add-tests-panel,
+  .mobile-cart-sheet-body-add > .atp-shell,
+  .mobile-cart-sheet-body-add > section {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  /* Neutralise the inline sticky/maxHeight set by OrderCart. The sheet's
+     body wrapper now handles scroll, so the cart can render at its natural
+     height without the inline constraints fighting the layout. */
+  .mobile-cart-sheet .order-cart-shell {
+    position: static !important;
+    top: auto !important;
+    width: 100%;
+    gap: 0;
+  }
+  .mobile-cart-sheet .order-cart {
+    --cart-mobile-count-col: 34px;
+    --cart-mobile-price-col: 84px;
+    --cart-mobile-action-col: 40px;
+    --cart-mobile-col-gap: 8px;
+    max-height: none !important;
+    height: auto;
+    padding-bottom: 78px;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+  .mobile-cart-sheet .cart-hd2 {
+    align-items: center;
+    padding: 10px 14px 8px;
+    background: var(--surface);
+  }
+  .mobile-cart-sheet .cart-hd2-title {
+    font-size: 14px;
+  }
+  .mobile-cart-sheet .cart-hd2-sub {
+    font-size: 11.5px;
+  }
+  .mobile-cart-sheet .cart-hd2-ico {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--brand-50);
+  }
+  .mobile-cart-sheet .cart-hd2-clear {
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border-color: var(--border);
+    background: var(--surface);
+  }
+  .cart-mobile-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
+    grid-template-areas:
+      "summary-copy summary-copy summary-total summary-blank";
+    align-items: center;
+    column-gap: var(--cart-mobile-col-gap);
+    margin: 8px 12px 6px;
+    padding: 10px 0 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .cart-mobile-summary-ready {
+    border-color: var(--brand-200);
+    background: linear-gradient(180deg, var(--surface) 0%, var(--brand-50) 100%);
+  }
+  .cart-mobile-summary-paid {
+    border-color: var(--success-200, #a7f3d0);
+    background: var(--surface);
+  }
+  .cart-mobile-summary-blocked,
+  .cart-mobile-summary-waiting {
+    border-color: var(--border);
+    background: var(--surface);
+  }
+  .cart-mobile-summary-copy {
+    grid-area: summary-copy;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cart-mobile-summary-title {
+    min-width: 0;
+    font-size: 13.5px;
+    font-weight: 760;
+    color: var(--ink-900);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cart-mobile-summary-sub {
+    margin-top: 0;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--ink-600);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .cart-mobile-summary-total {
+    grid-area: summary-total;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding-right: 0;
+    text-align: right;
+  }
+  .cart-mobile-summary-total-label {
+    display: none;
+  }
+  .cart-mobile-summary-total-amount {
+    display: block;
+    width: 100%;
+    font-size: 15px;
+    font-weight: 780;
+    color: var(--ink-900);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  /* Items-list cap is also handled by the sheet body scroll now — let the
+     items render naturally. */
+  .mobile-cart-sheet .cart-items-scroll {
+    max-height: none;
+  }
+  .mobile-cart-sheet-mode-cart .cart-payment-methods,
+  .mobile-cart-sheet-mode-cart .cart-pay-cash,
+  .mobile-cart-sheet-mode-cart .khqr-cfd,
+  .mobile-cart-sheet-mode-cart .pay-confirmed {
+    display: none !important;
+  }
+  .mobile-cart-sheet-mode-cart .cart-billing-summary {
+    display: none !important;
+  }
+  .mobile-cart-sheet-mode-cart .cart-validation-banner {
+    display: none !important;
+  }
+  .mobile-cart-sheet .order-cart .cart-group-head {
+    grid-template-columns: minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
+    min-height: 44px;
+    padding: 0 12px;
+    gap: var(--cart-mobile-col-gap);
+  }
+  .mobile-cart-sheet .order-cart .cart-group-label {
+    grid-column: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-cart-sheet .order-cart .cart-group-count {
+    grid-column: 2;
+    justify-self: center;
+  }
+  .mobile-cart-sheet .order-cart .cart-group-sub {
+    grid-column: 3;
+    justify-self: end;
+    width: 100%;
+    min-width: 0;
+    text-align: right;
+  }
+  .mobile-cart-sheet .order-cart .cart-group-chev {
+    grid-column: 4;
+    grid-row: 1;
+    justify-self: center;
+  }
+  .mobile-cart-sheet .order-cart .cart-group-body {
+    padding: 0 12px 8px;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-row {
+    grid-template-columns: 30px minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
+    min-height: 54px;
+    height: auto;
+    gap: var(--cart-mobile-col-gap);
+    padding: 8px 0;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-ico {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-name {
+    grid-column: 2 / 4;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-name-text {
+    font-size: 13px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-price {
+    grid-column: 4;
+    font-size: 13px;
+    justify-self: end;
+    width: 100%;
+    min-width: 0;
+    text-align: right;
+  }
+
+  /* On touch we don't have hover, so remove buttons must always show. */
+  .mobile-cart-sheet .order-cart .cart-line-row .cart-line-remove {
+    grid-column: 5;
+    justify-self: center;
+    opacity: 1;
+    width: var(--cart-mobile-action-col);
+    height: 44px;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-row {
+    min-height: 44px;
+  }
+  .mobile-cart-sheet .order-cart .cart-total-toggle {
+    grid-template-columns: minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
+    gap: var(--cart-mobile-col-gap);
+    padding: 9px 12px;
+  }
+  .mobile-cart-sheet .order-cart .cart-total-label {
+    grid-column: 1 / 3;
+  }
+  .mobile-cart-sheet .order-cart .cart-total-amount {
+    grid-column: 3;
+    justify-self: end;
+    min-width: 0;
+  }
+  .mobile-cart-sheet .order-cart .cart-total-chev {
+    grid-column: 4;
+    justify-self: center;
+  }
+  .mobile-cart-sheet .cart-primary-cta-wrap {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    padding: 10px 14px calc(12px + var(--mobile-safe-bottom)) !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), var(--surface) 24%);
+    box-shadow: 0 -10px 24px rgba(11, 20, 36, 0.08);
+  }
+  .mobile-cart-sheet .cart-tat-footer {
+    display: none;
+  }
+  .cart-empty-action {
+    margin-top: 10px;
+    min-height: 44px;
+  }
+
+  /* === Step shell + body === */
+  .step-shell { gap: 12px; }
+  .step-shell-orders {
+    gap: 0;
+  }
+  .step-shell-orders .step-head {
+    display: none;
+  }
+  .step-head {
+    gap: 10px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .step-title { font-size: 18px; }
+  .step-sub { font-size: 12.5px; line-height: 1.45; }
+  .step-head-right { flex-wrap: wrap; }
+
+  .card-soft {
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .group-head {
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Forms collapse to one column; inputs grow to a comfy 44px touch height. */
+  .form-grid,
+  .form-grid-2,
+  .form-grid-3,
+  .field-row,
+  .contact-grid,
+  .address-grid,
+  .policy-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .input,
+  .select,
+  textarea.input {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .btn { min-height: 40px; }
+  .btn.btn-sm { min-height: 34px; }
+
+  /* === StepFooter: inline on mobile; the Order Dock owns the thumb zone. === */
+  .step-footer {
+    position: static;
+    z-index: auto;
+    margin: 14px 0 0;
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+    border-top: 0;
+    box-shadow: none;
+  }
+  .step-footer-left,
+  .step-footer-right { gap: 8px; }
+  .step-footer-left {
+    display: none;
+  }
+  .step-footer-right {
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .step-footer .btn-primary {
+    min-width: 128px;
+    height: 44px;
+  }
+  .step-footer-blocker {
+    max-width: 44vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .step-footer-orders {
+    display: none;
+  }
+
+  /* === Step 1 — capture identity === */
+  .step1-methods {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+  .method-card {
+    min-height: 64px;
+    padding: 11px 12px;
+    border-radius: 12px;
+  }
+  .method-card-ico,
+  .method-card-icon-img {
+    width: 40px;
+    height: 40px;
+  }
+  .method-card-sub {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .id-captured-card { padding: 15px; }
+  .id-captured-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* === Step 2 — review === */
+  .phone-row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .otp-boxes {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .otp-box {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+  }
+  .contact-verified-row {
+    flex-wrap: wrap;
+    min-height: 44px;
+  }
+  .contact-verified-action {
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  /* === Step 4 — AddTestsPanel + Teleconsultation === */
+  .mobile-cart-sheet-body-add .atp-head {
+    padding: 6px 8px;
+  }
+  .atp-head-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 0;
+    scrollbar-width: none;
+  }
+  .atp-head-tabs::-webkit-scrollbar { display: none; }
+  .atp-tab {
+    flex: 0 1 auto;
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 9px;
+    font-size: 12px;
+  }
+  .atp-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface);
+  }
+  .atp-search input {
+    height: 48px;
+    padding-left: 38px;
+    padding-right: 34px;
+    border-radius: 11px;
+    font-size: 15px;
+  }
+  .atp-search-ico {
+    left: 14px;
+  }
+  .atp-search-clear {
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+  .atp-ccy {
+    height: 48px;
+    border-radius: 11px;
+    padding: 4px;
+  }
+  .atp-ccy-tab {
+    min-width: 54px;
+    height: 38px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .atp-hints,
+  .atp-tab-key,
+  .atp-search-hint { display: none; }
+  .atp-rows {
+    min-height: auto;
+    max-height: none;
+    padding: 4px 12px 0;
+  }
+  .atp-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check name add"
+      ".     price why";
+    gap: 3px 9px;
+    min-height: 50px;
+    padding: 7px 0;
+    cursor: pointer;
+  }
+  .atp-row.is-row-click-disabled {
+    cursor: default;
+  }
+  .atp-row:focus-visible {
+    outline: 2px solid var(--brand-300);
+    outline-offset: -2px;
+    border-radius: 8px;
+  }
+  .atp-check { grid-area: check; width: 22px; height: 22px; }
+  .atp-row-name { grid-area: name; }
+  .atp-name {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  .atp-badges {
+    gap: 3px;
+  }
+  .atp-badge {
+    font-size: 10px;
+    padding: 0 5px;
+    line-height: 1.45;
+  }
+  .atp-price { grid-area: price; text-align: left; color: var(--ink-600); }
+  .atp-add-btn,
+  .atp-incart {
+    grid-area: add;
+    min-width: 60px;
+    height: 40px;
+    border-radius: 8px;
+  }
+  .atp-why-btn {
+    grid-area: why;
+    justify-self: end;
+    width: 36px;
+    height: 36px;
+  }
+  /* Cart remove must be tappable with one thumb on mobile. The desktop
+     hover-reveal pattern doesn't work on touch. */
+  .mobile-cart-sheet .order-cart .cart-line-row .cart-line-remove {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  /* Payment cash input + confirm hardcode 32/34px inline heights. Override
+     to a comfortable 48px / 44px on mobile so the nurse can hit them with
+     a thumb while the keyboard is open. */
+  .cart-pay-cash-input {
+    min-height: 48px !important;
+    height: 48px !important;
+    font-size: 15px !important;
+  }
+  .cart-pay-cash-confirm {
+    min-height: 44px !important;
+    height: 44px !important;
+    font-size: 14px !important;
+    margin-top: 6px !important;
+  }
+  .mobile-cart-sheet .cart-payment-methods {
+    padding: 14px !important;
+  }
+  .mobile-cart-sheet .cart-payment-method-grid {
+    gap: 10px !important;
+  }
+  .mobile-cart-sheet .cart-payment-method-btn {
+    min-height: 72px !important;
+    border-radius: 14px !important;
+  }
+  /* Primary CTA inside the cart sheet should be a real touch target. */
+  .cart-primary-cta-wrap .cart-primary-cta {
+    min-height: 48px !important;
+    height: 48px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+  }
+  .atp-why { grid-column: 1 / -1; }
+  .atp-foot {
+    bottom: calc(var(--mobile-cart-bar-h) + var(--mobile-safe-bottom));
+    padding: 10px 12px;
+  }
+
+  .tele-card-row { align-items: flex-start; flex-wrap: wrap; }
+  .tele-card-actions { width: 100%; justify-content: stretch; }
+  .tele-card-actions .btn { flex: 1; justify-content: center; }
+
+  /* Out of the way on phone — focus is on cart + step CTA.
+     Keep the dev reset available for mobile QA, but lift it above the
+     order dock so it does not compete with production actions. */
+  .goal-bar { display: none; }
+  .debug-blank-btn {
+    left: 4px;
+    bottom: calc(var(--mobile-cart-bar-h) + var(--mobile-safe-bottom) + 8px);
+    z-index: 92;
+    width: 28px;
+    height: 28px;
+    min-height: 0;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    border-radius: 999px;
+    border-color: rgba(255,255,255,0.12);
+    background: rgba(15, 17, 21, 0.68);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.14);
+    opacity: 0.38;
+  }
+  .debug-blank-btn:hover,
+  .debug-blank-btn:focus-visible {
+    opacity: 0.92;
+  }
+  .debug-blank-btn > svg,
+  .debug-blank-btn > span:not(.debug-blank-chip),
+  .debug-blank-btn::before {
+    display: none;
+  }
+  .debug-blank-btn .debug-blank-chip {
+    display: block;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: white;
+  }
+  .mobile-cart-open .debug-blank-btn,
+  .mobile-nav-open .debug-blank-btn {
+    display: none;
+  }
+
+  /* === Modals as bottom sheets === */
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: 18px 18px 0 0;
+    margin: 0;
+    overflow: hidden;
+  }
+  .modal-body {
+    max-height: calc(92dvh - 132px);
+    overflow-y: auto;
+  }
+  .modal-foot {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    padding-bottom: calc(12px + var(--mobile-safe-bottom));
+  }
+
+  /* Unified mobile dismiss control for every modal / bottom sheet.
+     Some modal close buttons carry inline 30px sizing, so this rule
+     intentionally wins with !important to keep the tap target identical. */
+  .modal .modal-head .icon-btn,
+  .modal > div:first-child .icon-btn,
+  .mobile-step-sheet-head > button,
+  .mobile-cart-sheet-close,
+  .notif-close,
+  .ai-panel-close {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    flex: 0 0 38px !important;
+    padding: 0 !important;
+    margin-left: 0 !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 999px !important;
+    background: var(--surface) !important;
+    color: var(--ink-500) !important;
+    box-shadow: none !important;
+    cursor: pointer;
+    transition: background 120ms, color 120ms, border-color 120ms, transform 80ms;
+  }
+  .modal .modal-head .icon-btn > svg,
+  .modal > div:first-child .icon-btn > svg,
+  .mobile-step-sheet-head > button > svg,
+  .mobile-cart-sheet-close > svg,
+  .notif-close > svg,
+  .ai-panel-close > svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  .modal .modal-head .icon-btn:active,
+  .modal > div:first-child .icon-btn:active,
+  .mobile-step-sheet-head > button:active,
+  .mobile-cart-sheet-close:active,
+  .notif-close:active,
+  .ai-panel-close:active {
+    background: var(--ink-50) !important;
+    border-color: var(--border-strong, var(--border)) !important;
+    color: var(--ink-800) !important;
+    transform: translateY(1px);
+  }
+  .modal .modal-head .icon-btn:focus-visible,
+  .modal > div:first-child .icon-btn:focus-visible,
+  .mobile-step-sheet-head > button:focus-visible,
+  .mobile-cart-sheet-close:focus-visible,
+  .notif-close:focus-visible,
+  .ai-panel-close:focus-visible {
+    outline: 2px solid var(--brand-300);
+    outline-offset: 2px;
+  }
+
+  /* Dropdowns can't dangle off-screen on phones. */
+  .dropdown-panel {
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* Phone — narrowest devices need extra forgiveness. */
+@media (max-width: 359px) {
+  .patient-header-chips { max-width: 36vw; }
+  .id-captured-grid { grid-template-columns: 1fr; }
+  .mobile-cart-bar { left: 8px; right: 8px; }
+  .mobile-cart-bar-add {
+    width: 42px;
+    min-width: 42px;
+  }
+  .mobile-cart-bar-cta { min-width: 68px; padding: 0 10px; }
+  .mobile-cart-bar-summary { gap: 6px; }
+  .mobile-cart-bar-icon { display: none; }
+  .mobile-cart-tabs { gap: 3px; padding-left: 8px; padding-right: 8px; }
+  .mobile-cart-tab { font-size: 11px; padding: 0 4px; }
+  .step-footer-blocker { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-cart-sheet,
+  .sidebar,
+  .wiz-mobile-dot,
+  .mobile-cart-bar { transition: none !important; }
+  .mobile-nav-scrim,
+  .mobile-cart-scrim { animation: none !important; }
+}
+/* === End Mobile Responsive System === */
