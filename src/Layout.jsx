@@ -1,5 +1,5 @@
-// === Sidebar + Topbar + GoalBar ===
-import { useState, useRef, useEffect, useCallback } from "react";
+// === Sidebar + Topbar ===
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { I } from "./icons";
 import { useLang } from "./i18n";
 import { NotificationsPanel, PillMenu, UserMenu } from "./Notifications";
@@ -108,32 +108,156 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
   );
 }
 
-function SearchBar({ patients = [], onSearch }) {
+const SEARCH_RECENTS_KEY = "kura.reception.searchRecents.v1";
+const SEARCH_RECENTS_LIMIT = 6;
+
+function readSearchRecents() {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SEARCH_RECENTS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).slice(0, SEARCH_RECENTS_LIMIT) : [];
+  } catch {
+    return [];
+  }
+}
+
+function patientRecentSnapshot(p) {
+  return {
+    type: "patient",
+    id: p.id,
+    label: p.name || p.queueNumber || "Patient",
+    queueNumber: p.queueNumber || "",
+    mobile: p.mobile || "",
+    initials: p.initials || "P",
+    avatarColor: p.avatarColor || "av-blue",
+    status: p.status || null,
+    savedAt: Date.now(),
+  };
+}
+
+function recentKey(item) {
+  return item.type === "patient" ? `patient:${item.id}` : `query:${(item.query || "").toLowerCase()}`;
+}
+
+function patientSearchMatch(p, rawQuery) {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return null;
+  const digits = query.replace(/\D/g, "");
+  const name = (p.name || "").toLowerCase();
+  const queue = (p.queueNumber || "").toLowerCase();
+  const mobile = (p.mobile || p.phoneNumber || "").toLowerCase();
+  const phoneDigits = mobile.replace(/\D/g, "");
+  const idNumber = (p.idNumber || "").toLowerCase();
+  const reasons = Array.isArray(p.visitReason) ? p.visitReason : [];
+
+  if (queue && queue.includes(query)) return { score: 100, label: "Queue" };
+  if (idNumber && idNumber.includes(query)) return { score: 92, label: "VID" };
+  if (digits.length >= 3 && phoneDigits.includes(digits)) return { score: 88, label: "Phone" };
+  if (name.startsWith(query)) return { score: 82, label: "Name" };
+  if (name.includes(query)) return { score: 72, label: "Name" };
+  if (reasons.some(r => (r || "").toLowerCase().includes(query))) return { score: 54, label: "Reason" };
+  return null;
+}
+
+function hydrateRecentPatient(item, patients) {
+  if (item.type !== "patient") return item;
+  const live = patients.find(p => p.id === item.id);
+  return live ? { ...patientRecentSnapshot(live), savedAt: item.savedAt || Date.now() } : item;
+}
+
+function SearchBar({ patients = [], onSearch, onNewWalkIn }) {
   const t = useLang();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(-1);
+  const [recents, setRecents] = useState(readSearchRecents);
   const inputRef = useRef(null);
   const wrapRef = useRef(null);
 
-  const results = query.trim().length < 1 ? [] : (() => {
-    const q = query.toLowerCase();
-    return patients.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.queueNumber.toLowerCase().includes(q) ||
-      (p.mobile || "").toLowerCase().includes(q) ||
-      (p.idNumber || "").includes(q) ||
-      (p.visitReason || []).some(r => r.toLowerCase().includes(q))
-    );
-  })();
+  const trimmedQuery = query.trim();
+  const hasQuery = trimmedQuery.length > 0;
+  const patientResults = useMemo(() => {
+    if (!hasQuery) return [];
+    return patients
+      .map(patient => ({ patient, match: patientSearchMatch(patient, trimmedQuery) }))
+      .filter(result => result.match)
+      .sort((a, b) => b.match.score - a.match.score || (a.patient.name || "").localeCompare(b.patient.name || ""))
+      .slice(0, 7);
+  }, [patients, trimmedQuery, hasQuery]);
 
-  const commit = useCallback((p) => {
-    onSearch && onSearch(p.id);
+  const recentItems = useMemo(() => (
+    recents
+      .map(item => hydrateRecentPatient(item, patients))
+      .filter(item => item.type === "query" ? !!item.query : !!item.id)
+      .slice(0, SEARCH_RECENTS_LIMIT)
+  ), [patients, recents]);
+
+  const resultItems = useMemo(() => (
+    hasQuery
+      ? patientResults.map(({ patient, match }) => ({ type: "patient", patient, match }))
+      : recentItems.map(item => item.type === "patient"
+          ? { type: "recentPatient", patient: item }
+          : { type: "recentQuery", query: item.query })
+  ), [hasQuery, patientResults, recentItems]);
+  const actionItems = onNewWalkIn ? [{ type: "newWalkIn", query: trimmedQuery }] : [];
+  const menuItems = [...resultItems, ...actionItems];
+  const dropdownOpen = open && (menuItems.length > 0 || hasQuery);
+
+  const saveRecent = useCallback((item) => {
+    setRecents(prev => {
+      const next = [item, ...prev.filter(existing => recentKey(existing) !== recentKey(item))]
+        .slice(0, SEARCH_RECENTS_LIMIT);
+      try {
+        window.localStorage.setItem(SEARCH_RECENTS_KEY, JSON.stringify(next));
+      } catch {
+        // localStorage may be unavailable in privacy modes; search still works.
+      }
+      return next;
+    });
+  }, []);
+
+  const clearRecents = useCallback(() => {
+    setRecents([]);
+    try {
+      window.localStorage.removeItem(SEARCH_RECENTS_KEY);
+    } catch {
+      // Ignore storage failures; clearing UI state is enough.
+    }
+  }, []);
+
+  const closeSearch = useCallback(() => {
     setQuery("");
     setOpen(false);
     setCursor(-1);
     inputRef.current?.blur();
-  }, [onSearch]);
+  }, []);
+
+  const commitPatient = useCallback((p) => {
+    saveRecent(patientRecentSnapshot(p));
+    onSearch && onSearch(p.id);
+    closeSearch();
+  }, [closeSearch, onSearch, saveRecent]);
+
+  const commitQuery = useCallback((value) => {
+    setQuery(value);
+    setOpen(true);
+    setCursor(0);
+    inputRef.current?.focus();
+  }, []);
+
+  const commitNewWalkIn = useCallback((value) => {
+    const next = (value || "").trim();
+    if (next) saveRecent({ type: "query", query: next, savedAt: Date.now() });
+    onNewWalkIn?.();
+    closeSearch();
+  }, [closeSearch, onNewWalkIn, saveRecent]);
+
+  const commitItem = useCallback((item) => {
+    if (!item) return;
+    if (item.type === "patient" || item.type === "recentPatient") commitPatient(item.patient);
+    else if (item.type === "recentQuery") commitQuery(item.query);
+    else if (item.type === "newWalkIn") commitNewWalkIn(item.query);
+  }, [commitNewWalkIn, commitPatient, commitQuery]);
 
   // ⌘K / Ctrl+K global focus
   useEffect(() => {
@@ -161,21 +285,36 @@ function SearchBar({ patients = [], onSearch }) {
   }, []);
 
   const handleKey = (e) => {
-    if (!open || results.length === 0) {
-      if (e.key === "Escape") { setQuery(""); setOpen(false); }
+    if (e.key === "Escape") {
+      if (query) {
+        e.preventDefault();
+        setQuery("");
+        setCursor(-1);
+        setOpen(true);
+      } else {
+        setOpen(false);
+        setCursor(-1);
+        inputRef.current?.blur();
+      }
+      return;
+    }
+    if (!open || menuItems.length === 0) {
+      if (e.key === "ArrowDown" && menuItems.length > 0) {
+        e.preventDefault();
+        setOpen(true);
+        setCursor(0);
+      }
       return;
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setCursor(c => Math.min(c + 1, results.length - 1));
+      setCursor(c => Math.min(c + 1, menuItems.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setCursor(c => Math.max(c - 1, 0));
     } else if (e.key === "Enter") {
-      if (cursor >= 0 && results[cursor]) commit(results[cursor]);
-      else if (results.length === 1) commit(results[0]);
-    } else if (e.key === "Escape") {
-      setQuery(""); setOpen(false); setCursor(-1);
+      if (cursor >= 0 && menuItems[cursor]) commitItem(menuItems[cursor]);
+      else if (patientResults.length === 1) commitPatient(patientResults[0].patient);
     }
   };
 
@@ -186,14 +325,95 @@ function SearchBar({ patients = [], onSearch }) {
     info: "var(--info-500)",
   };
 
+  const getItemIndex = (item) => menuItems.indexOf(item);
+  const patientMeta = (p) => [p.queueNumber, p.mobile || p.phoneNumber, p.idNumber ? `VID ${p.idNumber}` : ""].filter(Boolean).join(" · ");
+  const renderPatientResult = (item, label) => {
+    const idx = getItemIndex(item);
+    const p = item.patient;
+    const tone = TONE_COLORS[p.status?.tone] || "var(--ink-500)";
+    return (
+      <button
+        type="button"
+        key={`${item.type}-${p.id}`}
+        className={"topbar-search-result" + (idx === cursor ? " hovered" : "")}
+        onClick={() => commitPatient(p)}
+        onMouseEnter={() => setCursor(idx)}
+        role="option"
+        aria-selected={idx === cursor}
+      >
+        <div className={"avatar av-sm " + (p.avatarColor || "av-blue")}>{p.initials || "P"}</div>
+        <div className="topbar-search-result-main">
+          <div className="topbar-search-result-name">
+            <span>{p.name || p.label || "Unnamed patient"}</span>
+            <span className="topbar-search-match">{label}</span>
+          </div>
+          <div className="topbar-search-result-meta">{patientMeta(p)}</div>
+        </div>
+        {p.status?.label && (
+          <span className="topbar-search-status" style={{ "--status-color": tone }}>
+            {p.status.label}
+          </span>
+        )}
+      </button>
+    );
+  };
+  const renderRecentQuery = (item) => {
+    const idx = getItemIndex(item);
+    return (
+      <button
+        type="button"
+        key={`query-${item.query}`}
+        className={"topbar-search-result topbar-search-recent-query" + (idx === cursor ? " hovered" : "")}
+        onClick={() => commitQuery(item.query)}
+        onMouseEnter={() => setCursor(idx)}
+        role="option"
+        aria-selected={idx === cursor}
+      >
+        <span className="topbar-search-mini-icon"><I.Clock size={13} /></span>
+        <span className="topbar-search-result-main">
+          <span className="topbar-search-result-name">{item.query}</span>
+          <span className="topbar-search-result-meta">Recent search</span>
+        </span>
+        <I.ChevronRight size={13} className="topbar-search-go" />
+      </button>
+    );
+  };
+  const renderNewWalkIn = (item) => {
+    const idx = getItemIndex(item);
+    return (
+      <button
+        type="button"
+        key="new-walk-in"
+        className={"topbar-search-result topbar-search-action" + (idx === cursor ? " hovered" : "")}
+        onClick={() => commitNewWalkIn(item.query)}
+        onMouseEnter={() => setCursor(idx)}
+        role="option"
+        aria-selected={idx === cursor}
+      >
+        <span className="topbar-search-action-icon"><I.Plus size={14} /></span>
+        <span className="topbar-search-result-main">
+          <span className="topbar-search-result-name">New walk-in</span>
+          <span className="topbar-search-result-meta">
+            {item.query ? `No match? Start intake for "${item.query}"` : "Create a new patient visit"}
+          </span>
+        </span>
+        <I.ArrowRight size={13} className="topbar-search-go" />
+      </button>
+    );
+  };
+
   return (
     <div className="search-wrap topbar-search-wrap" ref={wrapRef}>
-      <div className={"search" + (open && results.length > 0 ? " search-active" : "")}>
+      <div className={"search" + (dropdownOpen ? " search-active" : "")}>
         <I.Search size={15} style={{ color: "var(--ink-400)", flexShrink: 0 }} />
         <input
           ref={inputRef}
           value={query}
           placeholder={t("topbar.search")}
+          role="combobox"
+          aria-expanded={dropdownOpen}
+          aria-controls="topbar-search-dropdown"
+          aria-autocomplete="list"
           onChange={e => { setQuery(e.target.value); setOpen(true); setCursor(-1); }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKey}
@@ -203,7 +423,7 @@ function SearchBar({ patients = [], onSearch }) {
             type="button"
             aria-label="Clear patient search"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--ink-400)", display: "flex" }}
-            onClick={() => { setQuery(""); setOpen(false); inputRef.current?.focus(); }}
+            onClick={() => { setQuery(""); setOpen(true); setCursor(-1); inputRef.current?.focus(); }}
           >
             <I.X size={13} />
           </button>
@@ -212,40 +432,51 @@ function SearchBar({ patients = [], onSearch }) {
         )}
       </div>
 
-      {open && results.length > 0 && (
-        <div className="search-dropdown">
-          <div className="search-dropdown-label">Patients</div>
-          {results.map((p, i) => (
-            <button
-              type="button"
-              key={p.id}
-              className={"topbar-search-result" + (i === cursor ? " hovered" : "")}
-              onClick={() => commit(p)}
-              onMouseEnter={() => setCursor(i)}
-            >
-              <div className={"avatar av-sm " + p.avatarColor}>{p.initials}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-900)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                <div style={{ fontSize: 11.5, color: "var(--ink-500)" }}>{p.queueNumber} · {p.mobile}</div>
+      {dropdownOpen && (
+        <div id="topbar-search-dropdown" className="search-dropdown topbar-search-dropdown" role="listbox">
+          {hasQuery ? (
+            <>
+              {patientResults.length > 0 && (
+                <>
+                  <div className="search-dropdown-label">Patients</div>
+                  {resultItems.map(item => renderPatientResult(item, item.match?.label || "Match"))}
+                </>
+              )}
+              {patientResults.length === 0 && (
+                <div className="topbar-search-empty">
+                  <I.Search size={15} />
+                  <span>No patient found for <strong>{trimmedQuery}</strong></span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="search-dropdown-label topbar-search-label-row">
+                <span>Recent searches</span>
+                {recentItems.length > 0 && (
+                  <button type="button" className="topbar-search-clear-recents" onClick={clearRecents}>
+                    Clear
+                  </button>
+                )}
               </div>
-              <span style={{
-                fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 5,
-                background: `color-mix(in srgb, ${TONE_COLORS[p.status.tone]} 12%, transparent)`,
-                color: TONE_COLORS[p.status.tone],
-                whiteSpace: "nowrap",
-              }}>
-                {p.status.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {open && query.trim().length >= 1 && results.length === 0 && (
-        <div className="search-dropdown">
-          <div style={{ padding: "16px 14px", color: "var(--ink-400)", fontSize: 13, textAlign: "center" }}>
-            No patients found for "<strong style={{ color: "var(--ink-600)" }}>{query}</strong>"
-          </div>
+              {recentItems.length > 0 ? (
+                resultItems.map(item => item.type === "recentPatient"
+                  ? renderPatientResult(item, "Recent")
+                  : renderRecentQuery(item))
+              ) : (
+                <div className="topbar-search-empty topbar-search-empty-compact">
+                  <I.Clock size={14} />
+                  <span>No recent searches yet</span>
+                </div>
+              )}
+            </>
+          )}
+          {actionItems.length > 0 && (
+            <>
+              <div className="search-dropdown-label">Quick action</div>
+              {actionItems.map(renderNewWalkIn)}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -337,68 +568,59 @@ export function Topbar({
         </div>
       </div>
 
-      <SearchBar patients={patients} onSearch={onSearch} />
+      <SearchBar patients={patients} onSearch={onSearch} onNewWalkIn={onNewWalkIn} />
 
-      <div className="dropdown-anchor">
+      <div className="topbar-actions">
+        <div className="dropdown-anchor">
+          <button
+            className="icon-btn"
+            onClick={(e) => { e.stopPropagation(); closeAll("notif"); setNotifOpen(o => !o); }}
+          >
+            <I.Bell size={16} />
+            {notifications > 0 && <span className="badge">{notifications}</span>}
+          </button>
+          <NotificationsPanel
+            open={notifOpen}
+            onClose={() => setNotifOpen(false)}
+            items={notifs}
+            onMarkAllRead={onMarkAllRead}
+            onItemAction={(n) => { onNotifAction(n); setNotifOpen(false); }}
+            onItemClick={(n) => { onNotifClick(n); setNotifOpen(false); }}
+          />
+        </div>
+
+        <div className="dropdown-anchor">
+          <button
+            className="user-chip"
+            onClick={(e) => { e.stopPropagation(); closeAll("user"); setUserOpen(o => !o); }}
+          >
+            <div className="avatar av-purple">LN</div>
+            <div className="meta">
+              <strong>Linh Nguyen</strong>
+              <div>Receptionist</div>
+            </div>
+          </button>
+          <UserMenu
+            open={userOpen}
+            onClose={() => setUserOpen(false)}
+            onAction={onUserAction}
+            name="Linh Nguyen"
+            role="Receptionist"
+          />
+        </div>
+
         <button
-          className="icon-btn"
-          onClick={(e) => { e.stopPropagation(); closeAll("notif"); setNotifOpen(o => !o); }}
+          className="btn btn-secondary topbar-walkin-btn"
+          onClick={onNewWalkIn}
+          aria-label={t("topbar.newWalkin")}
+          aria-keyshortcuts="Control+N Meta+N"
+          title={`${t("topbar.newWalkin")} · Ctrl+N`}
         >
-          <I.Bell size={16} />
-          {notifications > 0 && <span className="badge">{notifications}</span>}
+          <I.Plus size={16} />
+          <span className="topbar-walkin-label">{t("topbar.newWalkin")}</span>
+          <span className="topbar-walkin-kbd" aria-hidden="true">Ctrl+N</span>
         </button>
-        <NotificationsPanel
-          open={notifOpen}
-          onClose={() => setNotifOpen(false)}
-          items={notifs}
-          onMarkAllRead={onMarkAllRead}
-          onItemAction={(n) => { onNotifAction(n); setNotifOpen(false); }}
-          onItemClick={(n) => { onNotifClick(n); setNotifOpen(false); }}
-        />
       </div>
-
-      <div className="dropdown-anchor">
-        <button
-          className="user-chip"
-          onClick={(e) => { e.stopPropagation(); closeAll("user"); setUserOpen(o => !o); }}
-        >
-          <div className="avatar av-purple">LN</div>
-          <div className="meta">
-            <strong>Linh Nguyen</strong>
-            <div>Receptionist</div>
-          </div>
-        </button>
-        <UserMenu
-          open={userOpen}
-          onClose={() => setUserOpen(false)}
-          onAction={onUserAction}
-          name="Linh Nguyen"
-          role="Receptionist"
-        />
-      </div>
-
-      <button className="btn btn-primary topbar-walkin-btn" onClick={onNewWalkIn} aria-label={t("topbar.newWalkin")}>
-        <I.Plus size={16} /> <span className="topbar-walkin-label">{t("topbar.newWalkin")}</span>
-      </button>
     </header>
-  );
-}
-
-export function GoalBar({ onLearnMore }) {
-  const t = useLang();
-  return (
-    <div className="goal-bar">
-      <div className="goal-icon"><I.Target size={18} /></div>
-      <div>
-        <strong>{t("goal.label")}</strong> {t("goal.text")}
-      </div>
-      <button
-        className="learn"
-        onClick={onLearnMore}
-        style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit", padding: 0, display: "inline-flex", alignItems: "center", gap: 4 }}
-      >
-        {t("goal.learnMore")} <I.ChevronRight size={14} />
-      </button>
-    </div>
   );
 }

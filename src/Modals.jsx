@@ -1,124 +1,8 @@
 // === Modals + Toasts ===
 import React, { useState, useEffect, useRef } from "react";
 import { I } from "./icons";
-import { CountryCodeSelect, VisitReasonPills, VISIT_REASONS, Kbd, MOD_LABEL } from "./shared";
-import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
-import { DateInput } from "./DateInput";
-
-export function NewWalkInModal({ open, onClose, onCreate }) {
-  const t = useLang();
-  const blank = { name: "", countryCode: "+855", phoneNumber: "", dob: "", visitReason: [], language: "Khmer", sexAtBirth: "" };
-  const [form, setForm] = useState(blank);
-  const [errors, setErrors] = useState({});
-  useEffect(() => { if (open) { setForm(blank); setErrors({}); } }, [open]);
-  if (!open) return null;
-  const phoneEmpty = !form.phoneNumber || form.phoneNumber.trim().length < 6;
-  const submit = () => {
-    const e = {};
-    if (!form.name) e.name = t("err.required");
-    if (phoneEmpty) e.phone = t("err.invalidPhone");
-    if (!form.dob) e.dob = t("err.required");
-    if (!form.sexAtBirth) e.sex = t("err.required");
-    if (!form.visitReason || form.visitReason.length === 0) e.visitReason = t("err.selectOne");
-    setErrors(e);
-    if (Object.keys(e).length === 0) onCreate(form);
-  };
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-head">
-          <div className="between">
-            <div>
-              <h2>{t("modal.newWalkin.title")}</h2>
-              <p>{t("modal.newWalkin.sub")}</p>
-            </div>
-            <button className="icon-btn" onClick={onClose} style={{ width: 30, height: 30 }}><I.X size={14} /></button>
-          </div>
-        </div>
-        <div className="modal-body">
-          <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <div className="field">
-              <label className="label">{t("checkin.fullName")} <span className="req">*</span></label>
-              <input className={"input" + (errors.name ? " invalid" : "")} value={form.name} onChange={e => set("name", e.target.value)} placeholder={t("checkin.fullName.placeholder")} />
-              {errors.name && <div className="help error">{errors.name}</div>}
-            </div>
-            <div className="field">
-              <label className="label">{t("checkin.mobile")} <span className="req">*</span></label>
-              <div style={{ display: "flex" }}>
-                <CountryCodeSelect value={form.countryCode} onChange={v => set("countryCode", v)} />
-                <input
-                  className={"input" + (errors.phone ? " invalid" : "")}
-                  value={form.phoneNumber}
-                  onChange={e => set("phoneNumber", e.target.value.replace(/[^\d\s]/g, ""))}
-                  placeholder="12 345 678"
-                  style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, flex: 1 }}
-                />
-              </div>
-              {errors.phone && <div className="help error">{errors.phone}</div>}
-            </div>
-          </div>
-          <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <div className="field">
-              <label className="label">{t("checkin.dob")} <span className="req">*</span></label>
-              <div className="input-wrap">
-                <DateInput
-                  className={"input" + (errors.dob ? " invalid" : "")}
-                  value={form.dob}
-                  onChange={(v) => set("dob", v)}
-                  format={t("checkin.dob.placeholder")}
-                  padRight={32}
-                  style={{ paddingRight: 32 }}
-                />
-                <I.Calendar size={16} className="rico" />
-              </div>
-              {errors.dob && <div className="help error">{errors.dob}</div>}
-            </div>
-            <div className="field">
-              <label className="label">{t("checkin.sexAtBirth")} <span className="req">*</span></label>
-              <div className="input-wrap">
-                <select className={"select" + (errors.sex ? " invalid" : "")} value={form.sexAtBirth} onChange={e => set("sexAtBirth", e.target.value)} style={{ paddingRight: 32, appearance: "none" }}>
-                  <option value="">{t("checkin.sex.select")}</option>
-                  <option>Female</option><option>Male</option><option>Intersex</option><option>Prefer not to say</option>
-                </select>
-                <I.ChevronDown size={14} className="rico" />
-              </div>
-              {errors.sex && <div className="help error">{errors.sex}</div>}
-            </div>
-          </div>
-          <div className="field-row" style={{ gridTemplateColumns: "1fr", marginBottom: 14 }}>
-            <div className="field">
-              <label className="label">{t("checkin.visitReason")} <span className="req">*</span></label>
-              <VisitReasonPills
-                value={form.visitReason}
-                onChange={v => set("visitReason", v)}
-                options={VISIT_REASON_KEYS.map((key, i) => ({ value: VISIT_REASONS[i], label: t(key), popular: VISIT_REASON_POPULAR.has(key) }))}
-                placeholder={t("checkin.visitReason.placeholder")}
-                invalid={!!errors.visitReason}
-              />
-              {errors.visitReason && <div className="help error">{errors.visitReason}</div>}
-            </div>
-          </div>
-          <div className="field" style={{ marginBottom: 8 }}>
-            <label className="label">{t("checkin.language")}</label>
-            <div className="input-wrap">
-              <select className="select" value={form.language} onChange={e => set("language", e.target.value)} style={{ paddingRight: 32, appearance: "none" }}>
-                <option>Khmer</option><option>English</option><option>Vietnamese</option><option>Thai</option><option>French</option><option>Korean</option>
-              </select>
-              <I.ChevronDown size={14} className="rico" />
-            </div>
-          </div>
-        </div>
-        <div className="modal-foot">
-          <button className="btn btn-ghost" onClick={onClose}>{t("modal.cancel")}</button>
-          <button className="btn btn-primary" onClick={submit} disabled={phoneEmpty} title={phoneEmpty ? t("checkin.phoneRequired") : ""}>
-            <I.Send size={15} /> {t("modal.newWalkin.cta")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { Kbd, MOD_LABEL } from "./shared";
+import { useLang } from "./i18n";
 
 export function AddServiceModal({ open, onClose, onAdd }) {
   const t = useLang();
@@ -264,6 +148,7 @@ export function HotkeyCheatsheetModal({ open, onClose }) {
           <Row keys={["T"]} label={t("hotkey.action.openAdd")} />
           <Row keys={["Alt", "+", "T"]} label={t("hotkey.action.openAddAlt")} />
           <Row keys={[MOD_LABEL, "+", "K"]} label={t("hotkey.action.focusSearch")} />
+          <Row keys={["Ctrl", "+", "N"]} label={t("hotkey.action.newWalkin")} />
           <Row keys={["?"]} label={t("hotkey.action.cheatsheet")} />
           <Row keys={["Esc"]} label={t("hotkey.action.closeModal")} />
 

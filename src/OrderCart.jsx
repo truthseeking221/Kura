@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
 import { QRGlyph, mockInsurerDecide, playDrawerDing, DisabledTooltip, TatCompact } from "./shared";
 import { useLang } from "./i18n";
+import { ORDER_CATALOG } from "./orderCatalog";
 
 const KHR_RATE = 4100;
 const fmtCcy = (usd, ccy) => ccy === "KHR" ? "៛" + Math.round(usd * KHR_RATE).toLocaleString() : "$" + usd.toFixed(2);
@@ -64,48 +65,7 @@ function confirmedPayment(cart, method, amount, ccy, extra = {}) {
 }
 
 // === Master order catalogue ===
-export const ORDER_CATALOG = [
-  { id: "visit-gp",     kind: "visit",   name: "GP consultation (visit fee)",  price: 15, popular: true },
-  { id: "visit-spec",   kind: "visit",   name: "Specialist consultation",      price: 35 },
-  { id: "cbc",          kind: "lab",     name: "Complete Blood Count (CBC)",   price: 8,  popular: true },
-  { id: "glucose",      kind: "lab",     name: "Blood Glucose (Fasting)",      price: 5,  popular: true, fasting: true },
-  { id: "lipid",        kind: "lab",     name: "Lipid Panel",                  price: 12, popular: true, fasting: true, alcohol: true },
-  { id: "tsh",          kind: "lab",     name: "TSH (Thyroid)",                price: 14, popular: true },
-  { id: "hba1c",        kind: "lab",     name: "HbA1c (Diabetes)",             price: 11, drugs: true },
-  { id: "urinalysis",   kind: "lab",     name: "Urinalysis",                   price: 6,  popular: true },
-  { id: "preg",         kind: "lab",     name: "Pregnancy (β-hCG)",            price: 7,  popular: true },
-  { id: "lft",          kind: "lab",     name: "Liver Function (LFT)",         price: 13, alcohol: true, drugs: true },
-  { id: "kft",          kind: "lab",     name: "Kidney Function (KFT)",        price: 13, drugs: true },
-  { id: "electro",      kind: "lab",     name: "Electrolytes Panel",           price: 9 },
-  { id: "esr",          kind: "lab",     name: "ESR (Sed Rate)",               price: 5 },
-  { id: "ferritin",     kind: "lab",     name: "Ferritin",                     price: 9 },
-  { id: "ptinr",        kind: "lab",     name: "PT / INR",                     price: 8 },
-  { id: "covid",        kind: "lab",     name: "COVID-19 PCR",                 price: 18, vaccine: true },
-  { id: "stool",        kind: "lab",     name: "Stool Culture",                price: 11 },
-  { id: "vit-d",        kind: "lab",     name: "Vitamin D",                    price: 25, fasting: true },
-  { id: "vit-b12",      kind: "lab",     name: "Vitamin B12",                  price: 18 },
-  { id: "xray-chest",   kind: "imaging", name: "X-ray — Chest",                price: 15, popular: true },
-  { id: "xray-lumbar",  kind: "imaging", name: "X-ray — Lumbar spine",         price: 18 },
-  { id: "xray-knee",    kind: "imaging", name: "X-ray — Knee",                 price: 16 },
-  { id: "us-abd",       kind: "imaging", name: "Ultrasound — Abdomen",         price: 35 },
-  { id: "us-thyroid",   kind: "imaging", name: "Ultrasound — Thyroid",         price: 30 },
-  { id: "us-preg",      kind: "imaging", name: "Ultrasound — OB / Pregnancy",  price: 40 },
-  { id: "ct-head",      kind: "imaging", name: "CT scan — Head",               price: 90 },
-  { id: "mri-knee",     kind: "imaging", name: "MRI — Knee",                   price: 180 },
-  { id: "ecg-12",       kind: "ecg",     name: "ECG — 12 lead",                price: 22, popular: true },
-  { id: "ecg-stress",   kind: "ecg",     name: "Stress test (Treadmill ECG)",  price: 65 },
-  { id: "ecg-holter",   kind: "ecg",     name: "Holter monitor (24h)",         price: 75 },
-  { id: "echo",         kind: "ecg",     name: "Echocardiogram",               price: 60 },
-  { id: "vit-bp",       kind: "vitals",  name: "Blood pressure",               price: 0,  popular: true },
-  { id: "vit-bmi",      kind: "vitals",  name: "Height / weight / BMI",        price: 0 },
-  { id: "vit-spo2",     kind: "vitals",  name: "SpO₂ (oxygen saturation)",     price: 0 },
-  { id: "vit-temp",     kind: "vitals",  name: "Temperature",                  price: 0 },
-  { id: "vit-vision",   kind: "vitals",  name: "Vision test (Snellen)",        price: 3 },
-  { id: "vit-audio",    kind: "vitals",  name: "Hearing screen",               price: 5 },
-  { id: "tele-gp",      kind: "telecon", name: "Telecon — GP follow-up (15m)", price: 12 },
-  { id: "tele-spec",    kind: "telecon", name: "Telecon — Specialist (30m)",   price: 30 },
-  { id: "tele-mh",      kind: "telecon", name: "Telecon — Mental health (45m)",price: 35 },
-];
+export { ORDER_CATALOG };
 
 function KindGlyph({ kind, size = 14, strokeWidth = 1.75 }) {
   const common = {
@@ -531,6 +491,137 @@ function BillSplitModal({ open, cart, onClose, onSave }) {
 }
 
 // === Pregnancy Consent Modal ===
+// Spec v12 §1 — Verbal consent fallback for sensitive tests
+//   Used when the patient has no phone or refuses the digital consent flow.
+//   Sensitive tests (HIV, STI, genetic, pregnancy) require a supervisor PIN
+//   because verbal consent is more abusable than digital — the PIN means
+//   another staff member witnessed it, with audit trail.
+//
+//   Non-sensitive items (e.g. plain imaging) skip the PIN gate.
+//
+function VerbalConsentModal({ open, item, isSensitive, onConfirm, onCancel }) {
+  const [nurseName, setNurseName] = useState("");
+  const [pin, setPin] = useState("");
+  const [pregAnswer, setPregAnswer] = useState(null);
+  useEffect(() => {
+    if (open) { setNurseName(""); setPin(""); setPregAnswer(null); }
+  }, [open]);
+  if (!open || !item) return null;
+  const askPregnancy = item.kind === "imaging" || item.id === "preg-bhcg";
+  const pinOk = !isSensitive || pin.length >= 4;
+  const pregOk = !askPregnancy || pregAnswer !== null;
+  const canConfirm = nurseName.trim().length > 1 && pinOk && pregOk;
+  const submit = () => {
+    if (!canConfirm) return;
+    onConfirm({
+      consent: "verbal",
+      sensitive: isSensitive,
+      by: nurseName.trim(),
+      supervisorPin: isSensitive ? pin : null,
+      pregnancyAnswer: askPregnancy ? pregAnswer : undefined,
+      at: new Date().toISOString(),
+    });
+  };
+  return (
+    <div className="modal-overlay" onClick={onCancel} role="presentation">
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 520, padding: 0 }} role="dialog" aria-modal="true">
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-50)", color: "var(--brand-600)", display: "grid", placeItems: "center" }}>
+            <I.MessageSquare size={17} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Verbal consent — {item.name}</h3>
+            <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>
+              Use only when the patient has no phone or refuses the digital consent flow.
+            </div>
+          </div>
+          <button onClick={onCancel} className="icon-btn"><I.X size={16} /></button>
+        </div>
+        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-700)" }}>
+            Confirm the following was asked and answered verbally with the patient.
+          </p>
+
+          {askPregnancy && (
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-900)", marginBottom: 8 }}>
+                Is there any chance the patient could be pregnant?
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                {[
+                  { v: "no", label: "Not pregnant" },
+                  { v: "yes", label: "Possibly pregnant" },
+                  { v: "declined", label: "Declined to answer" },
+                ].map(o => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setPregAnswer(o.v)}
+                    style={{
+                      padding: "8px",
+                      border: "1.5px solid " + (pregAnswer === o.v ? "var(--brand-500)" : "var(--border-strong)"),
+                      borderRadius: 6,
+                      background: pregAnswer === o.v ? "var(--brand-50)" : "var(--surface)",
+                      color: pregAnswer === o.v ? "var(--brand-700)" : "var(--ink-700)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label className="label">Confirmed by (nurse name) <span className="req">*</span></label>
+            <input
+              className="input"
+              value={nurseName}
+              onChange={e => setNurseName(e.target.value)}
+              placeholder="e.g. Linh Nguyen"
+              autoFocus
+              style={{ height: 32, fontSize: 12.5 }}
+            />
+          </div>
+
+          {isSensitive && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">
+                Supervisor witness PIN <span className="req">*</span>
+                <span style={{ marginLeft: 6, fontSize: 10.5, color: "var(--warn-600)", fontWeight: 600 }}>
+                  required for sensitive tests
+                </span>
+              </label>
+              <input
+                className="input"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
+                style={{ height: 32, fontSize: 14, fontFamily: "'SF Mono', ui-monospace, monospace", letterSpacing: "0.3em", textAlign: "center", maxWidth: 160 }}
+              />
+              <div className="help" style={{ fontSize: 10.5, color: "var(--ink-500)", marginTop: 4 }}>
+                Override is logged with timestamp + nurse + supervisor IDs.
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 8, background: "var(--surface-2)" }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit} disabled={!canConfirm}>
+            <I.Check size={13} /> Save verbal consent
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCancel }) {
   const t = useLang();
   const [answer, setAnswer] = useState(null);
@@ -651,6 +742,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
   const requiresValidation = item.kind === "imaging";
   const validationState = item.validationState || "idle"; // idle | sending | sent | signed
+  const lockedAutoItem = item.auto && item.kind === "visit";
   const showPolicyNote = item.payer === "insurance" && policyDecision && policyDecision.status !== "covered";
   const [openExpand, setOpenExpand] = useState(null); // null | "validation" | "policy"
 
@@ -706,9 +798,9 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
         <button
           type="button"
           onClick={onRemove}
-          disabled={item.auto}
-          className={"cart-line-remove" + (item.auto ? " disabled" : "")}
-          title={item.auto ? t("cart.autoVisitFee") : t("cart.remove")}
+          disabled={lockedAutoItem}
+          className={"cart-line-remove" + (lockedAutoItem ? " disabled" : "")}
+          title={lockedAutoItem ? t("cart.autoVisitFee") : t("cart.remove")}
         >
           <I.X size={10} strokeWidth={2.5} />
         </button>
@@ -716,16 +808,33 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
       {openExpand === "validation" && (
         <div className="cart-line-expand">
           {validationState === "idle" ? (
-            <button
-              type="button"
-              onClick={onSendValidation}
-              className="cart-line-action"
-            >
-              <I.Smartphone size={10} /> {t("validate.sendPhone")}
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={onSendValidation}
+                className="cart-line-action"
+              >
+                <I.Smartphone size={10} /> {t("validate.sendPhone")}
+              </button>
+              {/* Spec v12 §1 — Verbal consent fallback for no-phone patients */}
+              {item.onVerbalConsent && (
+                <button
+                  type="button"
+                  onClick={item.onVerbalConsent}
+                  className="cart-line-action"
+                  style={{ borderColor: "var(--warn-200, #fed7aa)", color: "var(--warn-700, #b45309)" }}
+                >
+                  <I.MessageSquare size={10} /> Capture verbal consent
+                </button>
+              )}
+            </div>
           ) : validationState === "sent" ? (
             <span className="cart-line-action-info">
               <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1 }} /> {t("validate.sent")}
+            </span>
+          ) : validationState === "verbal" ? (
+            <span className="cart-line-action-info" style={{ color: "var(--ink-700)" }}>
+              <I.MessageSquare size={10} /> Verbal consent · {item.consentBy || "nurse"} · {item.consentAt?.slice(11, 16) || ""}
             </span>
           ) : (
             <span className="cart-line-action-info success">
@@ -1046,6 +1155,10 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const [tendered, setTendered] = useState(cart.payment.tendered || "");
   const [pregOpen, setPregOpen] = useState(false);
   const [pendingPregItems, setPendingPregItems] = useState(null);
+  // Spec v12 §1 — verbal consent fallback. The state machine is per-item:
+  // open the modal for a specific cart line; on save, mark validation
+  // "verbal" and store who captured it for the audit trail.
+  const [verbalForItemId, setVerbalForItemId] = useState(null);
   // Round 12 #1 — collapse state per kind. Resets on reload (no persistence by design).
   const [collapsedKinds, setCollapsedKinds] = useState(() => new Set());
   const [billExpanded, setBillExpanded] = useState(false);
@@ -1067,9 +1180,10 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const guardPaidCartEdit = (description, buildNext) => {
     if (isPaid && requestPaidEdit) {
       requestPaidEdit(description, (mode) => setCart(buildNext(mode)));
-      return;
+      return { deferred: true };
     }
     setCart(buildNext("normal"));
+    return { deferred: false };
   };
 
   const PREG_GATE_KINDS = new Set(["imaging"]);
@@ -1097,32 +1211,21 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   };
 
   // === Clear all — drops every removable item (auto items like the visit fee stay).
-  //   Two-click confirm: first click arms it, second click commits. Esc disarms.
-  const [clearArmed, setClearArmed] = useState(false);
-  const clearArmTimer = useRef(0);
-  const removableCount = cart.items.filter(i => !i.auto).length;
+  const removableCount = cart.items.filter(i => !(i.auto && i.kind === "visit")).length;
   const handleClearAll = () => {
-    if (!clearArmed) {
-      setClearArmed(true);
-      window.clearTimeout(clearArmTimer.current);
-      clearArmTimer.current = window.setTimeout(() => setClearArmed(false), 3500);
-      return;
-    }
-    window.clearTimeout(clearArmTimer.current);
-    setClearArmed(false);
-    guardPaidCartEdit(`Clear ${removableCount} order${removableCount === 1 ? "" : "s"} from a paid visit?`, (mode) => ({
+    if (removableCount === 0) return;
+    const previousCart = cart;
+    const result = guardPaidCartEdit(`Clear ${removableCount} order${removableCount === 1 ? "" : "s"} from a paid visit?`, (mode) => ({
       ...cart,
-      items: cart.items.filter(i => i.auto),
+      items: cart.items.filter(i => i.auto && i.kind === "visit"),
       payment: paymentAfterPaidEdit(cart.payment, mode),
     }));
-    onPushToast?.(t("cart.clear.toast", { n: removableCount }), "success");
+    if (result?.deferred) return;
+    onPushToast?.(t("cart.clear.toast", { n: removableCount }), "success", {
+      actionLabel: "Undo",
+      onAction: () => setCart(previousCart),
+    });
   };
-  useEffect(() => {
-    if (!clearArmed) return;
-    const onKey = (e) => { if (e.key === "Escape") setClearArmed(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [clearArmed]);
 
   // === Patient-side validation for imaging (chain of custody) ===
   const sendValidation = (id) => {
@@ -1148,6 +1251,26 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     }, 1800);
   };
 
+  // Spec v12 §1 — Verbal consent fallback. Records the consent without
+  // exposing the pregnancy answer to the nurse for sensitive items (the
+  // answer goes to the physician via the audit log, not the cart UI).
+  const SENSITIVE_KINDS = ["imaging"];
+  const SENSITIVE_IDS = ["preg-bhcg", "hiv-test", "sti-panel", "genetic-panel"];
+  const isItemSensitive = (item) => !!item && (
+    SENSITIVE_IDS.includes(item.id) || (SENSITIVE_KINDS.includes(item.kind) && (patient.sexAtBirth === "Female"))
+  );
+  const verbalItem = useMemo(() => cart.items.find(i => i.id === verbalForItemId) || null, [cart.items, verbalForItemId]);
+  const saveVerbalConsent = (record) => {
+    setCart({
+      ...cart,
+      items: cart.items.map(i => i.id === verbalForItemId
+        ? { ...i, validationState: "verbal", consentBy: record.by, consentAt: record.at, supervisorOverride: record.supervisorPin ? true : undefined }
+        : i),
+    });
+    setVerbalForItemId(null);
+    onPushToast?.(`Verbal consent recorded · ${record.by}`, "success");
+  };
+
   // === Mock insurer API decisions for insurance-paid items ===
   const insItems = cart.items.filter(i => i.payer === "insurance");
   const policyDecisions = useMemo(() => {
@@ -1157,7 +1280,11 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   }, [insItems.map(i => i.id).join("|")]);
 
   // Pending validations gate
-  const pendingValidations = cart.items.filter(i => i.kind === "imaging" && (i.validationState || "idle") !== "signed");
+  const validationResolved = (item) => {
+    const state = item.validationState || "idle";
+    return state === "signed" || state === "verbal";
+  };
+  const pendingValidations = cart.items.filter(i => i.kind === "imaging" && !validationResolved(i));
 
   const applyPromo = () => {
     const code = promoInput.trim().toUpperCase();
@@ -1196,6 +1323,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const setMethod = (m) => setCart({ ...cart, payment: { ...cart.payment, method: m, status: m === "khqr" ? "waiting" : "idle" } });
 
   const paymentDue = paymentDueAmount(cart, totals);
+  const isNoCharge = itemCount > 0 && paymentDue <= 0;
   const tenderedNum = parseFloat(tendered) || 0;
   const change = tenderedNum - paymentDue;
   const cashOk = tenderedNum >= paymentDue && paymentDue > 0;
@@ -1245,44 +1373,49 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     amount: s.sub,
   }));
 
-  // === Primary CTA (Round 14 — Take payment vs Check in split) ===
-  //   Before payment confirmed → "Take payment" CTA (focuses payment area on
-  //   mobile where it's offscreen below).
-  //   After payment confirmed   → "Check in patient" CTA (calls onCheckIn).
-  //   Splitting these two avoids the prior "Check in & confirm order" label
-  //   which mis-implied a nurse could check in before paying.
-  //   Verification (mobile OTP or Telegram) is REQUIRED for both states.
+  // === Primary CTA (Spec v12 §Order Cart) ===
+  //   Single CTA: "Check in & confirm order".
+  //   Strict gate (no bypass, no override) per spec:
+  //     ≥1 cart item · full name · DOB · sex at birth · ≥1 verified contact.
+  //   Payment is NOT a gating condition — it lives in Step 6 and can complete
+  //   before or after check-in (e.g., insurance billing).
   const hasName = !!patient.name;
   const hasDob  = !!patient.dob;
+  const hasSex  = !!patient.sexAtBirth;
   const isVerified = !!(patient.otpVerified || patient.telegramVerified);
   const hasPendingValidations = pendingValidations.length > 0;
-  const ctaDisabled = !(hasName && hasDob && isVerified && payerReady) || hasPendingValidations;
+  const teleInCart = cart.items.some(i => i.kind === "telecon" || i.id === "telecon");
+  const tele = patient.teleconsult || {};
+  const hasTeleconsultBlocker = teleInCart && !tele.booked && !tele.skipped;
+  const ctaDisabled = !(hasName && hasDob && hasSex && isVerified) || hasPendingValidations || hasTeleconsultBlocker;
   const isPaymentWaiting = cart.payment.status === "waiting";
   // Build the precise list of what's missing — feeds the disabled tooltip.
   const ctaReasons = [];
-  if (!isVerified) ctaReasons.push(t("disabled.checkin.contact"));
-  if (!hasDob)     ctaReasons.push(t("disabled.checkin.dob"));
   if (!hasName)    ctaReasons.push(t("disabled.checkin.name"));
-  if (!payerReady)  ctaReasons.push(t("disabled.checkin.payer"));
+  if (!hasDob)     ctaReasons.push(t("disabled.checkin.dob"));
+  if (!hasSex)     ctaReasons.push("Sex at birth required");
+  if (!isVerified) ctaReasons.push(t("disabled.checkin.contact"));
   if (hasPendingValidations) ctaReasons.push(t("disabled.checkin.validation"));
+  if (hasTeleconsultBlocker) ctaReasons.push("Book or skip teleconsult");
   const mobileBlockers = [];
   if (!hasName || !hasDob) mobileBlockers.push("Complete identity");
   if (!isVerified) mobileBlockers.push("Verify contact");
   if (!payerReady) mobileBlockers.push("Choose payer");
+  if (hasTeleconsultBlocker) mobileBlockers.push("Resolve teleconsult");
   if (hasPendingValidations) {
     mobileBlockers.push(`Complete consent${pendingValidations.length > 1 ? ` (${pendingValidations.length})` : ""}`);
   }
   const mobileSummaryTone =
     itemCount === 0 ? "empty" :
     isCheckedIn ? "done" :
-    isPaid ? (ctaDisabled ? "blocked" : "paid") :
+    (isPaid || isNoCharge) ? (ctaDisabled ? "blocked" : "paid") :
     isPaymentWaiting ? "waiting" :
     ctaDisabled ? "blocked" :
     "ready";
   const mobileSummaryTitle =
     itemCount === 0 ? "Add orders" :
     isCheckedIn ? "Checked in" :
-    isPaid ? (ctaDisabled ? "Resolve check-in" : "Ready to check in") :
+    (isPaid || isNoCharge) ? (ctaDisabled ? "Resolve check-in" : "Ready to check in") :
     isPaymentWaiting ? "Payment in progress" :
     ctaDisabled ? "Resolve blockers" :
     "Ready to pay";
@@ -1319,14 +1452,12 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               {removableCount > 0 && (
                 <button
                   type="button"
-                  className={"cart-hd2-clear" + (clearArmed ? " is-armed" : "")}
+                  className="cart-hd2-clear"
                   onClick={handleClearAll}
-                  onBlur={() => clearArmed && setClearArmed(false)}
-                  title={clearArmed ? t("cart.clear.armed.title") : t("cart.clear.title")}
+                  title={t("cart.clear.title")}
+                  aria-label={t("cart.clear.title")}
                 >
-                  {clearArmed
-                    ? <><I.AlertCircle size={10} /> {t("cart.clear.armed")}</>
-                    : <><I.Trash size={10} /> {t("cart.clear")}</>}
+                  <I.Trash size={10} /> {t("cart.clear")}
                 </button>
               )}
             </div>
@@ -1343,6 +1474,53 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               </div>
             )}
           </div>
+
+          {/* Spec v12 §Step 4 — Patient context strip
+             Surfaces chief complaint + medical history / medication chips at
+             the top of the cart so the nurse always has clinical context for
+             the order they're building. Only renders when there is real
+             context to show. */}
+          {(patient.visitDetails?.chiefComplaint || patient.visitDetails?.medicalHistory || patient.visitDetails?.medications) && (
+            <div className="cart-context">
+              {patient.visitDetails?.chiefComplaint && (
+                <div className="cart-context-row">
+                  <span
+                    className="cart-context-icon-tip"
+                    data-tip="Chief complaint"
+                    role="img"
+                    aria-label="Chief complaint"
+                    tabIndex={0}
+                  >
+                    <I.Stethoscope size={11} />
+                  </span>
+                  <span className="cart-context-text" title={patient.visitDetails.chiefComplaint}>
+                    "{patient.visitDetails.chiefComplaint}"
+                  </span>
+                </div>
+              )}
+              {(patient.visitDetails?.medicalHistory || patient.visitDetails?.medications) && (
+                <div className="cart-context-row">
+                  <span
+                    className="cart-context-icon-tip"
+                    data-tip="History and medications"
+                    role="img"
+                    aria-label="History and medications"
+                    tabIndex={0}
+                  >
+                    <I.Tablet size={11} />
+                  </span>
+                  <div className="cart-context-chips">
+                    {(patient.visitDetails.medicalHistory || "").split(/[,;]+/).map(s => s.trim()).filter(Boolean).slice(0, 4).map((c, i) => (
+                      <span key={"h" + i} className="cart-context-chip">{c}</span>
+                    ))}
+                    {(patient.visitDetails.medications || "").split(/[,;]+/).map(s => s.trim()).filter(Boolean).slice(0, 3).map((c, i) => (
+                      <span key={"m" + i} className="cart-context-chip cart-context-chip-rx">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Items */}
           <div className="cart-items-scroll">
@@ -1390,7 +1568,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                       {items.map((item, idx) => (
                         <CartLine
                           key={item.id}
-                          item={item}
+                          item={{ ...item, onVerbalConsent: () => setVerbalForItemId(item.id) }}
                           isLast={idx === items.length - 1}
                           ccy={cart.ccy || "USD"}
                           onRemove={() => removeItem(item.id)}
@@ -1571,74 +1749,36 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             </div>
           )}
 
-          {/* Cart owns payment for the whole flow — there's no separate Step 5 panel. */}
-          <PaymentArea
-            cart={cart}
-            totals={totals}
-            tendered={tendered}
-            setTendered={setTendered}
-            onMethod={setMethod}
-            onCcyToggle={setCcy}
-            onConfirmCash={confirmCash}
-            onConfirmKhqr={confirmKhqr}
-            change={change}
-            cashOk={cashOk}
-            tenderedNum={tenderedNum}
-            itemCount={itemCount}
-            t={t}
-            paymentReady={!ctaDisabled}
-            paymentReasons={ctaReasons}
-          />
+          {/* Spec v12: payment moved out of the cart into Step 6.
+             The cart only renders PaymentArea when the wizard is on Step 6
+             AND the cart is mounted as the desktop sticky rail (not the
+             mobile sheet — mobile sheet has its own Pay tab that mounts
+             Step6Payment directly). For now Step 6 owns its own payment
+             surface, so the cart never mounts PaymentArea. */}
           </>)}
 
-          {/* Primary CTA — split into two semantic actions, mutually exclusive:
-             Pre-payment → "Take payment" disabled hint or scrolls payment area into view
-             Post-payment → "Check in patient" actually performs the check-in
-             Empty cart → no CTA shown (would be a misleading dead button).
-             KHQR waiting → "Waiting for payment…" disabled. */}
-          {itemCount > 0 && !isPaid && (
+          {/* Spec v12 §Order Cart — single "Check in & confirm order" CTA.
+             Strict gate (no bypass): items + name + dob + sex + verified contact.
+             Payment is in Step 6 and does NOT gate this CTA. The CTA shows a
+             "still pending" pill for payment once payment is in scope, plus
+             teleconsult / consent blockers so the nurse knows what's still
+             open even though it doesn't block them. */}
+          {itemCount > 0 && !isCheckedIn && (
             <div className="cart-primary-cta-wrap" style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
-              {isPaymentWaiting ? (
-                <button
-                  className="btn btn-primary cart-primary-cta"
-                  disabled
-                  style={{ width: "100%", justifyContent: "center" }}
-                >
-                  <I.Clock size={15} /> {t("cart.cta.waitingPayment")}
-                </button>
-              ) : (
-                <DisabledTooltip
-                  block
-                  disabled={ctaDisabled}
-                  title={t("disabled.checkin.title")}
-                  reasons={ctaReasons}
-                  hint={t("disabled.checkin.hint")}
-                >
-                  <button
-                    className="btn btn-primary cart-primary-cta"
-                    disabled={ctaDisabled}
-                    onClick={() => {
-                      if (onOpenPay) {
-                        onOpenPay();
-                        return;
-                      }
-                      // Scroll the payment area into view — useful on mobile
-                      // where the cart sheet may not fully expose it yet.
-                      const payArea = document.querySelector(".cart-payment, .cart-payment-methods, [data-cart-payment]");
-                      payArea?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-                    }}
-                    style={{ width: "100%", justifyContent: "center" }}
-                  >
-                    {ctaDisabled
-                      ? <><I.AlertCircle size={15} /> {t("cart.cta.resolveBeforePayment")}</>
-                      : <><I.CreditCard size={15} /> {t("cart.cta.takePayment")}</>}
-                  </button>
-                </DisabledTooltip>
+              {!isPaid && !isPaymentWaiting && currentStep >= 6 && (
+                <div className="cart-pending-flags" role="status" aria-live="polite">
+                  <span className="cart-pending-flag cart-pending-flag-pay">
+                    <I.CreditCard size={10} /> {t("cart.flag.paymentPending") || "Payment pending — collect in Step 6"}
+                  </span>
+                </div>
               )}
-            </div>
-          )}
-          {itemCount > 0 && isPaid && !isCheckedIn && (
-            <div className="cart-primary-cta-wrap" style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
+              {isPaymentWaiting && (
+                <div className="cart-pending-flags">
+                  <span className="cart-pending-flag cart-pending-flag-waiting">
+                    <I.Clock size={10} /> {t("cart.cta.waitingPayment")}
+                  </span>
+                </div>
+              )}
               <DisabledTooltip
                 block
                 disabled={ctaDisabled}
@@ -1652,7 +1792,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                   disabled={ctaDisabled}
                   style={{ width: "100%", justifyContent: "center" }}
                 >
-                  <I.Check size={15} /> {t("cart.cta.checkInOnly")}
+                  <I.Check size={15} /> {t("cart.cta.checkInConfirm") || "Check in & confirm order"}
                 </button>
               </DisabledTooltip>
             </div>
@@ -1691,6 +1831,13 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
         }}
       />
       <PregnancyConsentModal open={pregOpen} patient={patient} pendingItems={pendingPregItems || []} onConfirm={handlePregConsent} onCancel={handlePregCancel} />
+      <VerbalConsentModal
+        open={!!verbalItem}
+        item={verbalItem}
+        isSensitive={isItemSensitive(verbalItem)}
+        onConfirm={saveVerbalConsent}
+        onCancel={() => setVerbalForItemId(null)}
+      />
     </>
   );
 }

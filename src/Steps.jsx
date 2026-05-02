@@ -13,11 +13,12 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { I } from "./icons";
 import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
-import { ORDER_CATALOG, paymentAfterPaidEdit } from "./OrderCart";
+import { ORDER_CATALOG, paymentAfterPaidEdit, useCartPayment, PaymentArea, paymentDueAmount } from "./OrderCart";
 import { DisabledTooltip, VisitReasonPills, VISIT_REASONS, AuthorBadge, SLOT_OPTIONS, computeTatPlan, fmtTatHours } from "./shared";
 import { LAB_CATALOG, LAB_CATEGORIES, INSURANCE_PROVIDERS } from "./data";
 import { AddTestsPanel } from "./AddTestsPanel";
 import { DateInput, GhostPlaceholder, formatByPattern, digitsOnly } from "./DateInput";
+import { findBestPatientCollision } from "./patientMatching";
 import scanQrIcon from "./assets/icons/identity-scan-qr.svg";
 import idCardIcon from "./assets/icons/identity-id-card.svg";
 import manualEntryIcon from "./assets/icons/identity-manual-entry.svg";
@@ -91,7 +92,8 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
   const [searchQ, setSearchQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [scanState, setScanState] = useState("idle"); // idle | scanning | done
-  const [nfcAvailable] = useState(true); // mock — could be hardware probe
+  // Spec v12 §Step 1: NFC is "coming soon" — visible, disabled, COMING SOON badge.
+  const [nfcAvailable] = useState(false);
   const [recapturing, setRecapturing] = useState(false);
   const [recaptureConfirmOpen, setRecaptureConfirmOpen] = useState(false);
 
@@ -384,12 +386,15 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
             <img className="method-card-icon-img" src={idCardIcon} alt="" aria-hidden="true" />
           </div>
           <div className="method-card-body">
-            <div className="method-card-title">{t("step1.method.nfc.title")}</div>
+            <div className="method-card-title">
+              {t("step1.method.nfc.title")}
+              {!nfcAvailable && <span className="coming-soon-badge">COMING SOON</span>}
+            </div>
             <div className="method-card-sub">
-              {nfcAvailable ? t("step1.method.nfc.sub") : t("step1.method.nfc.unavailable")}
+              {nfcAvailable ? t("step1.method.nfc.sub") : "NFC reader integration in progress"}
             </div>
           </div>
-          <div className="method-card-cta">{t("step1.method.start")}</div>
+          <div className="method-card-cta">{nfcAvailable ? t("step1.method.start") : "—"}</div>
         </button>
 
         {/* Manual */}
@@ -538,12 +543,10 @@ function Step2VisitDetails({ patient, onUpdate, onSendIntake, onPushToast, chann
   const StatusIco = status.Ico;
 
   const handleSend = () => {
-    onUpdate({ ...patient, pwaSent: true, pwaSentAt: "just now" });
-    onSendIntake?.();
+    onSendIntake?.({ ...patient, pwaSent: true, pwaSentAt: "just now" });
   };
   const handleResend = () => {
-    onUpdate({ ...patient, pwaSentAt: "just now" });
-    onSendIntake?.();
+    onSendIntake?.({ ...patient, pwaSent: true, pwaSentAt: "just now" });
     onPushToast?.(t("vd.resend"), "success");
   };
 
@@ -726,10 +729,333 @@ function Step2VisitDetails({ patient, onUpdate, onSendIntake, onPushToast, chann
   );
 }
 
-export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, gate, onSendIntake }) {
+// Spec v12 §2 — choose-channel-first contact panel
+//   Two pills (Telegram / SMS). Nothing else shown until one is selected.
+//   - Telegram: pushes QR to CFD on pill select; auto-verifies; phone field
+//     auto-populates from Telegram (no OTP needed).
+//   - SMS: phone input is shown; OTP boxes auto-appear and auto-focus when a
+//     valid number is entered (no separate "Send OTP" tap).
+function ChannelChooser({
+  patient, update, phoneValid, otpStep, setOtpStep, otpCode, setOtpCode,
+  otpCountdown, tgPanel, setTgPanel, handleSendOtp, handleVerifyOtp, handleTgQr, t,
+  handleTgCancel,
+}) {
+  const [channel, setChannel] = useState(null); // null | "telegram" | "sms"
+  const selectChannel = (next) => {
+    if (next !== "telegram") handleTgCancel?.();
+    setChannel(next);
+  };
+  // When SMS channel is chosen + phone reaches min length, auto-send OTP once
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (channel !== "sms") return;
+    if (!phoneValid) { autoSentRef.current = false; return; }
+    if (otpStep === "idle" && !autoSentRef.current) {
+      autoSentRef.current = true;
+      handleSendOtp();
+    }
+  }, [channel, phoneValid, otpStep, handleSendOtp]);
+  // When Telegram channel is chosen, push the QR immediately to the CFD.
+  useEffect(() => {
+    if (channel === "telegram" && tgPanel === "idle") handleTgQr();
+  }, [channel, tgPanel, handleTgQr]);
+
+  return (
+    <div className="contact-chooser">
+      <div className="contact-chooser-prompt">How does the patient prefer to be contacted?</div>
+      <div className="contact-chooser-pills" role="radiogroup" aria-label="Contact channel">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={channel === "telegram"}
+          className={"contact-chooser-pill" + (channel === "telegram" ? " is-on" : "")}
+          onClick={() => selectChannel("telegram")}
+        >
+          <I.Send size={13} /> Telegram
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={channel === "sms"}
+          className={"contact-chooser-pill" + (channel === "sms" ? " is-on" : "")}
+          onClick={() => selectChannel("sms")}
+        >
+          <I.MessageSquare size={13} /> SMS
+        </button>
+      </div>
+
+      {channel === "telegram" && (
+        <div className="contact-card contact-card-tg">
+          <div className="contact-card-head">
+            <span className="contact-card-ico" style={{ color: "#229ed9" }}><I.Send size={13} /></span>
+            <span className="contact-card-title">Telegram QR pushed to display</span>
+          </div>
+          <div className="contact-card-body contact-card-qr">
+            <div className="qr-mock"><I.Smartphone size={26} /></div>
+            <div className="contact-card-help">{t("step2.tg.scanning") || "Waiting for patient to scan on the display…"}</div>
+            <button type="button" className="link-btn" onClick={() => { handleTgCancel?.(); setChannel(null); }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {channel === "sms" && (
+        <div className="contact-card contact-card-sms">
+          <div className="contact-card-head">
+            <span className="contact-card-ico" style={{ color: "#268cff" }}><I.MessageSquare size={13} /></span>
+            <span className="contact-card-title">Mobile *</span>
+          </div>
+          <div className="contact-card-body">
+            <div className="phone-row">
+              <select
+                className="select"
+                value={patient.countryCode || "+855"}
+                onChange={e => update("countryCode", e.target.value)}
+                style={{ width: 72 }}
+              >
+                <option>+855</option>
+                <option>+84</option>
+                <option>+66</option>
+                <option>+1</option>
+              </select>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                className="input"
+                value={patient.phoneNumber || ""}
+                onChange={e => update("phoneNumber", e.target.value.replace(/[^\d\s]/g, ""))}
+                placeholder="12 345 678"
+                autoFocus
+              />
+            </div>
+            {phoneValid && (otpStep === "sending" || otpStep === "sent") && (
+              <div className="otp-row">
+                <div className="otp-boxes">
+                  {[0,1,2,3,4,5].map(i => (
+                    <input
+                      key={i}
+                      className={"otp-box" + (otpCode[i] ? " has-val" : "")}
+                      maxLength={1}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={otpCode[i] || ""}
+                      onChange={e => {
+                        const v = e.target.value.replace(/\D/g, "").slice(-1);
+                        const next = otpCode.split("");
+                        next[i] = v;
+                        const joined = next.join("").slice(0, 6);
+                        setOtpCode(joined);
+                        if (v && i < 5) {
+                          const inputs = e.target.parentElement.querySelectorAll(".otp-box");
+                          inputs[i + 1]?.focus();
+                        }
+                      }}
+                      autoFocus={i === 0 && otpStep === "sent"}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleVerifyOtp}
+                  disabled={otpCode.length !== 6}
+                >
+                  {t("step2.verify")}
+                </button>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={handleSendOtp}
+                  disabled={otpCountdown > 0}
+                >
+                  {otpCountdown > 0 ? `${t("step2.resendIn")} ${otpCountdown}s` : t("step2.resend")}
+                </button>
+              </div>
+            )}
+            {!phoneValid && (
+              <div className="contact-card-help">Enter a valid number — OTP will send automatically.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Spec v12 §Step 2 — Patient KHQR capture (optional) for refunds
+function PatientKhqrCapture({ patient, onUpdate, onPushToast, t }) {
+  const captured = patient.bakong || null;
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualValue, setManualValue] = useState("");
+  const mockScan = () => {
+    const fakeId = "12345" + Math.floor(100 + Math.random() * 900);
+    onUpdate({
+      ...patient,
+      bakong: {
+        provider: "Bakong",
+        accountId: fakeId,
+        accountName: patient.name || "Patient",
+        capturedAt: new Date().toISOString(),
+      },
+    });
+    onPushToast?.(`Bakong captured · #${fakeId}`, "success");
+  };
+  const saveManual = () => {
+    const v = manualValue.trim();
+    if (!v) return;
+    onUpdate({
+      ...patient,
+      bakong: { provider: "Bakong", accountId: v, accountName: patient.name || "Patient", capturedAt: new Date().toISOString(), source: "manual" },
+    });
+    setManualOpen(false);
+    setManualValue("");
+    onPushToast?.(`Bakong account saved`, "success");
+  };
+  const remove = () => onUpdate({ ...patient, bakong: null });
+
+  if (captured) {
+    return (
+      <div className="patient-khqr is-captured">
+        <I.CreditCard size={13} />
+        <strong>Bakong · {captured.accountName}</strong>
+        <span className="patient-khqr-id">#{captured.accountId}</span>
+        <button type="button" className="link-btn" onClick={remove}>Remove</button>
+      </div>
+    );
+  }
+  return (
+    <div className="patient-khqr">
+      <div className="patient-khqr-head">
+        <I.CreditCard size={13} />
+        <strong>Patient KHQR — for refunds</strong>
+        <span className="patient-khqr-optional">optional</span>
+      </div>
+      <p className="patient-khqr-help">
+        If the patient has a Bakong QR, scan it to enable direct refunds to their account.
+      </p>
+      <div className="patient-khqr-actions">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={mockScan}>
+          <I.Camera size={11} /> Scan patient KHQR
+        </button>
+        <button type="button" className="link-btn" onClick={() => setManualOpen(o => !o)}>
+          {manualOpen ? "Hide manual entry" : "Or enter Bakong ID manually"}
+        </button>
+      </div>
+      {manualOpen && (
+        <div className="patient-khqr-manual">
+          <input
+            type="text"
+            placeholder="Bakong phone or account ID"
+            value={manualValue}
+            onChange={e => setManualValue(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") saveManual(); }}
+          />
+          <button type="button" className="btn btn-secondary btn-sm" onClick={saveManual} disabled={!manualValue.trim()}>
+            Save
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const COLLISION_FIELDS = new Set(["name", "dob", "sexAtBirth", "gender", "idNumber", "phoneNumber", "countryCode"]);
+
+function queueOrdinal(patient = {}) {
+  const n = Number((patient.queueNumber || "").toString().replace(/\D/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : Number.POSITIVE_INFINITY;
+}
+
+function collisionCopyFor(currentPatient, collision) {
+  const currentQueue = queueOrdinal(currentPatient);
+  const targetQueue = queueOrdinal(collision?.patient);
+  const targetLooksOlder = targetQueue < currentQueue;
+  if (targetLooksOlder) {
+    return {
+      title: "Possible duplicate patient detected",
+      primary: "Open existing patient",
+      secondary: "This is a different person",
+    };
+  }
+  return {
+    title: "Duplicate record may exist",
+    primary: "Review duplicate record",
+    secondary: "Keep as separate record",
+  };
+}
+
+function CollisionBanner({ patient, collision, onView, onDismiss }) {
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  if (!collision) return null;
+  const c = collision;
+  const copy = collisionCopyFor(patient, c);
+  return (
+    <div className="collision-stack">
+      <div className="collision-banner">
+        <div className="collision-icon"><I.AlertTriangle size={14} /></div>
+        <div className="collision-body">
+          <span className="collision-kicker">{c.strength} · {c.signals.join(" + ")}</span>
+          <strong>{copy.title}</strong>
+          <p>
+            <em>{c.patient.name}</em>
+            {c.patient.dob && <> · {c.patient.dob}</>}
+            {c.patient.sexAtBirth && <> · {c.patient.sexAtBirth}</>}
+            {c.patient.lastVisitAt && <> · last visit {c.patient.lastVisitAt}</>}
+          </p>
+        </div>
+        <div className="collision-actions">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onView?.(c.patient.id)}>
+            {copy.primary}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOverrideOpen(true)}>
+            {copy.secondary}
+          </button>
+        </div>
+        {overrideOpen && (
+          <div className="collision-override">
+            <strong>Supervisor PIN required</strong>
+            <p>This override is logged with timestamp and staff ID. Cannot be undone without admin intervention.</p>
+            <div className="collision-override-row">
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="PIN"
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, ""))}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => { onDismiss?.(c, pin); setOverrideOpen(false); setPin(""); }}
+                disabled={pin.length < 4}
+              >
+                Confirm override
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setOverrideOpen(false); setPin(""); }}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, gate, onSendIntake, allPatients = [], onSelectPatient }) {
   const t = useLang();
   const lockedFields = patient.identity?.lockedFields || [];
   const isLocked = (field) => lockedFields.includes(field);
+  const collision = useMemo(() => findBestPatientCollision(patient, allPatients), [patient, allPatients]);
+  const acked = patient.collisionAcked || [];
+  const liveCollision = collision && !(collision.candidateIds || [collision.patient.id]).every(id => acked.includes(id))
+    ? collision
+    : null;
+  const handleAckCollision = (collisionToAck) => {
+    const ids = collisionToAck?.candidateIds || [collisionToAck?.patient?.id].filter(Boolean);
+    onUpdate({ ...patient, collisionAcked: [...new Set([...acked, ...ids])] });
+  };
 
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
   const [addrOpen, setAddrOpen] = useState(false);
@@ -738,8 +1064,13 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
   const [otpCountdown, setOtpCountdown] = useState(0);
   const [tgPanel, setTgPanel] = useState(patient.telegramVerified ? "verified" : "idle"); // idle | qr | verified
   const [errors, setErrors] = useState({});
+  const tgTimerRef = useRef(null);
 
-  const update = (key, val) => onUpdate({ ...patient, [key]: val });
+  const update = (key, val) => onUpdate({
+    ...patient,
+    [key]: val,
+    ...(COLLISION_FIELDS.has(key) ? { collisionAcked: [] } : {}),
+  });
   const updateAddr = (key, val) => onUpdate({ ...patient, address: { ...(patient.address || {}), [key]: val } });
 
   // OTP timer
@@ -772,10 +1103,12 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
   };
 
   const handleTgQr = () => {
+    if (tgTimerRef.current) clearTimeout(tgTimerRef.current);
     setTgPanel("qr");
     // mock: auto-verify after 2.5s
-    setTimeout(() => {
+    tgTimerRef.current = setTimeout(() => {
       setTgPanel("verified");
+      tgTimerRef.current = null;
       onUpdate({
         ...patient,
         telegramVerified: true,
@@ -785,11 +1118,22 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       onPushToast?.("Telegram verified", "success");
     }, 2500);
   };
+  const handleTgCancel = () => {
+    if (tgTimerRef.current) {
+      clearTimeout(tgTimerRef.current);
+      tgTimerRef.current = null;
+    }
+    setTgPanel("idle");
+  };
 
   const handleTgReset = () => {
-    setTgPanel("idle");
+    handleTgCancel();
     onUpdate({ ...patient, telegramVerified: false, telegramHandle: "" });
   };
+
+  useEffect(() => () => {
+    if (tgTimerRef.current) clearTimeout(tgTimerRef.current);
+  }, []);
 
   const handleUnlock = () => {
     setUnlockConfirmOpen(false);
@@ -810,11 +1154,15 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       onPushToast?.("Please complete required fields", "error");
       return;
     }
+    if (liveCollision) {
+      onPushToast?.("Resolve possible duplicate patient before continuing", "error");
+      return;
+    }
     onNext();
   };
 
   const phoneDigits = (patient.phoneNumber || "").replace(/\D/g, "").length;
-  const phoneValid = phoneDigits >= 6;
+  const phoneValid = phoneDigits >= 8;
   const tgVerified = !!patient.telegramVerified;
   const otpVerified = !!patient.otpVerified;
 
@@ -830,6 +1178,18 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
         )
       }
     >
+      {/* Spec v12 §Step 1 collision detection — surfaces inline above identity */}
+      <CollisionBanner
+        patient={patient}
+        collision={liveCollision}
+        onView={(id) => onSelectPatient?.(id)}
+        onDismiss={(collisionToAck, pin) => {
+          if (!pin || pin.length < 4) return;
+          handleAckCollision(collisionToAck);
+          onPushToast?.(`Override accepted · supervisor PIN logged`, "success");
+        }}
+      />
+
       {/* Identity group */}
       <section className="card-soft">
         <div className="group-head">
@@ -923,7 +1283,7 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
           <span className="group-hint">{t("step2.contactHint")}</span>
         </div>
 
-        {/* Compact verified rows */}
+        {/* Compact verified rows — same as before */}
         {(tgVerified || otpVerified) && (
           <div className="contact-verified-stack">
             {tgVerified && (
@@ -933,6 +1293,9 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
                 <span className="contact-verified-sep">·</span>
                 <span className="contact-card-handle">{patient.telegramHandle || "—"}</span>
                 <span className="contact-card-badge"><I.Check size={9} strokeWidth={3} /> {t("step2.verified")}</span>
+                {patient.phoneNumber && (
+                  <span className="contact-verified-meta">📱 {(patient.countryCode || "+855")} {patient.phoneNumber} · via Telegram</span>
+                )}
                 <button type="button" className="link-btn contact-verified-action" onClick={handleTgReset}>
                   {t("step2.changeHandle")}
                 </button>
@@ -955,118 +1318,46 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
           </div>
         )}
 
-        {(!tgVerified || !otpVerified) && (
-        <div className={"contact-grid" + ((tgVerified || otpVerified) ? " is-single" : "")}>
-          {/* Telegram (only when not verified) */}
-          {!tgVerified && (
-          <div className="contact-card">
-            <div className="contact-card-head">
-              <span className="contact-card-ico" style={{ color: "#229ed9" }}><I.Send size={13} /></span>
-              <span className="contact-card-title">Telegram</span>
-            </div>
-            {tgPanel === "qr" ? (
-              <div className="contact-card-body contact-card-qr">
-                <div className="qr-mock"><I.Smartphone size={26} /></div>
-                <div className="contact-card-help">{t("step2.tg.scanning")}</div>
-              </div>
-            ) : (
-              <div className="contact-card-body">
-                <div className="contact-card-help">{t("step2.tg.help")}</div>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={handleTgQr}>
-                  <I.Sparkles size={11} /> {t("step2.tg.startQR")}
-                </button>
-              </div>
+        {/* Spec v12 §2 — choose-channel-first model */}
+        {(!tgVerified && !otpVerified) && (
+          <ChannelChooser
+            patient={patient}
+            update={update}
+            phoneValid={phoneValid}
+            otpStep={otpStep}
+            setOtpStep={setOtpStep}
+            otpCode={otpCode}
+            setOtpCode={setOtpCode}
+            otpCountdown={otpCountdown}
+            tgPanel={tgPanel}
+            setTgPanel={setTgPanel}
+            handleSendOtp={handleSendOtp}
+            handleVerifyOtp={handleVerifyOtp}
+            handleTgQr={handleTgQr}
+            handleTgCancel={handleTgCancel}
+            t={t}
+          />
+        )}
+
+        {/* If only one verified, show the other channel as an optional add-on */}
+        {(tgVerified !== otpVerified) && (
+          <div className="contact-add-other">
+            <span className="contact-add-other-label">Add a second channel?</span>
+            {!tgVerified && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={handleTgQr}>
+                <I.Send size={11} /> Add Telegram
+              </button>
+            )}
+            {!otpVerified && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={handleSendOtp} disabled={!phoneValid}>
+                <I.MessageSquare size={11} /> Add SMS verification
+              </button>
             )}
           </div>
-          )}
-
-          {/* Mobile OTP (only when not verified) */}
-          {!otpVerified && (
-          <div className="contact-card">
-            <div className="contact-card-head">
-              <span className="contact-card-ico" style={{ color: "#268cff" }}><I.MessageSquare size={13} /></span>
-              <span className="contact-card-title">SMS / Mobile</span>
-            </div>
-            <div className="contact-card-body">
-              <div className="phone-row">
-                <select
-                  className="select"
-                  value={patient.countryCode || "+855"}
-                  onChange={e => update("countryCode", e.target.value)}
-                  style={{ width: 72 }}
-                >
-                  <option>+855</option>
-                  <option>+84</option>
-                  <option>+66</option>
-                  <option>+1</option>
-                </select>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel-national"
-                  className="input"
-                  value={patient.phoneNumber || ""}
-                  onChange={e => update("phoneNumber", e.target.value.replace(/[^\d\s]/g, ""))}
-                  placeholder="12 345 678"
-                />
-              </div>
-              {otpStep === "sent" ? (
-                <div className="otp-row">
-                  <div className="otp-boxes">
-                    {[0,1,2,3,4,5].map(i => (
-                      <input
-                        key={i}
-                        className={"otp-box" + (otpCode[i] ? " has-val" : "")}
-                        maxLength={1}
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        value={otpCode[i] || ""}
-                        onChange={e => {
-                          const v = e.target.value.replace(/\D/g, "").slice(-1);
-                          const next = otpCode.split("");
-                          next[i] = v;
-                          const joined = next.join("").slice(0, 6);
-                          setOtpCode(joined);
-                          if (v && i < 5) {
-                            const inputs = e.target.parentElement.querySelectorAll(".otp-box");
-                            inputs[i + 1]?.focus();
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={handleVerifyOtp}
-                    disabled={otpCode.length !== 6}
-                  >
-                    {t("step2.verify")}
-                  </button>
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={handleSendOtp}
-                    disabled={otpCountdown > 0}
-                  >
-                    {otpCountdown > 0 ? `${t("step2.resendIn")} ${otpCountdown}s` : t("step2.resend")}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={handleSendOtp}
-                  disabled={!phoneValid || otpStep === "sending"}
-                >
-                  {otpStep === "sending" ? t("step2.sending") : t("step2.sendOtp")}
-                </button>
-              )}
-            </div>
-          </div>
-          )}
-        </div>
         )}
+
+        {/* Spec v12 §Step 2 — Patient KHQR for refunds (optional) */}
+        <PatientKhqrCapture patient={patient} onUpdate={onUpdate} onPushToast={onPushToast} t={t} />
 
         {/* Preferred channel */}
         {(tgVerified || otpVerified) && (
@@ -1172,8 +1463,8 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       <StepFooter
         onPrev={onPrev}
         onNext={handleNext}
-        nextDisabled={!gate.step2Done}
-        blockers={gate.blockers[2]}
+        nextDisabled={!gate.step2Done || !!liveCollision}
+        blockers={liveCollision ? ["Resolve possible duplicate patient"] : gate.blockers[2]}
       />
     </StepShell>
   );
@@ -1188,16 +1479,66 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ provider: "", policyNumber: "", memberName: patient.name || "", memberId: "", expiry: "", coverage: "Outpatient", cardAttached: false });
 
+  // Spec v12 §Step 3 — eligibility check.
+  // Mock async flow: policy ID ending in "0" → ineligible, ending in "9" →
+  // timeout/unreachable, everything else → eligible. Check fires automatically
+  // after Add Policy; result stored on the saved policy record.
+  const [eligibility, setEligibility] = useState(null); // { state: "checking"|"eligible"|"ineligible"|"unreachable", details? }
+  const [pendingPolicy, setPendingPolicy] = useState(null);
+  const checkTimer = useRef(null);
+
+  const startEligibilityCheck = (policy) => {
+    setEligibility({ state: "checking" });
+    setPendingPolicy(policy);
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    checkTimer.current = setTimeout(() => {
+      const last = (policy.policyNumber || "0").trim().slice(-1);
+      if (last === "9") {
+        setEligibility({ state: "unreachable" });
+      } else if (last === "0") {
+        setEligibility({ state: "ineligible", message: "Policy not found or expired." });
+      } else {
+        setEligibility({
+          state: "eligible",
+          details: {
+            tier: "Outpatient",
+            activeUntil: policy.expiry || "Dec 2026",
+            coveragePct: 80,
+            copay: 5,
+          },
+        });
+      }
+    }, 1600);
+  };
+  const cancelCheck = () => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    setEligibility(null);
+    setPendingPolicy(null);
+  };
+  const acceptEligibility = () => {
+    if (!pendingPolicy) return;
+    const enriched = { ...pendingPolicy, eligibility };
+    onUpdate({ ...patient, insurance: [...policies, enriched], insuranceAcked: true });
+    setEligibility(null);
+    setPendingPolicy(null);
+    setAdding(false);
+    setDraft({ provider: "", policyNumber: "", memberName: patient.name || "", memberId: "", expiry: "", coverage: "Outpatient", cardAttached: false });
+    if (eligibility.state === "eligible") {
+      onPushToast?.(`${enriched.provider} eligible · ${eligibility.details.coveragePct}% coverage`, "success");
+    } else if (eligibility.state === "unreachable") {
+      onPushToast?.(`${enriched.provider} added · eligibility pending`, "info");
+    } else {
+      onPushToast?.(`${enriched.provider} added but ineligible — check details`, "error");
+    }
+  };
+
   const handleAddPolicy = () => {
     if (!draft.provider || !draft.policyNumber) {
       onPushToast?.("Provider and policy number required", "error");
       return;
     }
     const newP = { id: "ins-" + Date.now(), ...draft };
-    onUpdate({ ...patient, insurance: [...policies, newP], insuranceAcked: true });
-    setAdding(false);
-    setDraft({ provider: "", policyNumber: "", memberName: patient.name || "", memberId: "", expiry: "", coverage: "Outpatient", cardAttached: false });
-    onPushToast?.(`${draft.provider} policy added`, "success");
+    startEligibilityCheck(newP);
   };
 
   const handleRemovePolicy = (id) => {
@@ -1205,9 +1546,20 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
     onPushToast?.("Policy removed", "error");
   };
 
+  const handleAttachPolicyCard = (id) => {
+    onUpdate({
+      ...patient,
+      insurance: policies.map(p => p.id === id ? { ...p, cardAttached: true } : p),
+      documents: { ...(patient.documents || {}), insurance: "ok" },
+    });
+    onPushToast?.("Insurance card attached", "success");
+  };
+
   const handleNoInsurance = () => {
-    onUpdate({ ...patient, insuranceAcked: true });
+    const next = { ...patient, insuranceAcked: true };
+    onUpdate(next);
     onPushToast?.("Marked as direct pay");
+    onNext?.(next);
   };
 
   const handleScanCard = () => {
@@ -1274,6 +1626,15 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
                   <div className="policy-card-provider">{p.provider}</div>
                   <div className="policy-card-policy mono">{p.policyNumber}</div>
                 </div>
+                {p.cardAttached ? (
+                  <span className="policy-card-status is-attached">
+                    <I.CheckCircle size={11} /> {t("step3.cardAttached")}
+                  </span>
+                ) : (
+                  <button type="button" className="policy-card-status is-missing" onClick={() => handleAttachPolicyCard(p.id)}>
+                    <I.Camera size={11} /> {t("step3.attachCard")}
+                  </button>
+                )}
                 <button type="button" className="icon-btn" onClick={() => handleRemovePolicy(p.id)}>
                   <I.Trash size={12} />
                 </button>
@@ -1283,11 +1644,6 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
                 <div><span className="lab">{t("step3.memberId")}</span><span className="val mono">{p.memberId || "—"}</span></div>
                 <div><span className="lab">{t("step3.expiry")}</span><span className="val mono">{p.expiry || "—"}</span></div>
                 <div><span className="lab">{t("step3.coverage")}</span><span className="val">{p.coverage}</span></div>
-                <div className="policy-card-attached">
-                  {p.cardAttached
-                    ? <><I.CheckCircle size={11} /> {t("step3.cardAttached")}</>
-                    : <><I.AlertCircle size={11} /> {t("step3.cardMissing")}</>}
-                </div>
               </div>
             </section>
           ))}
@@ -1332,10 +1688,61 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
               </div>
               <div className="step3-add-actions">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>{t("step3.cancel")}</button>
-                <button type="button" className="btn btn-primary btn-sm" onClick={handleAddPolicy}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={handleAddPolicy} disabled={eligibility?.state === "checking"}>
                   <I.Plus size={11} /> {t("step3.savePolicy")}
                 </button>
               </div>
+
+              {/* Spec v12 §Step 3 — eligibility check states */}
+              {eligibility && (
+                <div className={"elig-card elig-" + eligibility.state}>
+                  {eligibility.state === "checking" && (
+                    <>
+                      <div className="elig-spinner" aria-hidden="true" />
+                      <div className="elig-body">
+                        <strong>Checking eligibility with {pendingPolicy?.provider}…</strong>
+                        <p>This usually takes a few seconds.</p>
+                      </div>
+                      <button type="button" className="link-btn" onClick={cancelCheck}>Cancel</button>
+                    </>
+                  )}
+                  {eligibility.state === "eligible" && (
+                    <>
+                      <I.CheckCircle size={18} />
+                      <div className="elig-body">
+                        <strong>Eligible — {pendingPolicy?.provider}</strong>
+                        <p>Policy #{pendingPolicy?.policyNumber} · {eligibility.details.tier} · Active until {eligibility.details.activeUntil}</p>
+                        <p>Coverage: {eligibility.details.coveragePct}% of eligible services · Co-pay ${eligibility.details.copay} per visit</p>
+                      </div>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={acceptEligibility}>Save policy</button>
+                    </>
+                  )}
+                  {eligibility.state === "ineligible" && (
+                    <>
+                      <I.XCircle size={18} />
+                      <div className="elig-body">
+                        <strong>Not eligible — {pendingPolicy?.provider}</strong>
+                        <p>{eligibility.message} Check policy number and expiry, or contact insurer directly.</p>
+                      </div>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => startEligibilityCheck(pendingPolicy)}>
+                        <I.RefreshCw size={11} /> Retry
+                      </button>
+                      <button type="button" className="link-btn" onClick={cancelCheck}>Cancel</button>
+                    </>
+                  )}
+                  {eligibility.state === "unreachable" && (
+                    <>
+                      <I.AlertTriangle size={18} />
+                      <div className="elig-body">
+                        <strong>Unable to verify — insurer API unavailable</strong>
+                        <p>You can still add the policy manually. Eligibility will need to be confirmed with the insurer.</p>
+                      </div>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={acceptEligibility}>Add anyway</button>
+                      <button type="button" className="link-btn" onClick={cancelCheck}>Cancel</button>
+                    </>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -1360,14 +1767,14 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
 // =====================================================================
 // STEP 4 — AI Orders
 // =====================================================================
-export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate, requestPaidEdit }) {
+export function Step4Orders({ patient, onUpdate, onNext, onPrev, onPushToast, gate, requestPaidEdit }) {
   const t = useLang();
   const cart = patient.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" } };
   const inCartIds = useMemo(() => new Set(cart.items.map(i => i.id)), [cart.items]);
 
   // The unified AddTestsPanel calls onAdd with [{ testId, name, price, kind }, …].
   // We normalize to cart-item shape and merge with current cart, deduping in-cart ids.
-  const addBulk = (items) => {
+  const addBulk = (items, meta = {}) => {
     const fresh = items.filter(i => !inCartIds.has(i.testId || i.id));
     if (fresh.length === 0) {
       onPushToast?.("Already in cart", "error");
@@ -1382,8 +1789,12 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate, requ
       };
     });
     const apply = (mode) => {
+      const consumedBookingCodes = meta.bookingCode
+        ? Array.from(new Set([...(patient.consumedBookingCodes || []), meta.bookingCode]))
+        : patient.consumedBookingCodes;
       onUpdate({
         ...patient,
+        ...(meta.bookingCode ? { consumedBookingCodes } : {}),
         cart: {
           ...cart,
           items: [...cart.items, ...additions],
@@ -1405,44 +1816,12 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate, requ
             ...cart,
             items: (cart.items || []).filter(item => !addedIds.includes(item.id)),
           },
+          ...(meta.bookingCode
+            ? { consumedBookingCodes: (patient.consumedBookingCodes || []).filter(code => code !== meta.bookingCode) }
+            : {}),
         }),
       };
     }
-  };
-
-  // Telehealth state — slot picker is inline; opens on Include / Reschedule / Add it back.
-  const tele = patient.teleconsult || { status: "notBooked", slot: null };
-  const hasLabOrImaging = cart.items.some(i => i.kind === "lab" || i.kind === "imaging");
-  const tatPlan = useMemo(() => hasLabOrImaging ? computeTatPlan(cart.items) : null, [cart.items, hasLabOrImaging]);
-  const tatHours = tatPlan?.finalResultHours ?? 0;
-  const earliestViableSlot = useMemo(
-    () => SLOT_OPTIONS.find(s => s.etaHours >= tatHours)?.id || SLOT_OPTIONS[SLOT_OPTIONS.length - 1].id,
-    [tatHours]
-  );
-  const [telePicker, setTelePicker] = useState({ open: false, mode: "book", picked: null });
-  const closePicker = () => setTelePicker({ open: false, mode: "book", picked: null });
-  const openPickerForBook = () => setTelePicker({ open: true, mode: "book", picked: earliestViableSlot });
-  const openPickerForReschedule = () => setTelePicker({ open: true, mode: "reschedule", picked: tele.slot?.id || earliestViableSlot });
-  const confirmSlot = () => {
-    const slot = SLOT_OPTIONS.find(s => s.id === telePicker.picked);
-    if (!slot) return;
-    onUpdate({
-      ...patient,
-      teleconsult: {
-        status: "booked",
-        slot: { id: slot.id, hint: slot.hint },
-        by: "nurse",
-        bookedAt: new Date().toISOString(),
-      },
-    });
-    const key = telePicker.mode === "reschedule" ? "step4.tele.toastRescheduled" : "step4.tele.toastBooked";
-    onPushToast?.(t(key, { hint: slot.hint }), "success");
-    closePicker();
-  };
-  const handleWaiveTele = () => {
-    onUpdate({ ...patient, teleconsult: { status: "waived", slot: null } });
-    onPushToast?.(t("step4.tele.toastWaived"));
-    closePicker();
   };
 
   return (
@@ -1471,172 +1850,642 @@ export function Step4Orders({ patient, onUpdate, onPrev, onPushToast, gate, requ
           }
         }}
       />
-
-      {/* Telehealth — single-row decisive card with inline slot picker.
-         Info on the left (icon + title + meta line that adapts to state),
-         action cluster on the right. Clicking Include / Reschedule expands
-         the card downward with a 2x2 day-grouped slot grid; slots earlier
-         than the cart's TAT are disabled with a "results not ready" reason. */}
-      {(() => {
-        const locked = tele.status === "notBooked" && !hasLabOrImaging;
-        const stateClass = locked ? "is-locked" : "is-" + tele.status;
-        const picking = telePicker.open;
-        const reset = () => { onUpdate({ ...patient, teleconsult: { status: "notBooked", slot: null } }); closePicker(); };
-        const meta =
-          tele.status === "booked"  ? t("step4.tele.metaBooked", { hint: tele.slot?.hint || "" }) || tele.slot?.hint
-          : tele.status === "waived" ? t("step4.tele.metaWaived")
-          : locked                  ? t("step4.tele.metaLocked")
-          : t("step4.tele.metaSlot");
-        const MetaIcon =
-          tele.status === "booked"  ? I.Calendar
-          : tele.status === "waived" ? I.X
-          : locked                  ? I.AlertTriangle
-          : I.Clock;
-        // Group slots by day for the picker
-        const todaySlots    = SLOT_OPTIONS.filter(s => s.id.startsWith("today_"));
-        const tomorrowSlots = SLOT_OPTIONS.filter(s => s.id.startsWith("tom_"));
-        const tatLabel = fmtTatHours(tatHours || 0);
-        return (
-          <section className={"card-soft tele-card " + stateClass + (picking ? " is-picking" : "")}>
-            <div className="tele-card-row">
-              <div className="tele-card-icon" aria-hidden>
-                {tele.status === "booked"
-                  ? <img className="tele-card-icon-img" src={teleconsultationIcon} alt="" aria-hidden="true" />
-                  : <I.Video size={16} />}
-              </div>
-              <div className="tele-card-info">
-                <div className="tele-card-title-row">
-                  <span className="tele-card-title">{t("step4.tele.title")}</span>
-                  <span className="tele-card-duration">{t("step4.tele.duration")}</span>
-                </div>
-                <div className="tele-card-meta">
-                  <MetaIcon size={11} />
-                  <span>{tele.status === "booked" ? (tele.slot?.hint || meta) : meta}</span>
-                </div>
-              </div>
-              <span className={"tele-card-tag tele-card-tag-" + (locked ? "locked" : tele.status)}>
-                {tele.status === "booked"   && t("step4.tele.booked")}
-                {tele.status === "waived"   && t("step4.tele.waived")}
-                {tele.status === "notBooked" && t("step4.tele.notBooked")}
-              </span>
-              <div className="tele-card-actions">
-                {tele.status === "notBooked" && !picking && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm tele-btn-skip"
-                      onClick={handleWaiveTele}
-                      disabled={locked}
-                    >
-                      {t("step4.tele.waive")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm tele-btn-book"
-                      onClick={openPickerForBook}
-                      disabled={locked}
-                      title={locked ? t("step4.tele.disabled") : ""}
-                    >
-                      <I.Video size={11} /> {t("step4.tele.book")}
-                    </button>
-                  </>
-                )}
-                {tele.status === "booked" && !picking && (
-                  <>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>
-                      {t("step4.tele.cancel")}
-                    </button>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={openPickerForReschedule}>
-                      <I.Edit size={11} /> {t("step4.tele.reschedule")}
-                    </button>
-                  </>
-                )}
-                {tele.status === "waived" && !picking && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={openPickerForBook}
-                    disabled={!hasLabOrImaging}
-                  >
-                    <I.Video size={11} /> {t("step4.tele.bookInstead")}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {picking && (
-              <div className="tele-picker">
-                <div className="tele-picker-head">
-                  <I.Calendar size={11} />
-                  <strong>{t("step4.tele.pickHead")}</strong>
-                  {tatHours > 0 && (
-                    <span className="tele-picker-hint">
-                      · {t("step4.tele.pickHint", { eta: tatLabel })}
-                    </span>
-                  )}
-                </div>
-
-                {[
-                  { label: t("step4.tele.dayToday")  || "Today",    slots: todaySlots },
-                  { label: t("step4.tele.dayTomorrow") || "Tomorrow", slots: tomorrowSlots },
-                ].map(({ label, slots }) => (
-                  <div key={label} className="tele-picker-day">
-                    <div className="tele-picker-day-label">{label}</div>
-                    <div className="tele-picker-slots">
-                      {slots.map(s => {
-                        const tooEarly = tatHours > 0 && s.etaHours < tatHours;
-                        const active = telePicker.picked === s.id;
-                        const time = s.hint.split("·")[1]?.trim() || s.hint;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            className={"tele-picker-slot" + (active ? " is-active" : "") + (tooEarly ? " is-disabled" : "")}
-                            onClick={() => !tooEarly && setTelePicker({ ...telePicker, picked: s.id })}
-                            disabled={tooEarly}
-                            title={tooEarly ? t("step4.tele.tooEarly") : ""}
-                          >
-                            <I.Clock size={11} />
-                            <span className="tele-picker-slot-time">{time}</span>
-                            {tooEarly && (
-                              <span className="tele-picker-slot-warn">
-                                <I.AlertTriangle size={9} /> {t("step4.tele.tooEarly")}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="tele-picker-foot">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={closePicker}>
-                    {t("step4.tele.pickCancel")}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={confirmSlot}
-                    disabled={
-                      !telePicker.picked ||
-                      (telePicker.mode === "reschedule" && telePicker.picked === tele.slot?.id)
-                    }
-                  >
-                    <I.Check size={11} />{" "}
-                    {telePicker.mode === "reschedule"
-                      ? t("step4.tele.pickConfirmReschedule")
-                      : t("step4.tele.pickConfirm")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-        );
-      })()}
-
-      {/* Final step — payment + check-in CTA live in the cart rail. */}
-      <StepFooter onPrev={onPrev} className="step-footer-orders" />
+      <StepFooter
+        onPrev={onPrev}
+        onNext={onNext}
+        nextDisabled={!gate?.step4Done}
+        blockers={gate?.blockers?.[4] || []}
+        className="step-footer-orders"
+      />
     </StepShell>
   );
 }
+
+// =====================================================================
+// STEP 5 — Teleconsult booking
+// =====================================================================
+//   Spec v12 §Step 5: separate step for booking a teleconsult.
+//   Phase 1 ships the existing 2x2 day-grouped slot picker as a step body;
+//   Phase 3 will swap it for a full month calendar.
+//
+// === Spec v12 §5 — full calendar UI =====================================
+//   Replaces the 2x2 slot grid with a single calendar view + day-time pane.
+//   Days before the cart's TAT estimate are amber-tinted (results not ready);
+//   the first post-TAT day is pre-selected, with its first viable slot
+//   highlighted. A specialty selector sits above (auto-mapped from ordered
+//   tests, nurse can override).
+const SPECIALTIES = [
+  { id: "general",      label: "General Practice" },
+  { id: "endocrinology",label: "Endocrinology" },
+  { id: "cardiology",   label: "Cardiology" },
+  { id: "internal",     label: "Internal Medicine" },
+  { id: "obgyn",        label: "Obstetrics & Gynaecology" },
+];
+const TEST_SPECIALTY_MAP = {
+  hba1c: "endocrinology", glucose: "endocrinology", tsh: "endocrinology",
+  amh: "obgyn", "preg-bhcg": "obgyn", "us-pelvis": "obgyn",
+  "ecg-12": "cardiology", lipid: "cardiology", troponin: "cardiology",
+  cbc: "internal", lft: "internal", kft: "internal",
+};
+function autoSpecialty(items = []) {
+  const counts = {};
+  items.forEach(it => {
+    const sp = TEST_SPECIALTY_MAP[it.id];
+    if (sp) counts[sp] = (counts[sp] || 0) + 1;
+  });
+  const winner = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return winner ? winner[0] : "general";
+}
+const TIME_SLOTS = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+  "17:00", "17:30",
+];
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function makeMonthGrid(viewYear, viewMonth) {
+  const first = new Date(viewYear, viewMonth, 1);
+  const start = new Date(first);
+  // Mon=0..Sun=6
+  const offset = (first.getDay() + 6) % 7;
+  start.setDate(first.getDate() - offset);
+  const grid = [];
+  for (let w = 0; w < 6; w++) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const cell = new Date(start);
+      cell.setDate(start.getDate() + w * 7 + d);
+      week.push(cell);
+    }
+    grid.push(week);
+  }
+  return grid;
+}
+
+export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToast, gate }) {
+  const t = useLang();
+  const cart = patient.cart || { items: [] };
+  const tele = patient.teleconsult || { status: "notBooked", slot: null };
+  const hasLabOrImaging = (cart.items || []).some(i => i.kind === "lab" || i.kind === "imaging");
+  const tatPlan = useMemo(() => hasLabOrImaging ? computeTatPlan(cart.items) : null, [cart.items, hasLabOrImaging]);
+  const tatHours = tatPlan?.finalResultHours ?? 0;
+  const tatLabel = fmtTatHours(tatHours || 0);
+
+  // Auto-detect specialty from ordered tests; nurse can override.
+  const detected = useMemo(() => autoSpecialty(cart.items), [cart.items]);
+  const [specialty, setSpecialty] = useState(tele.specialty || detected);
+  useEffect(() => { if (!tele.booked && !tele.specialty) setSpecialty(detected); }, [detected, tele.booked, tele.specialty]);
+
+  // Earliest day on which TAT will be met. Today + ceil(tatHours/24) days.
+  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const earliestReadyDay = useMemo(() => {
+    const d = new Date(today);
+    const days = Math.max(1, Math.ceil(tatHours / 24));
+    d.setDate(d.getDate() + days);
+    return d;
+  }, [today, tatHours]);
+
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = tele.slot?.date ? new Date(tele.slot.date) : earliestReadyDay;
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+  const [selectedDay, setSelectedDay] = useState(() => {
+    if (tele.slot?.date) return tele.slot.date;
+    return dayKey(earliestReadyDay);
+  });
+  const [pickedTime, setPickedTime] = useState(tele.slot?.time || TIME_SLOTS.find(t => parseInt(t) >= 14) || TIME_SLOTS[0]);
+  const [overrideEarly, setOverrideEarly] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
+  const isBooked = tele.status === "booked";
+  const isWaived = tele.status === "waived" || tele.skipped;
+  useEffect(() => { if (!tele.booked) setSelectedDay(dayKey(earliestReadyDay)); }, [earliestReadyDay, tele.booked]);
+  useEffect(() => { if (!isBooked) setRescheduling(false); }, [isBooked]);
+
+  const grid = useMemo(() => makeMonthGrid(viewMonth.year, viewMonth.month), [viewMonth]);
+  const monthLabel = new Date(viewMonth.year, viewMonth.month, 1)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const selectedDate = useMemo(() => {
+    const [y, m, d] = selectedDay.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [selectedDay]);
+  const selectedDayBeforeTAT = selectedDate < earliestReadyDay;
+  const bookedDate = useMemo(() => {
+    if (!tele.slot?.date) return null;
+    const [y, m, d] = tele.slot.date.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [tele.slot?.date]);
+  const bookedSlotLabel = tele.slot?.hint || (bookedDate && tele.slot?.time
+    ? `${bookedDate.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })} · ${tele.slot.time}`
+    : "");
+  const bookedSpecialty = SPECIALTIES.find(s => s.id === (tele.specialty || specialty)) || SPECIALTIES.find(s => s.id === specialty);
+  const hasBookedSlot = isBooked && !!tele.slot;
+  const showPicker = !hasBookedSlot || rescheduling;
+
+  const prevMonth = () => setViewMonth(({ year, month }) =>
+    month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 });
+  const nextMonth = () => setViewMonth(({ year, month }) =>
+    month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
+
+  const confirmBooking = () => {
+    const wasBooked = hasBookedSlot;
+    if (selectedDayBeforeTAT && !overrideEarly) {
+      const ok = window.confirm("Results may not be ready for this slot. Book anyway?");
+      if (!ok) return;
+      setOverrideEarly(true);
+    }
+    const dateLabel = selectedDate.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
+    const slot = { date: selectedDay, time: pickedTime, hint: `${dateLabel} · ${pickedTime}` };
+    onUpdate({
+      ...patient,
+      teleconsult: {
+        ...tele,
+        status: "booked",
+        booked: true,
+        skipped: false,
+        specialty,
+        slot,
+        by: "nurse",
+        bookedAt: new Date().toISOString(),
+      },
+    });
+    setRescheduling(false);
+    onPushToast?.(`${wasBooked ? "Teleconsult rescheduled" : "Teleconsult booked"} · ${slot.hint}`, "success");
+  };
+  const skip = () => {
+    setRescheduling(false);
+    onUpdate({
+      ...patient,
+      teleconsult: { ...tele, status: "waived", booked: false, skipped: true, slot: null },
+      cart: {
+        ...cart,
+        items: (cart.items || []).filter(i => i.kind !== "telecon" && i.id !== "telecon"),
+        payment: paymentAfterPaidEdit(cart.payment, "normal"),
+      },
+    });
+    onPushToast?.("Teleconsult skipped");
+  };
+  const removeBooking = () => {
+    setRescheduling(false);
+    onUpdate({
+      ...patient,
+      teleconsult: { ...tele, status: "notBooked", booked: false, skipped: false, slot: null },
+    });
+    onPushToast?.("Teleconsult booking removed");
+  };
+  const startReschedule = () => {
+    if (tele.slot?.date) setSelectedDay(tele.slot.date);
+    if (tele.slot?.time) setPickedTime(tele.slot.time);
+    if (tele.specialty) setSpecialty(tele.specialty);
+    setRescheduling(true);
+  };
+  const keepBooking = () => {
+    if (tele.slot?.date) setSelectedDay(tele.slot.date);
+    if (tele.slot?.time) setPickedTime(tele.slot.time);
+    if (tele.specialty) setSpecialty(tele.specialty);
+    setRescheduling(false);
+  };
+
+  return (
+    <StepShell title={t("step5.title") || "Book a teleconsultation"} subtitle={t("step5.sub") || "Schedule a call with a doctor to review results."} className="step-shell-tele">
+      <section className="card-soft tele-step-card">
+        <div className="tele-step-context">
+          <div className="tele-step-context-row">
+            <I.Clock size={12} />
+            <span>{tatHours > 0
+              ? `Estimated results available: ${tatLabel}. First post-TAT slot is highlighted.`
+              : "No TAT-bound tests in cart — book any slot."}</span>
+          </div>
+        </div>
+
+        {hasBookedSlot && !rescheduling && (
+          <div className="tele-booked-summary">
+            <div className="tele-booked-summary-icon" aria-hidden="true">
+              <I.CheckCircle size={18} />
+            </div>
+            <div className="tele-booked-summary-copy">
+              <span className="tele-booked-summary-kicker">{t("step5.booked")}</span>
+              <strong>{bookedSlotLabel || t("step5.bookedSlotFallback")}</strong>
+              <span>{bookedSpecialty?.label || specialty} · {t("step5.notifyQueued")}</span>
+            </div>
+            <div className="tele-booked-summary-actions">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={startReschedule}>
+                <I.Edit size={11} /> {t("step5.changeTime")}
+              </button>
+              <button type="button" className="btn btn-danger-ghost btn-sm" onClick={removeBooking}>
+                {t("step5.removeBooking")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showPicker && (
+          <>
+            {hasBookedSlot && rescheduling && (
+              <div className="tele-reschedule-note">
+                <I.Edit size={12} />
+                <span>{t("step5.rescheduleNote")}</span>
+              </div>
+            )}
+
+            {/* Specialty selector — auto-matched, nurse can override */}
+            <div className="tele-specialty">
+              <label htmlFor="tele-spec">Specialty</label>
+              <select
+                id="tele-spec"
+                value={specialty}
+                onChange={e => setSpecialty(e.target.value)}
+              >
+                {SPECIALTIES.map(s => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              {specialty === detected && detected !== "general" && (
+                <span className="tele-specialty-hint">auto-matched from ordered tests</span>
+              )}
+            </div>
+
+            {/* Calendar — month view with TAT-aware shading */}
+            <div className="tele-calendar">
+              <div className="tele-cal-head">
+                <button type="button" className="tele-cal-nav" onClick={prevMonth} aria-label="Previous month"><I.ChevronLeft size={14} /></button>
+                <strong>{monthLabel}</strong>
+                <button type="button" className="tele-cal-nav" onClick={nextMonth} aria-label="Next month"><I.ChevronRight size={14} /></button>
+              </div>
+              <div className="tele-cal-grid">
+                <div className="tele-cal-dow">Mon</div>
+                <div className="tele-cal-dow">Tue</div>
+                <div className="tele-cal-dow">Wed</div>
+                <div className="tele-cal-dow">Thu</div>
+                <div className="tele-cal-dow">Fri</div>
+                <div className="tele-cal-dow">Sat</div>
+                <div className="tele-cal-dow">Sun</div>
+                {grid.flat().map((d) => {
+                  const inMonth = d.getMonth() === viewMonth.month;
+                  const isToday = dayKey(d) === dayKey(today);
+                  const isPast = d < today;
+                  const isBeforeTat = d < earliestReadyDay;
+                  const isSelected = dayKey(d) === selectedDay;
+                  const cls = "tele-cal-day"
+                    + (inMonth ? "" : " is-out")
+                    + (isPast ? " is-past" : "")
+                    + (isBeforeTat && !isPast ? " is-before-tat" : "")
+                    + (isToday ? " is-today" : "")
+                    + (isSelected ? " is-selected" : "");
+                  return (
+                    <button
+                      key={dayKey(d)}
+                      type="button"
+                      className={cls}
+                      disabled={isPast || !inMonth}
+                      onClick={() => setSelectedDay(dayKey(d))}
+                      title={isBeforeTat && !isPast ? "Results not ready yet on this date" : ""}
+                      aria-current={isToday ? "date" : undefined}
+                      aria-pressed={isSelected}
+                    >
+                      {d.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Time-slot pane for the selected day */}
+            <div className="tele-times">
+              <div className="tele-times-head">
+                <I.Clock size={12} />
+                <strong>{selectedDate.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "short" })}</strong>
+                {selectedDayBeforeTAT && (
+                  <span className="tele-times-warn"><I.AlertTriangle size={10} /> Results may not be ready</span>
+                )}
+              </div>
+              <div className="tele-times-grid">
+                {TIME_SLOTS.map(time => {
+                  const active = pickedTime === time;
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      className={"tele-times-slot" + (active ? " is-active" : "")}
+                      onClick={() => setPickedTime(time)}
+                    >
+                      {time}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="tele-step-actions">
+              {hasBookedSlot ? (
+                <>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={keepBooking}>
+                    {t("step5.keepCurrent")}
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={confirmBooking}>
+                    <I.Check size={11} /> {t("step5.saveNewTime")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={skip}>
+                    {t("step5.skip")}
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={confirmBooking}>
+                    <I.Check size={11} /> {t("step5.confirm")}
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      <p className="tele-step-foot-note">
+        <I.Info size={11} /> {t("step5.footNote") || "Slots are based on estimated result availability. We'll notify the patient if the lab is delayed."}
+      </p>
+
+      <StepFooter
+        onPrev={onPrev}
+        onNext={onNext}
+        nextLabel={isWaived ? (t("step5.nextSkipped") || "Continue without teleconsult") : undefined}
+        nextDisabled={!gate?.step5Done}
+        blockers={gate?.blockers?.[5] || []}
+        className="step-footer-tele"
+      />
+    </StepShell>
+  );
+}
+
+// =====================================================================
+// STEP 6 — Payment
+// =====================================================================
+//   Spec v12 §Step 6: order summary + payment capture.
+//   Phase 1 reuses the existing PaymentArea / useCartPayment from OrderCart.jsx
+//   so the payment surface stays a single source of truth. Phase 3 layers the
+//   spec's split-bill, mixed cash+KHQR, and auto-split-from-coverage on top.
+//
+export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, onCheckIn, gate, payerReady }) {
+  const t = useLang();
+  const pay = useCartPayment(patient, onUpdate, onPushToast);
+  const cart = pay.cart;
+  const totals = pay.totals;
+  const due = paymentDueAmount(cart, totals);
+  const isPaid = cart.payment?.status === "confirmed";
+  const isWaiting = cart.payment?.status === "waiting";
+  const isPayLater = cart.payment?.status === "deferred";
+  const isSplitCash = cart.payment?.status === "split-cash";
+  const isNoCharge = cart.items.length > 0 && due <= 0;
+  const ccy = cart.ccy || "USD";
+
+  // Spec v12 §6 — mixed cash+KHQR on a single invoice.
+  // Nurse enters the cash portion; KHQR remainder is auto-calculated.
+  // Cash step must confirm before KHQR step unlocks.
+  const [splitMode, setSplitMode] = useState(cart.payment?.method === "split");
+  const [cashPortion, setCashPortion] = useState(cart.payment?.cashPortion || "");
+  const cashNum = parseFloat(cashPortion) || 0;
+  const cashUSD = ccy === "KHR" ? cashNum / KHR_RATE : cashNum;
+  const khqrRemainder = Math.max(0, due - cashUSD);
+  const cashStepDone = cart.payment?.cashConfirmed === true;
+  const splitFullyPaid = cart.payment?.status === "confirmed" && cart.payment?.method === "split";
+
+  const enterSplit = () => {
+    setSplitMode(true);
+    pay.onMethod(null);
+  };
+  const exitSplit = () => {
+    setSplitMode(false);
+    setCashPortion("");
+  };
+  const confirmCashStep = () => {
+    if (cashUSD <= 0 || cashUSD >= due) return;
+    onUpdate({
+      ...patient,
+      cart: { ...cart, payment: { ...cart.payment, method: "split", status: "split-cash", cashPortion: cashPortion, cashConfirmed: true } },
+    });
+    onPushToast?.(`Cash collected · ${ccy === "KHR" ? "៛" + Math.round(cashNum).toLocaleString() : "$" + cashUSD.toFixed(2)}`, "success");
+  };
+  const confirmKhqrStep = () => {
+    onUpdate({
+      ...patient,
+      cart: { ...cart, payment: { ...cart.payment, status: "confirmed", method: "split", receiptId: "R-" + Math.floor(10000 + Math.random() * 90000) } },
+    });
+    onPushToast?.("Payment complete — split cash + KHQR", "success");
+  };
+
+  const ctaLabel = (isPaid || isPayLater || isNoCharge)
+    ? (t("step6.continue") || "Continue to check-in")
+    : (t("step6.payLater") || "Pay later — continue");
+  const markPayLater = (continueToCheckIn = false) => {
+    const next = {
+      ...patient,
+      cart: { ...cart, payment: { ...cart.payment, status: "deferred", method: null } },
+    };
+    onUpdate(next);
+    onPushToast?.(t("step6.payLaterToast") || "Marked pay-later — collect at exit", "info");
+    if (continueToCheckIn) onNext?.(next);
+  };
+  const handleFooterNext = () => {
+    if (isPaid || isPayLater || isNoCharge) {
+      onNext?.(patient);
+      return;
+    }
+    markPayLater(true);
+  };
+
+  // Spec v12 §4 + §6 — auto-split preview based on coverage labels.
+  const insurance = patient.insurance || [];
+  const hasInsurance = insurance.length > 0;
+  const groupedByPayer = useMemo(() => {
+    const out = { direct: [], insurance: [], preauth: [] };
+    cart.items.forEach(it => {
+      if (!hasInsurance) { out.direct.push(it); return; }
+      const cov = MOCK_COVERAGE_FOR_STEP6[it.id];
+      if (cov?.preauth) out.preauth.push(it);
+      else if (cov?.covered > 0) out.insurance.push({ ...it, _coverage: cov });
+      else out.direct.push(it);
+    });
+    return out;
+  }, [cart.items, hasInsurance]);
+  const hasAutoSplit = hasInsurance && (groupedByPayer.insurance.length > 0 || groupedByPayer.preauth.length > 0);
+
+  return (
+    <StepShell title={t("step6.title") || "Payment"} subtitle={t("step6.sub") || "Collect payment and confirm the order."} className="step-shell-payment">
+      <section className="card-soft step6-summary">
+        <header className="step6-summary-head">
+          <strong>{t("step6.summaryTitle") || "Order summary"}</strong>
+          <span className="step6-summary-total">${totals.total.toFixed(2)}</span>
+        </header>
+        <div className="step6-summary-rows">
+          {cart.items.map(it => (
+            <div key={it.id} className="step6-summary-row">
+              <span className="step6-summary-row-name">{it.name}</span>
+              <span className="step6-summary-row-amt">${(it.price || 0).toFixed(2)}</span>
+            </div>
+          ))}
+          {cart.items.length === 0 && (
+            <div className="step6-summary-empty">{t("step6.empty") || "Nothing in cart yet — go back to Orders."}</div>
+          )}
+        </div>
+      </section>
+
+      {/* Spec v12 §4 auto-split preview — only when insurance is on file */}
+      {hasAutoSplit && !splitMode && !isPaid && (
+        <section className="card-soft step6-autosplit">
+          <header className="step6-autosplit-head">
+            <I.Sparkles size={12} />
+            <strong>Auto-split applied based on insurance eligibility</strong>
+          </header>
+          {groupedByPayer.insurance.length > 0 && (
+            <div className="step6-autosplit-group">
+              <div className="step6-autosplit-grouphead">
+                <span>Invoice -A · {insurance[0]?.provider || "Insurance"}</span>
+                <span>${groupedByPayer.insurance.reduce((s, it) => s + (it.price || 0) * ((it._coverage?.covered || 0) / 100), 0).toFixed(2)}</span>
+              </div>
+              {groupedByPayer.insurance.map(it => (
+                <div key={it.id} className="step6-autosplit-row">
+                  <span>{it.name}</span>
+                  <span>{it._coverage.covered}% covered · patient ${(it.price * (1 - it._coverage.covered / 100)).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {groupedByPayer.direct.length > 0 && (
+            <div className="step6-autosplit-group">
+              <div className="step6-autosplit-grouphead">
+                <span>Invoice -B · Direct Pay</span>
+                <span>${groupedByPayer.direct.reduce((s, it) => s + (it.price || 0), 0).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+          {groupedByPayer.preauth.length > 0 && (
+            <div className="step6-autosplit-warn">
+              <I.AlertTriangle size={11} /> {groupedByPayer.preauth.length} item(s) require pre-auth before claim
+            </div>
+          )}
+        </section>
+      )}
+
+      {isNoCharge && !isPaid && !isPayLater && (
+        <section className="card-soft step6-nocharge">
+          <I.CheckCircle size={16} />
+          <div>
+            <strong>No payment due</strong>
+            <p>This order has a $0 patient balance. Continue to confirm check-in.</p>
+          </div>
+        </section>
+      )}
+
+      {/* Mixed cash+KHQR section, available when cart hasn't been paid */}
+      {cart.items.length > 0 && !isPaid && !isWaiting && !isNoCharge && (
+        <section className="card-soft step6-split">
+          <header className="step6-split-head">
+            <strong>Payment method</strong>
+            <button
+              type="button"
+              className={"step6-split-toggle" + (splitMode ? " is-on" : "")}
+              onClick={() => splitMode ? exitSplit() : enterSplit()}
+            >
+              {splitMode ? <><I.X size={11} /> Cancel split</> : <><I.Split size={11} /> Cash + KHQR split</>}
+            </button>
+          </header>
+
+          {splitMode && (
+            <div className="step6-split-body">
+              <div className="step6-split-row">
+                <label>Cash portion ({ccy})</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cashPortion}
+                  onChange={e => setCashPortion(e.target.value)}
+                  disabled={cashStepDone}
+                  placeholder={ccy === "KHR" ? "0" : "0.00"}
+                />
+              </div>
+              <div className="step6-split-row">
+                <label>KHQR remainder (auto)</label>
+                <span className="step6-split-readonly">${khqrRemainder.toFixed(2)}</span>
+              </div>
+
+              <div className="step6-split-steps">
+                <button
+                  type="button"
+                  className={"step6-split-step" + (cashStepDone ? " is-done" : "")}
+                  onClick={confirmCashStep}
+                  disabled={cashUSD <= 0 || cashUSD >= due || cashStepDone}
+                >
+                  {cashStepDone ? <><I.Check size={12} strokeWidth={3} /> Step 1: Cash collected</> : <><I.CreditCard size={12} /> Step 1: Collect cash</>}
+                </button>
+                <button
+                  type="button"
+                  className="step6-split-step"
+                  onClick={confirmKhqrStep}
+                  disabled={!cashStepDone || splitFullyPaid}
+                >
+                  {splitFullyPaid ? <><I.Check size={12} strokeWidth={3} /> Step 2: KHQR confirmed</> : <><I.CreditCard size={12} /> Step 2: Show KHQR ${khqrRemainder.toFixed(2)}</>}
+                </button>
+              </div>
+              {splitFullyPaid && (
+                <div className="step6-split-done"><I.CheckCircle size={12} /> Invoice paid in full — split cash + KHQR</div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {cart.items.length > 0 && !splitMode && !isNoCharge && (
+        <PaymentArea
+          cart={cart}
+          totals={totals}
+          tendered={pay.tendered}
+          setTendered={pay.setTendered}
+          onMethod={pay.onMethod}
+          onCcyToggle={pay.onCcyToggle}
+          onConfirmCash={pay.onConfirmCash}
+          onConfirmKhqr={pay.onConfirmKhqr}
+          change={pay.change}
+          cashOk={pay.cashOk}
+          tenderedNum={pay.tenderedNum}
+          itemCount={pay.itemCount}
+          t={t}
+          paymentReady={due > 0 && payerReady !== false}
+          paymentReasons={[]}
+        />
+      )}
+
+      <StepFooter
+        onPrev={onPrev}
+        onNext={handleFooterNext}
+        nextLabel={ctaLabel}
+        nextDisabled={isWaiting || isSplitCash || cart.items.length === 0}
+        blockers={
+          isWaiting
+            ? [t("step6.waitingBlock") || "Waiting for payment to confirm"]
+            : isSplitCash
+              ? ["Finish split KHQR payment before continuing"]
+              : []
+        }
+        secondary={!isPaid && !isPayLater && !isNoCharge && cart.items.length > 0 && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => markPayLater(false)}>
+            <I.Clock size={11} /> {t("step6.markPayLater") || "Mark pay-later"}
+          </button>
+        )}
+        className="step-footer-payment"
+      />
+    </StepShell>
+  );
+}
+
+// Step6 mock coverage map mirrors the AddTestsPanel one — keeps payment
+// auto-split aligned with the labels nurse saw on each row in Step 4.
+const MOCK_COVERAGE_FOR_STEP6 = {
+  cbc: { covered: 80 }, glucose: { covered: 80 }, hba1c: { covered: 80 },
+  lipid: { covered: 80 }, urinalysis: { covered: 60 }, lft: { covered: 80 },
+  kft: { covered: 80 }, tsh: { covered: 80 }, amh: { covered: 0 },
+  "preg-bhcg": { covered: 0 }, "xray-chest": { covered: 60 },
+  "us-pelvis": { covered: 0 }, "ct-head": { covered: 100, preauth: true },
+  "mri-brain": { covered: 100, preauth: true }, "ecg-12": { covered: 80 },
+  "vit-bp": { covered: 100 }, "vit-bmi": { covered: 100 },
+};

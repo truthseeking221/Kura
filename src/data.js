@@ -1,4 +1,9 @@
 // === Kura Reception — seed data ===
+import {
+  LAB_CATALOG as STANDARD_LAB_CATALOG,
+  LAB_CATEGORIES as STANDARD_LAB_CATEGORIES,
+  ORDER_CATALOG as STANDARD_ORDER_CATALOG,
+} from "./orderCatalog";
 
 // === Blank-state factory (dev tester) ===
 // Returns a patient stripped to first-arrival, no PII captured yet.
@@ -30,7 +35,13 @@ export function blankPatient(id = "p-blank", queueNumber = "Q-000", avatarColor 
     pwaLog: [],
     services: [],
     cart: {
-      items: [],
+      // Spec v12 §Step 4 "Empty cart — auto-populated defaults":
+      // every new visit starts with Vitals + Teleconsult at $0 to nudge
+      // the nurse to record vitals and book a tele slot. Both are removable.
+      items: [
+        { id: "vit-pkg", kind: "vitals", name: "Vital signs package", price: 0, qty: 1, payer: "direct", status: "pending", auto: true },
+        { id: "telecon", kind: "telecon", name: "Teleconsultation", price: 0, qty: 1, payer: "direct", status: "pending", auto: true },
+      ],
       promos: {},
       splits: null,
       ccy: "USD",
@@ -53,7 +64,7 @@ export function blankPatient(id = "p-blank", queueNumber = "Q-000", avatarColor 
   };
 }
 
-export const initialPatients = [
+const seedPatients = [
   {
     id: "p1",
     name: "Maya Tran",
@@ -402,7 +413,13 @@ export const initialPatients = [
     ],
     services: [],
     cart: {
-      items: [],
+      // Spec v12 §Step 4 "Empty cart — auto-populated defaults":
+      // every new visit starts with Vitals + Teleconsult at $0 to nudge
+      // the nurse to record vitals and book a tele slot. Both are removable.
+      items: [
+        { id: "vit-pkg", kind: "vitals", name: "Vital signs package", price: 0, qty: 1, payer: "direct", status: "pending", auto: true },
+        { id: "telecon", kind: "telecon", name: "Teleconsultation", price: 0, qty: 1, payer: "direct", status: "pending", auto: true },
+      ],
       promos: {},
       splits: null,
       ccy: "USD",
@@ -788,7 +805,13 @@ export const initialPatients = [
     ],
     services: [],
     cart: {
-      items: [],
+      // Spec v12 §Step 4 "Empty cart — auto-populated defaults":
+      // every new visit starts with Vitals + Teleconsult at $0 to nudge
+      // the nurse to record vitals and book a tele slot. Both are removable.
+      items: [
+        { id: "vit-pkg", kind: "vitals", name: "Vital signs package", price: 0, qty: 1, payer: "direct", status: "pending", auto: true },
+        { id: "telecon", kind: "telecon", name: "Teleconsultation", price: 0, qty: 1, payer: "direct", status: "pending", auto: true },
+      ],
       promos: {},
       splits: null,
       ccy: "USD",
@@ -816,7 +839,330 @@ export const initialPatients = [
   },
 ];
 
-export const queueCounts = { Waiting: 12, "Intake Sent": 7, Ready: 5, Exceptions: 4 };
+const catalogById = new Map(STANDARD_ORDER_CATALOG.map(item => [item.id, item]));
+const pad = (n, width = 3) => String(n).padStart(width, "0");
+const initialsFor = (name) => name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+const dobForAge = (age, index) => {
+  const year = 2026 - age;
+  const month = String((index % 12) + 1).padStart(2, "0");
+  const day = String((index % 27) + 1).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const ageFromDob = (dob) => 2026 - Number(dob.slice(0, 4));
+const itemFromCatalog = (id, payer = "direct", overrides = {}) => {
+  const c = catalogById.get(id) || {};
+  return {
+    id,
+    kind: overrides.kind || c.kind || "lab",
+    name: overrides.name || c.name || id,
+    price: overrides.price ?? c.price ?? 0,
+    qty: 1,
+    payer,
+    status: overrides.status || "pending",
+    ...overrides,
+  };
+};
+const defaultZeroItems = (payer = "direct") => [
+  { id: "vit-pkg", kind: "vitals", name: "Vital signs package", price: 0, qty: 1, payer, status: "pending", auto: true },
+  { id: "telecon", kind: "telecon", name: "Teleconsultation", price: 0, qty: 1, payer, status: "pending", auto: true },
+];
+const cartFor = (items, payment = { method: null, status: "idle", tendered: "" }, ccy = "USD", extras = {}) => ({
+  items,
+  promos: extras.promos || {},
+  splits: extras.splits || null,
+  ccy,
+  payment,
+  pregnancyConsent: extras.pregnancyConsent || null,
+});
+const labTestsFrom = (items) => items
+  .filter(item => item.kind === "lab")
+  .map(item => ({ id: item.id, name: item.name, price: item.price, status: item.status === "paid" ? "ordered" : item.status }));
+const servicesFrom = (items, payerLabel = "Direct Pay") => items
+  .filter(item => item.kind !== "telecon" && item.id !== "telecon")
+  .map(item => ({ name: item.name, payer: payerLabel, status: item.status || "pending", amount: item.price || 0 }));
+
+const mockFirstNames = [
+  "Kosal", "Sophea", "Lina", "Rithy", "Maly", "Dalin", "Sovann", "Bopha", "Vichet", "Sreyneang",
+  "Minh", "Lan", "Huy", "Thao", "Quang", "Anh", "Niran", "Pim", "Somchai", "Araya",
+  "Jisoo", "Minho", "Elena", "Marco", "Amina", "Omar", "Hannah", "Lucas", "Noor", "Yara",
+];
+const mockLastNames = [
+  "Sok", "Chan", "Kim", "Chea", "Lim", "Heng", "Ly", "Phan", "Nguyen", "Tran",
+  "Pham", "Le", "Sato", "Tan", "Wong", "Singh", "Khan", "Martin", "Dubois", "Garcia",
+  "Park", "Lee", "Rahman", "Chen", "Patel",
+];
+const mockReasons = [
+  ["Annual physical"],
+  ["Diabetes follow-up", "HbA1c"],
+  ["Chest discomfort", "ECG"],
+  ["Fatigue", "Iron studies"],
+  ["Pregnancy check", "Ultrasound"],
+  ["Travel clearance", "COVID PCR"],
+  ["Back pain", "Imaging"],
+  ["Hypertension follow-up"],
+  ["Fever", "CBC"],
+  ["Thyroid review"],
+  ["Corporate screening"],
+  ["Insurance billing"],
+  ["Booking code follow-up"],
+  ["Vaccination clearance"],
+  ["Kidney monitoring"],
+  ["Pediatric fever"],
+];
+const languages = ["Khmer", "English", "Vietnamese", "Thai", "French", "Korean"];
+const avatarColors = ["av-blue", "av-teal", "av-purple", "av-amber", "av-pink", "av-green"];
+const countryProfiles = [
+  { code: "+855", base: "12" },
+  { code: "+855", base: "77" },
+  { code: "+84", base: "933" },
+  { code: "+66", base: "81" },
+  { code: "+82", base: "10" },
+  { code: "+33", base: "6" },
+];
+const insuranceProviders = ["Forte Insurance", "Prudential", "AIA Cambodia", "Manulife", "NSSF (National Social Security Fund)", "Bupa Global"];
+const corporateAccounts = ["Angkor Foods", "Mekong Bank", "Phnom Penh Logistics", "Bayon Telecom", "Lotus Hospitality"];
+const bookedSlots = [
+  { id: "today_pm", hint: "Today - 14:00-14:30" },
+  { id: "today_late", hint: "Today - 16:30-17:00" },
+  { id: "tom_am", hint: "Tomorrow - 09:00-09:30" },
+  { id: "tom_pm", hint: "Tomorrow - 15:00-15:30" },
+];
+
+function paymentAmount(items) {
+  return items.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+}
+
+function buildGeneratedPatient(index) {
+  const n = index + 1;
+  const scenario = index % 20;
+  const duplicateRisk = index === 15;
+  const sexAtBirth = index % 3 === 0 ? "Female" : "Male";
+  const first = mockFirstNames[index % mockFirstNames.length];
+  const last = mockLastNames[(index * 7) % mockLastNames.length];
+  const name = duplicateRisk ? "Maya Tran" : `${first} ${last}`;
+  const age = duplicateRisk ? 30 : 18 + ((index * 7) % 58);
+  const dob = duplicateRisk ? "1996-02-14" : dobForAge(age, index);
+  const country = duplicateRisk ? { code: "+855", base: "12" } : countryProfiles[index % countryProfiles.length];
+  const localPhone = duplicateRisk
+    ? "12 345 678"
+    : `${country.base} ${pad(200 + ((index * 37) % 700), 3)} ${pad(100 + ((index * 53) % 800), 3)}`;
+  const mobile = `${country.code} ${localPhone}`;
+  const id = `p-mock-${pad(n)}`;
+  const queueNumber = `Q-${pad(51 + index)}`;
+  const arrivedMinute = 50 + index;
+  const arrivedHour = 9 + Math.floor(arrivedMinute / 60);
+  const arrivedMins = arrivedMinute % 60;
+  const arrivedAt = `${String(arrivedHour).padStart(2, "0")}:${String(arrivedMins).padStart(2, "0")} AM`;
+  const base = {
+    id,
+    name,
+    gender: sexAtBirth,
+    sexAtBirth,
+    age: ageFromDob(dob),
+    initials: initialsFor(name),
+    avatarColor: avatarColors[index % avatarColors.length],
+    arrivedAt,
+    queueNumber,
+    status: { tone: "info", label: "Awaiting check-in" },
+    visitReason: mockReasons[index % mockReasons.length],
+    language: languages[index % languages.length],
+    countryCode: country.code,
+    phoneNumber: localPhone,
+    mobile,
+    dob,
+    telegramHandle: index % 4 === 0 ? `t.me/${first.toLowerCase()}${last.toLowerCase()}${pad(n, 2)}` : "",
+    telegramVerified: index % 4 === 0,
+    commMethod: index % 4 === 0 ? "telegram" : "sms",
+    otpVerified: true,
+    pwaSentAt: arrivedAt,
+    idScanned: true,
+    idNumber: `MOCK${pad(260500 + n, 6)}`,
+    payer: "direct",
+    insuranceAcked: true,
+    documents: { id: "ok", consent: "ok", insurance: "pending", receipt: "pending" },
+    pwaProgress: 100,
+    pwaLog: [
+      { type: "sent", text: index % 4 === 0 ? "Link sent by Telegram" : "Link sent by SMS", time: arrivedAt, state: "ok" },
+      { type: "verified", text: index % 4 === 0 ? "Telegram verified" : "OTP verified", time: arrivedAt, state: "ok" },
+    ],
+    services: [],
+    cart: cartFor(defaultZeroItems()),
+    visitDetails: {
+      chiefComplaint: mockReasons[index % mockReasons.length].join(", "),
+      medicalHistory: index % 5 === 0 ? "Hypertension" : index % 7 === 0 ? "Type 2 diabetes" : "",
+      medications: index % 5 === 0 ? "Amlodipine 5mg daily" : index % 7 === 0 ? "Metformin 500mg twice daily" : "",
+      allergies: index % 11 === 0 ? "Penicillin" : index % 13 === 0 ? "Shellfish" : "None known",
+      notes: "",
+    },
+    visitDetailsAuthors: {
+      chiefComplaint: "patient",
+      allergies: "patient",
+    },
+    labTests: [],
+    insurance: [],
+    priorResults: index % 3 === 0 ? [
+      { id: `pr-${id}-cbc`, testId: "cbc", testName: "Complete Blood Count (CBC)", visitDate: "2026-02-10", status: "complete", price: 8, sensitive: false },
+      { id: `pr-${id}-lipid`, testId: "lipid", testName: "Lipid Panel", visitDate: "2025-11-18", status: "complete", price: 12, sensitive: true },
+    ] : [],
+    teleconsult: { status: "notBooked", slot: null, by: null },
+    handoff: 1,
+    handoffStates: ["done", "done", "pending", "pending"],
+    identity: { verified: true, source: "scan", lockedFields: ["name", "dob", "sexAtBirth"] },
+    manualEntry: false,
+    arrivedRaw: `Today, ${arrivedAt}`,
+  };
+
+  let items = [];
+  let payment = { method: null, status: "idle", tendered: "" };
+  let payerLabel = "Direct Pay";
+  switch (scenario) {
+    case 0:
+      items = [itemFromCatalog("visit-gp"), itemFromCatalog("cbc"), itemFromCatalog("glucose"), itemFromCatalog("lipid")];
+      base.status = { tone: "info", label: "Ready to pay" };
+      base.teleconsult = { status: "waived", skipped: true, slot: null, by: "nurse" };
+      break;
+    case 1:
+      items = [itemFromCatalog("hba1c"), itemFromCatalog("kft"), itemFromCatalog("urinalysis")];
+      base.status = { tone: "warn", label: "Needs insurance" };
+      base.payer = "insurance";
+      base.insuranceAcked = false;
+      base.documents = { ...base.documents, insurance: "pending" };
+      base.insurance = [{ id: `ins-${id}`, provider: insuranceProviders[index % insuranceProviders.length], policyNumber: `POL-${pad(700000 + index, 6)}`, memberName: name, memberId: `M-${pad(9000 + index, 5)}`, expiry: "12/2027", coverage: "Outpatient", cardAttached: false }];
+      break;
+    case 2:
+      items = [itemFromCatalog("xray-chest", "direct", { validationState: "sent" }), itemFromCatalog("cbc")];
+      base.status = { tone: "danger", label: "Consent required" };
+      base.documents = { ...base.documents, consent: "pending" };
+      base.exception = "consent";
+      base.handoffStates = ["done", "done", "done", "blocked"];
+      break;
+    case 3:
+      items = [itemFromCatalog("covid"), itemFromCatalog("vit-b12")];
+      payment = { method: "cash", status: "confirmed", receiptId: `KUR-260502-${pad(300 + index)}`, confirmedAt: "2026-05-02T03:10:00Z", amount: paymentAmount(items), currency: "USD", tendered: String(paymentAmount(items) + 2), change: 2, cashier: "Linh Nguyen" };
+      base.status = { tone: "success", label: "Checked in" };
+      base.checkedInAt = "2026-05-02T03:12:00Z";
+      base.documents = { ...base.documents, receipt: "ok" };
+      base.handoff = 3;
+      base.handoffStates = ["done", "done", "done", "done"];
+      break;
+    case 4:
+      items = [itemFromCatalog("kft"), itemFromCatalog("urinalysis")];
+      payment = { method: "khqr", status: "waiting", tendered: "" };
+      base.status = { tone: "info", label: "Payment pending" };
+      base.pwaLog.push({ type: "pending", text: "KHQR waiting", time: arrivedAt, state: "pending" });
+      break;
+    case 5:
+      items = [{ id: "vit-pkg", kind: "vitals", name: "Vital signs package", price: 0, qty: 1, payer: "direct", status: "pending", auto: true }];
+      base.status = { tone: "success", label: "No charge" };
+      base.teleconsult = { status: "waived", skipped: true, slot: null, by: "nurse" };
+      break;
+    case 6:
+      items = [itemFromCatalog("visit-gp", "corporate"), itemFromCatalog("ecg-12", "corporate"), itemFromCatalog("lipid", "corporate")];
+      base.payer = "corporate";
+      payerLabel = "Corporate";
+      base.status = { tone: "success", label: "Corporate ready" };
+      base.corporateAccount = corporateAccounts[index % corporateAccounts.length];
+      break;
+    case 7:
+      items = [itemFromCatalog("tsh"), itemFromCatalog("ferritin")];
+      payment = { method: null, status: "deferred", tendered: "" };
+      base.status = { tone: "info", label: "Pay later" };
+      break;
+    case 8:
+      items = [itemFromCatalog("cbc"), itemFromCatalog("ferritin")];
+      base.status = { tone: "warn", label: "Verify contact" };
+      base.otpVerified = false;
+      base.telegramVerified = false;
+      base.pwaProgress = 35;
+      base.pwaLog = [{ type: "sent", text: "Link sent by SMS", time: arrivedAt, state: "ok" }, { type: "pending", text: "OTP not verified", time: "Awaiting patient", state: "pending" }];
+      break;
+    case 9:
+      items = defaultZeroItems();
+      base.status = { tone: "info", label: "Awaiting ID" };
+      base.idScanned = false;
+      base.manualEntry = true;
+      base.identity = { verified: false, source: "manual", lockedFields: [] };
+      base.documents = { id: "pending", consent: "pending", insurance: "pending", receipt: "pending" };
+      base.pwaProgress = 0;
+      base.pwaLog = [{ type: "pending", text: "Waiting for National ID scan", time: "Now", state: "pending" }];
+      break;
+    case 10:
+      items = [itemFromCatalog("preg"), itemFromCatalog("us-preg", "direct", { validationState: "idle" })];
+      base.status = { tone: "danger", label: "Pregnancy consent" };
+      base.documents = { ...base.documents, consent: "pending" };
+      base.cart = cartFor(items, payment, "USD", { pregnancyConsent: { state: "pending" } });
+      break;
+    case 11:
+      items = [itemFromCatalog("cbc"), itemFromCatalog("glucose"), itemFromCatalog("kft"), itemFromCatalog("lipid")];
+      base.status = { tone: "success", label: "Booking applied" };
+      base.consumedBookingCodes = ["BC-2026042-DIA3"];
+      break;
+    case 12:
+      items = [itemFromCatalog("xray-knee", "direct", { validationState: "verbal", verbalBy: "Linh Nguyen" }), itemFromCatalog("esr")];
+      base.status = { tone: "info", label: "Verbal consent" };
+      break;
+    case 13:
+      items = [itemFromCatalog("visit-gp"), itemFromCatalog("hba1c"), itemFromCatalog("lipid")];
+      base.status = { tone: "info", label: "Teleconsult booked" };
+      base.teleconsult = { status: "booked", booked: true, slot: bookedSlots[index % bookedSlots.length], by: "nurse", bookedAt: "2026-05-02T04:00:00Z" };
+      break;
+    case 14:
+      items = [itemFromCatalog("visit-spec"), itemFromCatalog("ct-head", "insurance")];
+      base.status = { tone: "warn", label: "Pre-auth needed" };
+      base.payer = "insurance";
+      payerLabel = "Insurance";
+      base.insurance = [{ id: `ins-${id}`, provider: insuranceProviders[index % insuranceProviders.length], policyNumber: `PRE-${pad(800000 + index, 6)}`, memberName: name, memberId: `M-${pad(12000 + index, 5)}`, expiry: "08/2027", coverage: "Pre-auth required", cardAttached: true }];
+      break;
+    case 15:
+      items = [itemFromCatalog("cbc"), itemFromCatalog("glucose")];
+      base.status = { tone: "danger", label: "Possible duplicate" };
+      base.notes = "Duplicate-risk seed: same name/DOB/phone suffix as Maya Tran.";
+      break;
+    case 16:
+      items = [itemFromCatalog("visit-gp"), itemFromCatalog("lft"), itemFromCatalog("ptinr")];
+      payment = { method: "split", status: "split-cash", cashPortion: "10", cashConfirmed: true, tendered: "10" };
+      base.status = { tone: "info", label: "Split payment" };
+      break;
+    case 17:
+      items = [itemFromCatalog("stool"), itemFromCatalog("electro")];
+      base.status = { tone: "warn", label: "Intake incomplete" };
+      base.pwaProgress = 58;
+      base.pwaLog.push({ type: "pending", text: "Medical history pending", time: "58% complete", state: "pending" });
+      base.visitDetails.medicalHistory = "";
+      base.visitDetails.medications = "";
+      break;
+    case 18:
+      items = [itemFromCatalog("visit-gp", "referral"), itemFromCatalog("echo", "referral")];
+      base.payer = "referral";
+      payerLabel = "Referral";
+      base.status = { tone: "info", label: "Referral review" };
+      base.referralClinic = "Kampot Clinic";
+      break;
+    default:
+      items = [itemFromCatalog("vit-d"), itemFromCatalog("vit-b12"), itemFromCatalog("cbc")];
+      base.status = { tone: "success", label: "Ready for nurse" };
+      break;
+  }
+
+  if (!base.cart || base.cart.items.length === 0 || scenario !== 10) {
+    base.cart = cartFor(items, payment, scenario % 9 === 0 ? "KHR" : "USD");
+  }
+  base.services = servicesFrom(base.cart.items, payerLabel);
+  base.labTests = labTestsFrom(base.cart.items);
+  if (!base.teleconsult.booked && !base.teleconsult.skipped && !base.cart.items.some(item => item.kind === "telecon" || item.id === "telecon")) {
+    base.teleconsult = { status: "waived", skipped: true, slot: null, by: "nurse" };
+  }
+  if (base.status.label === "Checked in") {
+    base.pwaLog.push({ type: "ok", text: "Check-in complete", time: arrivedAt, state: "ok" });
+  }
+  return base;
+}
+
+const generatedPatients = Array.from({ length: 100 }, (_, index) => buildGeneratedPatient(index));
+
+export const initialPatients = [...seedPatients, ...generatedPatients];
+
+export const queueCounts = { Waiting: 72, "Intake Sent": 21, Ready: 17, Exceptions: 14 };
 
 export const initialNotifications = [
   {
@@ -920,31 +1266,9 @@ export const payerOptions = [
   { id: "referral",  name: "Referral",   icon: "Network",     caption: "Linked to referring clinic" },
 ];
 
-export const LAB_CATALOG = [
-  { id: "cbc",          name: "Complete Blood Count (CBC)", category: "Haematology", popular: true,  price: 8 },
-  { id: "glucose",      name: "Blood Glucose (Fasting)",    category: "Biochemistry", popular: true, price: 5 },
-  { id: "lipid",        name: "Lipid Panel",                category: "Biochemistry", popular: true, price: 12 },
-  { id: "tsh",          name: "TSH (Thyroid)",              category: "Biochemistry", popular: true, price: 14 },
-  { id: "urinalysis",   name: "Urinalysis",                 category: "Urinalysis",   popular: true, price: 6 },
-  { id: "preg",         name: "Pregnancy (β-hCG)",          category: "Biochemistry", popular: true, price: 7 },
-  { id: "hba1c",        name: "HbA1c (Diabetes)",           category: "Biochemistry", price: 11 },
-  { id: "lft",          name: "Liver Function (LFT)",       category: "Biochemistry", price: 13 },
-  { id: "kft",          name: "Kidney Function (KFT)",      category: "Biochemistry", price: 13 },
-  { id: "electro",      name: "Electrolytes Panel",         category: "Biochemistry", price: 9 },
-  { id: "esr",          name: "ESR (Sed Rate)",             category: "Haematology",  price: 5 },
-  { id: "ferritin",     name: "Ferritin",                   category: "Haematology",  price: 9 },
-  { id: "ptinr",        name: "PT / INR",                   category: "Haematology",  price: 8 },
-  { id: "strep",        name: "Strep Throat Culture",       category: "Microbiology", price: 10 },
-  { id: "covid",        name: "COVID-19 PCR",               category: "Microbiology", price: 18 },
-  { id: "stool",        name: "Stool Culture",              category: "Microbiology", price: 11 },
-  { id: "hiv",          name: "HIV Antibody",               category: "Immunology",   price: 12 },
-  { id: "hep",          name: "Hepatitis B Surface Ag",     category: "Immunology",   price: 10 },
-  { id: "ana",          name: "ANA (Autoimmune Screen)",    category: "Immunology",   price: 16 },
-  { id: "urineculture", name: "Urine Culture & Sensitivity",category: "Urinalysis",   price: 9 },
-  { id: "microalbumin", name: "Urine Microalbumin",         category: "Urinalysis",   price: 7 },
-];
+export const LAB_CATALOG = STANDARD_LAB_CATALOG;
 
-export const LAB_CATEGORIES = ["Popular", "Biochemistry", "Haematology", "Microbiology", "Immunology", "Urinalysis"];
+export const LAB_CATEGORIES = STANDARD_LAB_CATEGORIES;
 
 export const INSURANCE_PROVIDERS = [
   "Forte Insurance",

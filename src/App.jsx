@@ -11,18 +11,17 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { I } from "./icons";
 import { initialPatients, initialNotifications, blankPatient } from "./data";
-import { Sidebar, Topbar, GoalBar } from "./Layout";
-import { OrderCart, deriveCart, cartTotals, ORDER_CATALOG, paymentAfterPaidEdit } from "./OrderCart";
+import { Sidebar, Topbar } from "./Layout";
+import { OrderCart, deriveCart, cartTotals, ORDER_CATALOG, paymentAfterPaidEdit, paymentDueAmount } from "./OrderCart";
 import { AddTestsPanel } from "./AddTestsPanel";
 import { useKeydown, isTypingTarget } from "./shared";
 import {
-  NewWalkInModal,
   HotkeyCheatsheetModal,
   ToastStack,
 } from "./Modals";
-import { LangProvider, useLang } from "./i18n";
+import { LangProvider } from "./i18n";
 import { WizardProgress, PatientHeader, useWizardGate, canNavigateToStep } from "./Wizard";
-import { Step1Identity, Step2Review, Step3Insurance, Step4Orders } from "./Steps";
+import { Step1Identity, Step2Review, Step3Insurance, Step4Orders, Step5Teleconsult, Step6Payment } from "./Steps";
 
 export default function App() {
   return (
@@ -35,7 +34,7 @@ export default function App() {
 function AppShell() {
   const [patients, setPatients] = useState(initialPatients);
   const [activeId, setActiveId] = useState("p1");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [activeNav, setActiveNav] = useState("reception");
   const [uiLang, setUiLang] = useState("English");
 
@@ -52,7 +51,6 @@ function AppShell() {
   // Per-patient wizard step (default to inferred step on first load)
   const [wizardStepMap, setWizardStepMap] = useState({});
 
-  const [walkInOpen, setWalkInOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   // Paid-edit safety: any attempt to mutate the cart after payment.status
   // === "confirmed" is intercepted and queued here. The resolution prompt
@@ -78,8 +76,11 @@ function AppShell() {
   // Cart summary for the mobile bottom-bar (hidden on desktop via CSS).
   const activeCart = useMemo(() => deriveCart(active), [active]);
   const activeTotals = cartTotals(activeCart);
+  const activePaymentDue = paymentDueAmount(activeCart, activeTotals);
   const activeItemCount = activeCart.items.length;
   const cartPaid = activeCart.payment?.status === "confirmed";
+  const cartPayLater = activeCart.payment?.status === "deferred";
+  const cartNoCharge = activeItemCount > 0 && activePaymentDue <= 0;
   const activeLinePayers = activeCart.items.map(i => i.payer || active.payer || "direct");
   const hasInsurancePaidLines = activeLinePayers.includes("insurance");
   const payerReadyForPayment =
@@ -87,14 +88,54 @@ function AppShell() {
     (activeItemCount > 0 &&
       activeLinePayers.every(Boolean) &&
       (!hasInsurancePaidLines || (active.insurance || []).length > 0));
+  const isValidationResolved = (item) => {
+    const state = item.validationState || "idle";
+    return state === "signed" || state === "verbal";
+  };
+  const patientReadyForCheckIn = (target) => {
+    const targetCart = deriveCart(target);
+    const targetTotals = cartTotals(targetCart);
+    const targetPaymentDue = paymentDueAmount(targetCart, targetTotals);
+    const targetItems = targetCart.items || [];
+    const linePayers = targetItems.map(i => i.payer || target.payer || "direct");
+    const hasInsuranceLines = linePayers.includes("insurance");
+    const payerReady =
+      target.insuranceAcked ||
+      (target.insurance || []).length > 0 ||
+      (targetItems.length > 0 &&
+        linePayers.every(Boolean) &&
+        (!hasInsuranceLines || (target.insurance || []).length > 0));
+    const pendingValidation = targetItems.some(i => i.kind === "imaging" && !isValidationResolved(i));
+    const paymentResolved =
+      targetCart.payment?.status === "confirmed" ||
+      targetCart.payment?.status === "deferred" ||
+      targetPaymentDue <= 0;
+    const teleInCart = targetItems.some(i => i.kind === "telecon" || i.id === "telecon");
+    const tele = target.teleconsult || {};
+    const teleResolved = tele.booked || tele.skipped || !teleInCart;
+    return (
+      paymentResolved &&
+      targetItems.length > 0 &&
+      !!target.name &&
+      !!target.dob &&
+      !!target.sexAtBirth &&
+      !!(target.otpVerified || target.telegramVerified) &&
+      payerReady &&
+      !pendingValidation &&
+      teleResolved
+    );
+  };
 
   // Infer initial step from gate (resume where they left off).
-  // Step 4 is the final step; payment is taken in the cart rail.
+  // Spec v12: 6-step wizard. Step 6 (Payment) is the final step before
+  // the cart's "Check in & confirm order" CTA.
   const inferStep = (g) => {
     if (!g.step1Done) return 1;
     if (!g.step2Done) return 2;
     if (!g.step3Done) return 3;
-    return 4;
+    if (!g.step4Done) return 4;
+    if (!g.step5Done) return 5;
+    return 6;
   };
   const currentStep = wizardStepMap[activeId] ?? inferStep(gate);
   const setCurrentStep = (n) => setWizardStepMap(m => ({ ...m, [activeId]: n }));
@@ -148,7 +189,7 @@ function AppShell() {
   // Step 4 has its own copy of this; the dock's Add tab needs a parallel one
   // so the nurse can stage orders from anywhere. Logic mirrors Step4Orders,
   // but routes through guardCartEdit so adding to a paid visit is safe.
-  const addBulk = (items) => {
+  const addBulk = (items, meta = {}) => {
     const cart = active.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" } };
     const inCartIds = new Set((cart.items || []).map(i => i.id));
     const fresh = items.filter(i => !inCartIds.has(i.testId || i.id));
@@ -167,7 +208,14 @@ function AppShell() {
         };
       });
       const nextPayment = paymentAfterPaidEdit(cart.payment, mode);
-      updatePatient({ ...active, cart: { ...cart, items: [...(cart.items || []), ...additions], payment: nextPayment } });
+      const consumedBookingCodes = meta.bookingCode
+        ? Array.from(new Set([...(active.consumedBookingCodes || []), meta.bookingCode]))
+        : active.consumedBookingCodes;
+      updatePatient({
+        ...active,
+        ...(meta.bookingCode ? { consumedBookingCodes } : {}),
+        cart: { ...cart, items: [...(cart.items || []), ...additions], payment: nextPayment },
+      });
       return additions.map(item => item.id);
     };
     if (active.cart?.payment?.status === "confirmed") {
@@ -187,6 +235,9 @@ function AppShell() {
               ...latestCart,
               items: (latestCart.items || []).filter(item => !addedIds.includes(item.id)),
             },
+            ...(meta.bookingCode
+              ? { consumedBookingCodes: (p.consumedBookingCodes || []).filter(code => code !== meta.bookingCode) }
+              : {}),
           };
         }));
       },
@@ -292,54 +343,45 @@ function AppShell() {
   };
   const closeToast = (id) => setToasts(ts => ts.filter(t => t.id !== id));
 
-  const sendIntakeLink = () => {
-    pushToast("Intake link sent to " + active.mobile, "success");
+  const startNewWalkIn = () => {
+    if (isPristineBlankPatient(active)) {
+      const reset = blankPatient(active.id, active.queueNumber, active.avatarColor);
+      updatePatient(reset);
+      setWizardStepMap(m => ({ ...m, [active.id]: 1 }));
+      setActiveId(active.id);
+      setCartSheetOpen(false);
+      setMobileNavOpen(false);
+      setSheetMode("cart");
+      pushToast(`Ready for new patient · ${reset.queueNumber}`);
+      return;
+    }
+    const next = createBlankReceptionSlot();
+    pushToast(`Ready for new patient · ${next.queueNumber}`);
+  };
+
+  useKeydown((e) => {
+    const key = (e.key || "").toLowerCase();
+    if (key !== "n" || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (document.querySelector(".modal-overlay")) return;
+    startNewWalkIn();
+  }, [active, patients]);
+
+  const sendIntakeLink = (patientArg = active) => {
+    const target = patientArg || active;
+    const mobileTarget = target.mobile || `${target.countryCode || "+855"} ${target.phoneNumber || ""}`.trim();
+    pushToast("Intake link sent to " + (mobileTarget || "patient"), "success");
     const next = {
-      ...active,
+      ...target,
+      pwaSent: true,
       pwaSentAt: "just now",
       status: { tone: "info", label: "PWA sent" },
       pwaLog: [
         { type: "sent", text: "Link sent by SMS", time: "just now", state: "ok" },
-        ...(active.pwaLog || []).filter(l => !l.text.startsWith("Link sent")),
+        ...(target.pwaLog || []).filter(l => !l.text.startsWith("Link sent")),
       ],
     };
     updatePatient(next);
-  };
-
-  const handleCreateWalkIn = (form) => {
-    const id = "p" + (patients.length + 1);
-    const initials = (form.name || "?").split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
-    const colors = ["av-blue","av-teal","av-purple","av-amber","av-pink","av-green"];
-    const newP = {
-      id, name: form.name, gender: "—", age: 0, initials,
-      avatarColor: colors[patients.length % colors.length],
-      arrivedAt: "just now",
-      arrivedRaw: "Today, just now",
-      queueNumber: "Q-" + String(43 + patients.length).padStart(3, "0"),
-      status: { tone: "info", label: "Awaiting check-in" },
-      visitReason: Array.isArray(form.visitReason) ? form.visitReason : [form.visitReason].filter(Boolean),
-      language: form.language || "Khmer",
-      mobile: (form.countryCode || "+855") + " " + (form.phoneNumber || ""),
-      countryCode: form.countryCode || "+855",
-      phoneNumber: form.phoneNumber || "",
-      dob: form.dob,
-      sexAtBirth: form.sexAtBirth || "",
-      payer: "direct",
-      documents: { id: "pending", consent: "pending", insurance: "pending", receipt: "pending" },
-      pwaProgress: 0,
-      pwaLog: [],
-      services: [], handoff: 0,
-      handoffStates: ["in-progress","pending","pending","pending"],
-      identity: { verified: false, source: null, lockedFields: [] },
-      cart: { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" }, pregnancyConsent: null },
-      insurance: [],
-      priorResults: [],
-    };
-    setPatients(ps => [newP, ...ps]);
-    setActiveId(id);
-    setWizardStepMap(m => ({ ...m, [id]: 1 }));
-    setWalkInOpen(false);
-    pushToast(`${form.name} added · ${newP.queueNumber}`);
   };
 
   const handleStationChange = (id) => { setStation(id); pushToast(`Station switched to ${id}`); };
@@ -384,22 +426,23 @@ function AppShell() {
   };
 
   const handleNext = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
+    if (currentStep < 6) setCurrentStep(currentStep + 1);
   };
   const handlePrev = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
-  // CTA: complete check-in — fired from the cart rail once payment is confirmed.
-  const handleCheckIn = () => {
-    if (!cartReadyForCheckIn) {
+  // CTA: complete check-in — fired from the cart rail / Step 6 after payment is resolved or deferred.
+  const handleCheckIn = (patientOverride = active) => {
+    const target = patientOverride || active;
+    if (!patientReadyForCheckIn(target)) {
       openSheet("receipt");
       pushToast("Resolve blockers before check-in", "error");
       return;
     }
-    pushToast(`${active.name} checked in · ${active.queueNumber}`, "success");
+    pushToast(`${target.name} checked in · ${target.queueNumber}`, "success");
     updatePatient({
-      ...active,
+      ...target,
       checkedInAt: new Date().toISOString(),
       status: { tone: "success", label: "Checked in" },
     });
@@ -430,23 +473,26 @@ function AppShell() {
   //   done        → checked in; CTA moves to the next patient.
   //
   const isContactVerified = !!(active.otpVerified || active.telegramVerified);
-  const pendingValidationCount = activeCart.items.filter(i => i.kind === "imaging" && (i.validationState || "idle") !== "signed").length;
-  const cartReadyForPayment = activeItemCount > 0 && gate.step2Done && payerReadyForPayment && pendingValidationCount === 0;
-  const cartReadyForCheckIn = cartPaid && cartReadyForPayment;
+  const pendingValidationCount = activeCart.items.filter(i => i.kind === "imaging" && !isValidationResolved(i)).length;
+  const cartReadyForPayment = activeItemCount > 0 && gate.step2Done && gate.step5Done && payerReadyForPayment && pendingValidationCount === 0;
+  const cartPaymentResolved = cartPaid || cartPayLater || (cartNoCharge && cartReadyForPayment);
+  const cartReadyForCheckIn = patientReadyForCheckIn(active);
   const isCheckedIn = !!active.checkedInAt || active.status?.label === "Checked in";
   const paymentWaiting = activeCart.payment?.status === "waiting";
-  const reviewTargetStep = !gate.step2Done ? 2 : (!payerReadyForPayment ? 3 : 4);
+  const reviewTargetStep = !gate.step2Done ? 2 : (!payerReadyForPayment ? 3 : (pendingValidationCount > 0 ? 4 : (!gate.step5Done ? 5 : 4)));
   const blockerCopy = !gate.step2Done
     ? "Review patient before payment"
     : !payerReadyForPayment
       ? "Select payer before payment"
       : pendingValidationCount > 0
         ? "Resolve consent before payment"
-        : "Review order before payment";
+        : !gate.step5Done
+          ? "Book or skip teleconsult before payment"
+          : "Review order before payment";
   let dockState;
   if (isCheckedIn) dockState = "done";
   else if (activeItemCount === 0) dockState = "empty";
-  else if (cartPaid) dockState = "paid";
+  else if (cartPaymentResolved) dockState = "paid";
   else if (paymentWaiting) dockState = "waiting";
   else if (!cartReadyForPayment) dockState = "review-gate";
   else dockState = "pay";
@@ -470,7 +516,9 @@ function AppShell() {
     cartBarCta = "Waiting…";
     dockCtaDisabled = true;
   } else if (dockState === "paid") {
-    cartBarTitle = cartReadyForCheckIn ? "Paid · receipt ready" : "Paid · needs review";
+    cartBarTitle = cartReadyForCheckIn
+      ? (cartNoCharge && !cartPaid && !cartPayLater ? "No charge · ready" : (cartPayLater ? "Pay later · ready" : "Paid · receipt ready"))
+      : (cartNoCharge && !cartPaid && !cartPayLater ? "No charge · needs review" : (cartPayLater ? "Pay later · needs review" : "Paid · needs review"));
     cartBarSub = `${activeItemCount} order${activeItemCount === 1 ? "" : "s"} · $${activeTotals.total.toFixed(2)}`;
     cartBarCta = "Check in";
   } else {
@@ -528,7 +576,7 @@ function AppShell() {
       }
       data-screen-label="Reception"
       data-cart-count={activeItemCount}
-      data-cart-paid={cartPaid ? "true" : "false"}
+      data-cart-paid={cartPaymentResolved ? "true" : "false"}
     >
       <Sidebar
         collapsed={collapsed}
@@ -548,11 +596,11 @@ function AppShell() {
           onClick={closeMobileNav}
         />
       )}
-      <div className="main" inert={mobileNavOpen ? "" : undefined}>
+      <div className={"main main-step-" + currentStep} inert={mobileNavOpen ? "" : undefined}>
         <Topbar
           onMenuClick={() => setMobileNavOpen(true)}
           menuButtonRef={mobileMenuButtonRef}
-          onNewWalkIn={() => setWalkInOpen(true)}
+          onNewWalkIn={startNewWalkIn}
           notifications={notifs.filter(n => !n.read).length}
           station={station}
           onStationChange={handleStationChange}
@@ -575,7 +623,7 @@ function AppShell() {
           onStepClick={handleStepClick}
         />
 
-        <div className="wizard-workspace">
+        <div className={"wizard-workspace wizard-workspace-step-" + currentStep}>
           <div className="wizard-content">
             {currentStep === 1 && (
               <Step1Identity
@@ -597,6 +645,8 @@ function AppShell() {
                 onPushToast={pushToast}
                 gate={gate}
                 onSendIntake={sendIntakeLink}
+                allPatients={patients.filter(p => p.id !== active.id && p.name)}
+                onSelectPatient={setActiveId}
               />
             )}
             {currentStep === 3 && (
@@ -613,10 +663,33 @@ function AppShell() {
               <Step4Orders
                 patient={active}
                 onUpdate={updatePatient}
+                onNext={handleNext}
                 onPrev={handlePrev}
                 onPushToast={pushToast}
                 gate={gate}
                 requestPaidEdit={requestPaidEdit}
+              />
+            )}
+            {currentStep === 5 && (
+              <Step5Teleconsult
+                patient={active}
+                onUpdate={updatePatient}
+                onNext={handleNext}
+                onPrev={handlePrev}
+                onPushToast={pushToast}
+                gate={gate}
+              />
+            )}
+            {currentStep === 6 && (
+              <Step6Payment
+                patient={active}
+                onUpdate={updatePatient}
+                onNext={handleCheckIn}
+                onPrev={handlePrev}
+                onPushToast={pushToast}
+                onCheckIn={handleCheckIn}
+                gate={gate}
+                payerReady={payerReadyForPayment}
               />
             )}
           </div>
@@ -724,7 +797,7 @@ function AppShell() {
 	                    aria-selected={sheetMode === "pay"}
 	                    className={"mobile-cart-tab" + (sheetMode === "pay" ? " is-active" : "")}
 	                    onClick={() => setSheetMode("pay")}
-	                    disabled={activeItemCount === 0 || cartPaid || !cartReadyForPayment}
+	                    disabled={activeItemCount === 0 || cartPaymentResolved || !cartReadyForPayment}
 	                  >
 	                    <I.CreditCard size={13} /> Pay
 	                  </button>
@@ -776,9 +849,9 @@ function AppShell() {
               {/* Cart + Pay both render the OrderCart — Pay just auto-scrolls
                  to the payment region on mode entry (handled by the cart's
                  internal layout: items first, payment area below). */}
-	              {(sheetMode === "cart" || sheetMode === "pay" || sheetMode === "receipt") && (
-	                <div className="mobile-cart-sheet-body">
-	                  <OrderCart
+              {(sheetMode === "cart" || sheetMode === "pay" || sheetMode === "receipt") && (
+                <div className="mobile-cart-sheet-body">
+                  <OrderCart
                     patient={active}
                     onUpdate={updatePatient}
                     onPushToast={pushToast}
@@ -789,31 +862,58 @@ function AppShell() {
 	                    onOpenAdd={() => setSheetMode("add")}
                     onOpenPay={() => setSheetMode("pay")}
 	                    payerReady={payerReadyForPayment}
-	                  />
+                  />
                 </div>
               )}
             </div>
+
+            <div className="desktop-cart-rail-body">
+              <OrderCart
+                patient={active}
+                onUpdate={updatePatient}
+                onPushToast={pushToast}
+                onCheckIn={handleCheckIn}
+                identityComplete={gate.step2Done}
+                currentStep={currentStep}
+                requestPaidEdit={requestPaidEdit}
+                onOpenAdd={() => {
+                  if (canNavigateToStep(4, currentStep, gate)) {
+                    setCurrentStep(4);
+                  } else {
+                    setCurrentStep(!gate.step2Done ? 2 : 3);
+                    pushToast("Complete review before adding orders", "error");
+                  }
+                }}
+                onOpenPay={() => setSheetMode("pay")}
+                payerReady={payerReadyForPayment}
+              />
+            </div>
           </div>
         </div>
-
-        <GoalBar onLearnMore={() => pushToast("Open product tour")} />
       </div>
 
-      <NewWalkInModal open={walkInOpen} onClose={() => setWalkInOpen(false)} onCreate={handleCreateWalkIn} />
       <HotkeyCheatsheetModal open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
       <PaidEditModal pending={paidEditPending} onResolve={resolvePaidEdit} onCancel={cancelPaidEdit} />
       <ToastStack toasts={toasts} onClose={closeToast} />
 
-      {/* Dev tester */}
-      <DebugBlankStateButton
-        onReset={() => {
-          const reset = blankPatient(active.id, active.queueNumber, active.avatarColor);
-          updatePatient(reset);
-          setWizardStepMap(m => ({ ...m, [active.id]: 1 }));
-          pushToast("Blank state — start at Step 1");
-        }}
-      />
     </div>
+  );
+}
+
+function isPristineBlankPatient(patient = {}) {
+  const defaultOrderIds = new Set(["vit-pkg", "telecon"]);
+  const items = patient.cart?.items || [];
+  const hasOnlyDefaultOrders = items.every(item => item.auto || defaultOrderIds.has(item.id));
+  return (
+    !patient.name &&
+    !patient.dob &&
+    !patient.idNumber &&
+    !patient.phoneNumber &&
+    !patient.mobile &&
+    !(patient.visitReason || []).length &&
+    !patient.otpVerified &&
+    !patient.telegramVerified &&
+    hasOnlyDefaultOrders
   );
 }
 
@@ -870,21 +970,5 @@ function PaidEditModal({ pending, onResolve, onCancel }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function DebugBlankStateButton({ onReset }) {
-  return (
-    <button
-      type="button"
-      onClick={onReset}
-      className="debug-blank-btn"
-      title="Reset to first-arrival blank state (dev only)"
-      aria-label="Test blank state"
-    >
-      <I.Sparkles size={12} />
-      <span className="debug-blank-chip">DEV</span>
-      <span>Test blank state</span>
-    </button>
   );
 }

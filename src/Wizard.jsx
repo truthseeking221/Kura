@@ -1,7 +1,9 @@
 // === Kura Reception — Wizard shell, progress bar, patient header ===
-//   v2.1: 4-step wizard (Identity → Review → Insurance → AI Orders).
-//   Payment + check-in CTA live inside the always-visible cart rail, so the
-//   former Step 5 panel was a duplicate of the cart and has been removed.
+//   v3 (spec v12): 6-step wizard
+//     Identity → Review → Insurance → Orders → Teleconsult → Payment.
+//   The cart rail still owns the final "Check in & confirm order" CTA; payment
+//   capture moves out of the cart into Step 6 so the cart can stay focused on
+//   the order list + TAT footer.
 //   - WizardProgress: numbered stepper with active/done/locked states
 //   - PatientHeader: sticky patient identity bar (always visible)
 //   - useWizardGate: returns step-by-step completion gates with reasons
@@ -10,13 +12,16 @@
 import React, { useMemo, useState } from "react";
 import { I } from "./icons";
 import { useLang } from "./i18n";
+import { deriveCart, cartTotals, paymentDueAmount } from "./OrderCart";
 
 // === Canonical step definitions ===
 export const STEP_DEFS = [
-  { id: 1, key: "Identity",   icon: "User",         labelKey: "step.identity"  },
-  { id: 2, key: "Review",     icon: "FileText",     labelKey: "step.review"    },
-  { id: 3, key: "Insurance",  icon: "Shield",       labelKey: "step.insurance" },
-  { id: 4, key: "AI Orders",  icon: "Sparkles",     labelKey: "step.orders"    },
+  { id: 1, key: "Identity",     icon: "User",        labelKey: "step.identity"    },
+  { id: 2, key: "Review",       icon: "FileText",    labelKey: "step.review"      },
+  { id: 3, key: "Insurance",    icon: "Shield",      labelKey: "step.insurance"   },
+  { id: 4, key: "Orders",       icon: "Sparkles",    labelKey: "step.orders"      },
+  { id: 5, key: "Teleconsult",  icon: "Video",       labelKey: "step.teleconsult" },
+  { id: 6, key: "Payment",      icon: "CreditCard",  labelKey: "step.payment"     },
 ];
 
 export function canNavigateToStep(stepId, currentStep, gate) {
@@ -28,18 +33,23 @@ export function canNavigateToStep(stepId, currentStep, gate) {
 }
 
 // === useWizardGate: derives completion state for each step ===
-//   Returns { stepStatus[1..4], blockers, isReadyToCheckIn }
+//   Returns { stepStatus[1..6], blockers, isReadyToCheckIn }
 //
-//   Step 1 (Identity) → has name AND identity captured (any source)
-//   Step 2 (Review)   → name + DOB + sexAtBirth + at least one verified contact
-//   Step 3 (Insurance)→ either has insurance OR explicitly marked "no insurance"
-//                       (auto-completes — never blocking)
-//   Step 4 (AI Orders)→ at least one item in cart
-//   Payment confirmation lives in the cart rail; isReadyToCheckIn folds it in.
+//   Step 1 (Identity)   → has name AND identity captured (any source)
+//   Step 2 (Review)     → name + DOB + sexAtBirth + at least one verified contact
+//   Step 3 (Insurance)  → has insurance OR explicitly marked "no insurance"
+//                         (auto-completes — never blocking)
+//   Step 4 (Orders)     → at least one item in cart
+//   Step 5 (Teleconsult)→ teleconsult booked OR explicitly skipped
+//   Step 6 (Payment)    → payment confirmed (or marked pay-later)
+//
+//   Cart CTA per spec v12 §Order Cart gates only on identity + items, not on
+//   payment — payment can complete in Step 6 before or after check-in.
+//   `isReadyToCheckIn` mirrors the cart CTA so dock + cart agree.
 //
 export function useWizardGate(patient) {
   return useMemo(() => {
-    const blockers = { 1: [], 2: [], 3: [], 4: [] };
+    const blockers = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
     // Step 1 — identity
     const hasName = !!patient.name;
@@ -68,22 +78,41 @@ export function useWizardGate(patient) {
     if (itemCount === 0) blockers[4].push("Add at least one service");
     const step4Done = step3Done && itemCount > 0;
 
-    // Payment — confirmed in the cart rail; needed for check-in
+    // Step 5 — teleconsult: auto-completes when nurse books or explicitly skips,
+    // OR when there's no teleconsult line in the cart (nurse already removed it).
+    const tele = patient.teleconsult || {};
+    const teleInCart = (cart.items || []).some(i => i.kind === "telecon" || i.id === "telecon");
+    const teleResolved = tele.booked || tele.skipped || !teleInCart;
+    if (!teleResolved) blockers[5].push("Book or skip teleconsult");
+    const step5Done = step4Done && teleResolved;
+
+    // Step 6 — payment confirmed OR explicitly deferred (pay-later)
     const paid = cart.payment?.status === "confirmed";
+    const payLater = cart.payment?.status === "deferred";
+    if (!paid && !payLater) blockers[6].push("Take payment or mark pay-later");
+    const step6Done = step5Done && (paid || payLater);
 
     const stepStatus = {
       1: step1Done ? "done" : "active",
       2: !step1Done ? "locked" : (step2Done ? "done" : "active"),
       3: !step2Done ? "locked" : (step3Done ? "done" : "active"),
       4: !step3Done ? "locked" : (step4Done ? "done" : "active"),
+      5: !step4Done ? "locked" : (step5Done ? "done" : "active"),
+      6: !step5Done ? "locked" : (step6Done ? "done" : "active"),
     };
+
+    // Cart CTA gate per spec v12 — strict, no bypass:
+    //   ≥1 cart item · name · DOB · sex · ≥1 verified contact.
+    // Payment resolution is handled by the final check-in action.
+    const cartCtaReady = itemCount > 0 && hasName && hasDob && hasSex && hasContact;
 
     return {
       stepStatus,
       blockers,
-      step1Done, step2Done, step3Done, step4Done,
-      paid,
-      isReadyToCheckIn: step4Done && paid,
+      step1Done, step2Done, step3Done, step4Done, step5Done, step6Done,
+      paid, payLater,
+      cartCtaReady,
+      isReadyToCheckIn: cartCtaReady,
     };
   }, [patient]);
 }
@@ -203,22 +232,26 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick }) {
     return `${day} ${mo} ${yr} · ${age}y`;
   })();
 
-  // Cart-aware payment chip — "Orders needed" beats "Payment pending"
-  // when the cart is empty: a stressed nurse should see the next required
-  // action, not a vague status.
-  const cartItemCount = (patient.cart?.items || []).length;
-  const cartPaid = patient.cart?.payment?.status === "confirmed";
-  let payChipLabel, payChipDone;
-  if (cartPaid)             { payChipLabel = t("chip.payment");        payChipDone = true; }
-  else if (cartItemCount === 0) { payChipLabel = t("chip.ordersNeeded"); payChipDone = false; }
-  else                      { payChipLabel = t("chip.paymentPending"); payChipDone = false; }
-
-  const chips = [
-    { id: "id",   label: t("chip.identity"),  done: gate.step1Done },
-    { id: "rev",  label: t("chip.review"),    done: gate.step2Done },
-    { id: "ins",  label: t("chip.insurance"), done: gate.step3Done },
-    { id: "pay",  label: payChipLabel,        done: payChipDone, pendingLabel: payChipLabel },
-  ];
+  // Spec v12: queue badges + status chips removed from header. Status now
+  // lives in the wizard progress bar only. Mobile keeps a single primary
+  // status pill so a nurse on a phone still sees "what should I do next?"
+  // without scrolling — desktop relies entirely on the progress bar.
+  const headerCart = useMemo(() => deriveCart(patient), [patient]);
+  const headerTotals = useMemo(() => cartTotals(headerCart), [headerCart]);
+  const cartItemCount = (headerCart.items || []).length;
+  const cartPaid = headerCart.payment?.status === "confirmed";
+  const cartPayLater = headerCart.payment?.status === "deferred";
+  const cartNoCharge = cartItemCount > 0 && paymentDueAmount(headerCart, headerTotals) <= 0;
+  const cartPaymentResolved = cartPaid || cartPayLater || cartNoCharge;
+  const pendingValidationCount = (headerCart.items || []).filter(i => {
+    const state = i.validationState || "idle";
+    return i.kind === "imaging" && state !== "signed" && state !== "verbal";
+  }).length;
+  const linePayers = (headerCart.items || []).map(i => i.payer || patient.payer || "direct");
+  const hasInsurancePaidLines = linePayers.includes("insurance");
+  const payerReady =
+    cartItemCount === 0 ||
+    (linePayers.every(Boolean) && (!hasInsurancePaidLines || (patient.insurance || []).length > 0));
 
   // === Mobile primary status — single pill + concise secondary line ===
   // The 4-chip horizontal scroll on mobile makes nurses guess what's hidden.
@@ -227,8 +260,11 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick }) {
   const isCheckedIn = patient.status?.label === "Checked in";
   const primaryStatus = (() => {
     if (isCheckedIn) return { tone: "success", label: "Checked in", icon: "CheckCircle" };
-    if (cartPaid && gate.step4Done) return { tone: "success", label: "Ready to check in", icon: "CheckCircle" };
-    if (cartPaid) return { tone: "info", label: "Paid", icon: "Check" };
+    if (pendingValidationCount > 0) return { tone: "warn", label: "Resolve consent", icon: "AlertCircle" };
+    if (!payerReady) return { tone: "warn", label: "Choose payer", icon: "AlertCircle" };
+    if (gate.step4Done && !gate.step5Done) return { tone: "warn", label: "Teleconsult next", icon: "Video" };
+    if (cartPaymentResolved && gate.step5Done) return { tone: "success", label: "Ready to check in", icon: "CheckCircle" };
+    if (cartPaymentResolved) return { tone: "info", label: cartPayLater ? "Pay later" : "Paid", icon: "Check" };
     if (cartItemCount > 0 && gate.step2Done) return { tone: "info", label: "Ready to pay", icon: "CreditCard" };
     if (cartItemCount > 0 && !gate.step2Done) return { tone: "warn", label: "Verify patient", icon: "AlertCircle" };
     if (gate.step1Done && cartItemCount === 0) return { tone: "warn", label: "Orders needed", icon: "Plus" };
@@ -262,25 +298,19 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick }) {
         <div className="patient-header-meta">
           <div className="patient-header-name">{patient.name || t("patient.unidentified")}</div>
           <div className="patient-header-sub">
-            <span className="patient-header-pill"><I.Tag size={9} /> {patient.queueNumber || "—"}</span>
+            {/* Spec v12 §Global Layout: queue badge removed. Identity bar shows
+                name · DOB · age · sex (and phone when captured), nothing else. */}
             {dobDisplay && (
               <span className="patient-header-pill"><I.Calendar size={9} /> {dobDisplay}</span>
+            )}
+            {patient.sexAtBirth && (
+              <span className="patient-header-pill"><I.User size={9} /> {patient.sexAtBirth.charAt(0).toUpperCase()}</span>
             )}
             {phoneDisplay !== "—" && (
               <span className="patient-header-pill"><I.Phone size={9} /> {phoneDisplay}</span>
             )}
           </div>
         </div>
-      </div>
-      <div className="patient-header-chips">
-        {chips.map(c => (
-          <span key={c.id} className={"ph-chip " + (c.done ? "ph-chip-ok" : "ph-chip-wait")}>
-            {c.done
-              ? <I.CheckCircle size={10} strokeWidth={2.25} />
-              : <I.Clock size={10} />}
-            <span>{c.done ? c.label : (c.pendingLabel || c.label)}</span>
-          </span>
-        ))}
       </div>
       {/* Mobile-only primary status pill — single answer to "what next?". */}
       <div className={"patient-header-mobile-status patient-header-mobile-status-" + primaryStatus.tone}>

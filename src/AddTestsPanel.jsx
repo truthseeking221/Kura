@@ -18,12 +18,20 @@ import { I } from "./icons";
 import { useLang } from "./i18n";
 import { ORDER_CATALOG } from "./OrderCart";
 import { useAIRecommendations, TEST_INFO, WhyCard } from "./AIPanel";
-import { Kbd, MOD_LABEL } from "./shared";
+import { Kbd, MOD_LABEL, isTypingTarget } from "./shared";
 
 const KHR_RATE = 4100;
 const fmtPrice = (usd, ccy) => ccy === "KHR"
   ? "៛" + Math.round((usd || 0) * KHR_RATE).toLocaleString()
   : "$" + (usd || 0).toFixed(2);
+// Compact count for category badges so a 4-digit lab catalog doesn't blow
+// out the chip. 1234 → "1.2k". Sub-1000 stays exact.
+const fmtCount = (n) => {
+  if (n == null) return "";
+  if (n < 1000) return String(n);
+  if (n < 10000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return Math.round(n / 1000) + "k";
+};
 
 // === flyToCart — parabolic toss animation when adding tests ===
 //
@@ -152,17 +160,104 @@ function flyToCart(sourceEl, { name, kind }) {
 }
 
 // === View definitions ===
+//   Spec v12 §Step 4: tabs replaced by a LEFT SIDE PANEL grouped into two
+//   sections — Smart sources (top) and Catalogue specialties (bottom).
+//   Telecon is removed from the catalogue (it's now Step 5).
+//   Visit is removed (visit fee auto-adds to the cart).
+//   Booking code is new — a doctor-prescribed pre-populated test set.
+//
 const VIEWS = [
-  { id: "smart",    label: "Smart",    icon: "Sparkles" },
-  { id: "bundles",  label: "Bundles",  icon: "Package" },
-  { id: "previous", label: "Previous", icon: "RefreshCw" },
-  { id: "visit",    label: "Visit",    icon: "Stethoscope" },
-  { id: "lab",      label: "Lab",      icon: "FlaskConical" },
-  { id: "imaging",  label: "Imaging",  icon: "Scan" },
-  { id: "ecg",      label: "ECG",      icon: "Activity" },
-  { id: "vitals",   label: "Vitals",   icon: "Heart" },
-  { id: "telecon",  label: "Telecon",  icon: "Video" },
+  // Smart sources
+  { id: "smart",    label: "Smart",         icon: "Sparkles",   group: "smart" },
+  { id: "bundles",  label: "Bundles",       icon: "Package",    group: "smart" },
+  { id: "previous", label: "Previous",      icon: "RefreshCw",  group: "smart" },
+  { id: "booking",  label: "Booking code",  icon: "Ticket",     group: "smart" },
+  // Catalogue specialties
+  { id: "lab",      label: "Lab",           icon: "FlaskConical", group: "catalogue", specialty: "lab" },
+  { id: "imaging",  label: "Imaging",       icon: "Scan",         group: "catalogue", specialty: "imaging" },
+  { id: "ecg",      label: "ECG / Cardio",  icon: "Activity",     group: "catalogue", specialty: "ecg" },
+  { id: "vitals",   label: "Vitals",        icon: "Heart",        group: "catalogue", specialty: "vitals" },
 ];
+const SEARCHABLE_ORDER_KINDS = new Set(VIEWS.filter(v => v.group === "catalogue").map(v => v.id));
+
+// === Specialty colour tokens — Spec v12 §8 visual clarity rules ===
+//   Each specialty has a consistent colour for the small uppercase pill.
+//   These are kept light enough to read on the row's white background.
+const SPECIALTY_META = {
+  lab:        { label: "BIOCHEM/HAEM",  color: "#1d4ed8", bg: "#dbeafe" },
+  imaging:    { label: "IMAGING",       color: "#3730a3", bg: "#e0e7ff" },
+  ecg:        { label: "CARDIO",        color: "#9d174d", bg: "#fce7f3" },
+  vitals:     { label: "VITALS",        color: "#9a3412", bg: "#fed7aa" },
+  visit:      { label: "VISIT",         color: "#1e40af", bg: "#bfdbfe" },
+  telecon:    { label: "TELECON",       color: "#15803d", bg: "#bbf7d0" },
+};
+
+const LAB_CATEGORY_META = {
+  Biochemistry:        { label: "BIOCHEM",   color: "#1d4ed8", bg: "#dbeafe" },
+  Endocrinology:       { label: "ENDO",      color: "#0f766e", bg: "#ccfbf1" },
+  Haematology:         { label: "HAEM",      color: "#991b1b", bg: "#fee2e2" },
+  Coagulation:         { label: "COAG",      color: "#9d174d", bg: "#fce7f3" },
+  Microbiology:        { label: "MICRO",     color: "#166534", bg: "#dcfce7" },
+  Immunology:          { label: "IMMUNO",    color: "#6d28d9", bg: "#ede9fe" },
+  Urinalysis:          { label: "URINE",     color: "#9a3412", bg: "#ffedd5" },
+  "Blood Gas":         { label: "BLOOD GAS", color: "#0e7490", bg: "#cffafe" },
+  Toxicology:          { label: "TOX",       color: "#854d0e", bg: "#fef3c7" },
+  "Therapeutic Drugs": { label: "TDM",       color: "#115e59", bg: "#ccfbf1" },
+  Molecular:           { label: "MOLEC",     color: "#4338ca", bg: "#e0e7ff" },
+  Allergy:             { label: "ALLERGY",   color: "#be185d", bg: "#fce7f3" },
+};
+
+function getSpecialtyMeta(row) {
+  if (row.kind === "lab" && row.category) {
+    return LAB_CATEGORY_META[row.category] || SPECIALTY_META.lab;
+  }
+  return SPECIALTY_META[row.kind];
+}
+
+function rowMatchesSearch(row, query) {
+  const specialty = getSpecialtyMeta(row);
+  return [
+    row.name,
+    row.kind,
+    row.category,
+    specialty?.label,
+  ].filter(Boolean).some(value => value.toLowerCase().includes(query));
+}
+
+// === Mock insurer coverage map — Spec v12 §4 ===
+//   In real life this comes from the insurer eligibility API (Phase 4).
+//   Until then we use a mock based on test id so coverage labels can ship now.
+//   covered: percentage covered (0-100). preauth: requires pre-auth before claim.
+//   When the patient has no insurance policy, no labels are shown.
+const MOCK_COVERAGE = {
+  cbc:         { covered: 80 },
+  glucose:     { covered: 80 },
+  hba1c:       { covered: 80 },
+  lipid:       { covered: 80 },
+  urinalysis:  { covered: 60 },
+  lft:         { covered: 80 },
+  kft:         { covered: 80 },
+  tsh:         { covered: 80 },
+  amh:         { covered: 0 },
+  "preg-bhcg": { covered: 0 },
+  "xray-chest":{ covered: 60 },
+  "us-pelvis": { covered: 0 },
+  "ct-head":   { covered: 100, preauth: true },
+  "mri-brain": { covered: 100, preauth: true },
+  "ecg-12":    { covered: 80 },
+  "vit-bp":    { covered: 100 },
+  "vit-bmi":   { covered: 100 },
+};
+
+function getCoverage(testId, insurance = []) {
+  const hasPolicy = (insurance || []).length > 0;
+  if (!hasPolicy) return null;
+  const c = MOCK_COVERAGE[testId];
+  if (!c) return { kind: "unconfirmed" };
+  if (c.preauth) return { kind: "preauth", insurer: insurance[0]?.provider || "Insurer" };
+  if (c.covered === 0) return { kind: "not-covered" };
+  return { kind: "covered", percent: c.covered, insurer: insurance[0]?.provider || "Insurer" };
+}
 
 // === Bundles — curated multi-test packages defined by the medical director ===
 //   The value prop is curation + speed: clinical-guideline-aligned sets that take
@@ -225,6 +320,7 @@ function buildBundleRows({ inCart }) {
 //
 function useRows({ view, search, patient, buckets, priors, inCart }) {
   return useMemo(() => {
+    const searchTerm = search.trim().toLowerCase();
     const aiMap = new Map();
     buckets.forEach(b => b.items.forEach(it => {
       // keep the highest-confidence reason if the same testId appears in multiple buckets
@@ -249,6 +345,7 @@ function useRows({ view, search, patient, buckets, priors, inCart }) {
         name: catItem.name,
         price: catItem.price,
         kind: catItem.kind,
+        category: catItem.category,
         inCart: inCart.has(catItem.id),
         badges: {
           ai: ai?.confidence,
@@ -263,7 +360,12 @@ function useRows({ view, search, patient, buckets, priors, inCart }) {
 
     let rows = [];
 
-    if (view === "smart") {
+    if (searchTerm) {
+      rows = ORDER_CATALOG
+        .filter(c => SEARCHABLE_ORDER_KINDS.has(c.kind))
+        .map(c => decorate(c))
+        .filter(r => rowMatchesSearch(r, searchTerm));
+    } else if (view === "smart") {
       // Priors first (most personal signal), then AI items not already shown
       const seen = new Set();
       for (const p of priors) {
@@ -289,11 +391,6 @@ function useRows({ view, search, patient, buckets, priors, inCart }) {
       // catalogue by kind
       const items = ORDER_CATALOG.filter(c => c.kind === view);
       rows = items.map(c => decorate(c));
-    }
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter(r => r.name.toLowerCase().includes(q));
     }
 
     return rows;
@@ -357,8 +454,34 @@ function BundleRow({ bundle, ccy, inCart, onAddBundle }) {
   );
 }
 
+// === Coverage label — Spec v12 §4 ===
+//   ✓ Insurer X% covered (green) · ✕ Not covered (muted) · ? Unconfirmed (amber)
+//   · 🔒 Pre-auth required (purple). Hidden when patient has no policy on file.
+function CoverageLabel({ coverage }) {
+  if (!coverage) return null;
+  if (coverage.kind === "covered") {
+    return (
+      <span className="atp-cov atp-cov-yes" title={`${coverage.insurer} covers ${coverage.percent}% of this test`}>
+        <I.Check size={9} strokeWidth={3} /> {coverage.insurer} {coverage.percent}%
+      </span>
+    );
+  }
+  if (coverage.kind === "not-covered") {
+    return <span className="atp-cov atp-cov-no" title="Insurer confirmed not covered"><I.X size={9} /> Not covered</span>;
+  }
+  if (coverage.kind === "unconfirmed") {
+    return <span className="atp-cov atp-cov-unsure" title="Coverage unconfirmed for this test">? Unconfirmed</span>;
+  }
+  if (coverage.kind === "preauth") {
+    return <span className="atp-cov atp-cov-preauth" title="Insurer requires pre-authorisation"><I.Lock size={9} /> Pre-auth</span>;
+  }
+  return null;
+}
+
 // === TestRow — the universal row ===
-function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onAdd, whyOpen, onToggleWhy, t, ccy }) {
+//   Spec v12 §9: per-row [+ Add] button removed. Rows select via checkbox /
+//   row tap; bulk add fires from the sticky bottom bar.
+function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, whyOpen, onToggleWhy, t, ccy, coverage, specialtyMeta }) {
   const { id, name, price, inCart, badges } = row;
   const hasReason = !!badges.reason || !!badges.details;
   const rowInteractive = rowClickEnabled && !inCart;
@@ -394,21 +517,21 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onAd
       <div className="atp-row-name">
         <span className="atp-name">{name}</span>
         <div className="atp-badges">
+          {specialtyMeta && (
+            <span className="atp-specialty" style={{ color: specialtyMeta.color, background: specialtyMeta.bg }}>{specialtyMeta.label}</span>
+          )}
           {badges.ai && <BadgeAI conf={badges.ai} />}
           {badges.previous && <BadgePrev date={badges.previous} />}
           {badges.sensitive && <BadgeSensitive />}
           {badges.popular && !badges.ai && !badges.previous && <BadgePopular />}
+          <CoverageLabel coverage={coverage} />
         </div>
       </div>
 
       <span className="atp-price">{fmtPrice(price, ccy)}</span>
 
-      {inCart ? (
+      {inCart && (
         <span className="atp-incart"><I.Check size={10} strokeWidth={3} /> {t("atp.added")}</span>
-      ) : (
-        <button type="button" className="atp-add-btn" onClick={(e) => { e.stopPropagation(); onAdd(row); }}>
-          <I.Plus size={10} /> {t("atp.add")}
-        </button>
       )}
 
       {hasReason && (
@@ -432,26 +555,252 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onAd
   );
 }
 
+// === Booking code section — Spec v12 §Step 4: 📋 Booking code ===
+//   A doctor from a previous teleconsult can prescribe a booking code that
+//   pre-populates a specific set of tests. Nurse scans or enters; on valid
+//   code, pre-selected tests render with [Add all to cart].
+//
+//   Mock codes are defined here so this can ship before the API exists.
+//   `consumed` defaults to false; once added to cart we mark it consumed.
+const MOCK_BOOKING_CODES = {
+  "BC-2026042-DIA3": {
+    code: "BC-2026042-DIA3",
+    doctor: "Dr. Sopheap Chan",
+    issuedAt: "2026-04-14",
+    testIds: ["hba1c", "glucose", "kft", "lipid"],
+  },
+  "BC-2026048-CARD": {
+    code: "BC-2026048-CARD",
+    doctor: "Dr. Sokha Pich",
+    issuedAt: "2026-04-21",
+    testIds: ["ecg-12", "lipid", "vit-bp"],
+  },
+};
+
+const BOOKING_CODE_PATTERN = /^BC-[A-Z0-9]{7}-[A-Z0-9]{4}$/;
+
+function formatBookingCode(raw) {
+  const chars = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const body = chars.startsWith("BC") ? chars.slice(2) : chars;
+  const first = body.slice(0, 7);
+  const second = body.slice(7, 11);
+  if (!first) return "";
+  return `BC-${first}${second ? `-${second}` : ""}`;
+}
+
+function BookingCodeSection({ patient, inCart, onAddBundle, onPushToast, ccy }) {
+  const [input, setInput] = useState("");
+  const [result, setResult] = useState(null); // { ok, code?, items?, message? }
+  const [picks, setPicks] = useState(new Set());
+
+  const consumedCodes = patient.consumedBookingCodes || [];
+
+  const check = (raw) => {
+    const code = formatBookingCode(raw || input);
+    if (!code) return;
+    if (!BOOKING_CODE_PATTERN.test(code)) {
+      setResult({ ok: false, message: "Enter booking code as BC-XXXXXXX-XXXX." });
+      return;
+    }
+    if (consumedCodes.includes(code)) {
+      setResult({ ok: false, message: "This code has already been used for this patient." });
+      return;
+    }
+    const def = MOCK_BOOKING_CODES[code];
+    if (!def) {
+      setResult({ ok: false, message: "Code not found or expired." });
+      return;
+    }
+    const items = def.testIds.map(id => ORDER_CATALOG.find(c => c.id === id)).filter(Boolean);
+    setResult({ ok: true, code: def, items });
+    setPicks(new Set(items.filter(it => !inCart.has(it.id)).map(it => it.id)));
+  };
+
+  const togglePick = (id) => {
+    setPicks(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const addAll = () => {
+    if (!result?.ok) return;
+    const chosen = result.items.filter(it => picks.has(it.id) && !inCart.has(it.id));
+    if (chosen.length === 0) {
+      onPushToast?.("Nothing selected to add", "error");
+      return;
+    }
+    onAddBundle(chosen.map(it => ({ testId: it.id, name: it.name, price: it.price, kind: it.kind })), result.code.code);
+    setResult(null);
+    setInput("");
+    setPicks(new Set());
+  };
+
+  return (
+    <div className="atp-booking">
+      <div className="atp-booking-intro">
+        <I.Ticket size={14} />
+        <div>
+          <strong>Booking code</strong>
+          <p>Scan or enter the code on the patient's prescription or teleconsult summary.</p>
+        </div>
+      </div>
+
+      <div className="atp-booking-input">
+        <input
+          type="text"
+          placeholder="BC-XXXXXXX-XXXX"
+          value={input}
+          onChange={e => { setInput(formatBookingCode(e.target.value)); if (result) setResult(null); }}
+          onKeyDown={e => { if (e.key === "Enter") check(); }}
+          inputMode="text"
+          maxLength={15}
+          spellCheck={false}
+        />
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => check()}>
+          <I.Check size={11} /> Check
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => check("BC-2026042-DIA3")} title="Try a sample code">
+          <I.Sparkles size={11} /> Sample
+        </button>
+      </div>
+
+      {result && !result.ok && (
+        <div className="atp-booking-error">
+          <I.XCircle size={12} /> {result.message}
+        </div>
+      )}
+
+      {result?.ok && (
+        <div className="atp-booking-result">
+          <div className="atp-booking-result-head">
+            <span className="atp-booking-tag"><I.Check size={10} strokeWidth={3} /> Code accepted</span>
+            <span className="atp-booking-meta">Prescribed by {result.code.doctor} · {result.code.issuedAt}</span>
+          </div>
+          <div className="atp-booking-rows">
+            {result.items.map(it => {
+              const already = inCart.has(it.id);
+              const checked = !already && picks.has(it.id);
+              return (
+                <label key={it.id} className={"atp-booking-row" + (already ? " is-incart" : "")}>
+                  <input
+                    type="checkbox"
+                    checked={checked || already}
+                    disabled={already}
+                    onChange={() => togglePick(it.id)}
+                  />
+                  <span className="atp-booking-row-name">{it.name}</span>
+                  <span className="atp-booking-row-price">{fmtPrice(it.price, ccy)}</span>
+                  {already && <span className="atp-booking-row-incart">In cart</span>}
+                </label>
+              );
+            })}
+          </div>
+          <div className="atp-booking-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setResult(null); setInput(""); setPicks(new Set()); }}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={addAll} disabled={picks.size === 0}>
+              <I.Plus size={11} /> Add {picks.size} to cart
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// === Filter bar — Spec v12 §7 (designed down) ===
+//   Original spec called for a histogram + dual-handle slider + numeric inputs
+//   per-filter. In a clinical-flow context that's overkill: nurses pick 1–3
+//   tests per visit and don't fine-tune budget ranges. So we collapsed it to
+//   a single row of preset chips (covers ~95% of intent) plus an optional
+//   coverage row when insurance is on file. Filter chrome should never
+//   dominate the content it filters.
+function CatalogueFilterBar({ priceRange, setPriceRange, coverageFilter, setCoverageFilter, hasInsurance, maxPrice, ccy = "USD" }) {
+  const fmt = (usd) => ccy === "KHR"
+    ? "៛" + Math.round((usd || 0) * KHR_RATE).toLocaleString()
+    : "$" + Math.round(usd || 0);
+  const setRange = (lo, hi) => setPriceRange([lo, hi]);
+  const reset = () => { setPriceRange([0, maxPrice]); setCoverageFilter("all"); };
+  const isFiltered = priceRange[0] !== 0 || priceRange[1] !== maxPrice || coverageFilter !== "all";
+  const pricePresets = [
+    { id: "all",      label: "Any",          range: [0, maxPrice] },
+    { id: "free",     label: "Free",         range: [0, 0] },
+    { id: "routine",  label: `≤ ${fmt(25)}`,  range: [0, Math.min(25, maxPrice)] },
+    { id: "mid",      label: `${fmt(25)}–${fmt(50)}`, range: [25, Math.min(50, maxPrice)] },
+    { id: "high",     label: `${fmt(50)}+`,   range: [50, maxPrice] },
+  ];
+  const activePreset = pricePresets.find(p => p.range[0] === priceRange[0] && p.range[1] === priceRange[1])?.id || null;
+  const coverageOpts = [
+    { id: "all", label: "All" },
+    { id: "covered", label: "Covered" },
+    { id: "not-covered", label: "Not covered" },
+  ];
+  return (
+    <div className="atp-filterbar" role="region" aria-label="Catalogue filters">
+      <I.Filter size={11} className="atp-filterbar-ico" aria-hidden="true" />
+      <span className="atp-filterbar-label">Price</span>
+      <div className="atp-filterbar-chips" role="group" aria-label="Price filter">
+        {pricePresets.map(preset => (
+          <button
+            key={preset.id}
+            type="button"
+            className={"atp-filter-chip" + (activePreset === preset.id ? " is-active" : "")}
+            onClick={() => setRange(preset.range[0], preset.range[1])}
+            aria-pressed={activePreset === preset.id}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      {hasInsurance && (
+        <>
+          <span className="atp-filterbar-sep" aria-hidden="true" />
+          <span className="atp-filterbar-label">Coverage</span>
+          <div className="atp-filterbar-chips" role="group" aria-label="Coverage filter">
+            {coverageOpts.map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                className={"atp-filter-chip" + (coverageFilter === opt.id ? " is-active" : "")}
+                onClick={() => setCoverageFilter(opt.id)}
+                aria-pressed={coverageFilter === opt.id}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {isFiltered && (
+        <button type="button" className="atp-filterbar-reset" onClick={reset} title="Clear all filters">
+          <I.X size={10} /> Reset
+        </button>
+      )}
+    </div>
+  );
+}
+
 // === Main panel ===
 export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyToggle }) {
   const t = useLang();
   const buckets = useAIRecommendations(patient);
   const priors = patient.priorResults || [];
   const inCart = useMemo(() => new Set((patient.cart?.items || []).map(i => i.id)), [patient.cart]);
+  const insurance = patient.insurance || [];
+  const hasInsurance = insurance.length > 0;
 
-  // Visibility signals — decide which tabs are shown.
+  // Visibility signals — decide which left-panel sections appear.
   const aiTotal = buckets.reduce((n, b) => n + b.items.length, 0);
   const hasSmartSignal = priors.length > 0 || aiTotal > 0;
-  const isNewPatient = priors.length === 0;
 
   const visibleViews = useMemo(() => VIEWS.filter(v => {
     if (v.id === "smart" && !hasSmartSignal) return false;
     if (v.id === "previous" && priors.length === 0) return false;
-    // Visit tab is hidden for new patients — keep it pure catalogue browse
-    // for returning patients who actually have prior visit context.
-    if (v.id === "visit" && isNewPatient) return false;
     return true;
-  }), [hasSmartSignal, priors.length, isNewPatient]);
+  }), [hasSmartSignal, priors.length]);
 
   const defaultView = hasSmartSignal ? "smart" : "lab";
   const [view, setView] = useState(defaultView);
@@ -460,8 +809,24 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const [whyOpenId, setWhyOpenId] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [rowClickEnabled, setRowClickEnabled] = useState(() => !isMobileViewport());
+  const [searchFocused, setSearchFocused] = useState(false);
+  // Mobile category picker — collapsed pill trigger + popover grid.
+  // Replaces the horizontal scroll bar so nurses don't have to hunt for
+  // a category that's offscreen.
+  const [mobilePickerOpen, setMobilePickerOpen] = useState(false);
+  const mobilePickerRef = useRef(null);
+  // Spec v12 §7 — catalogue filters live above the test list
+  const maxPrice = useMemo(() => Math.ceil(Math.max(...ORDER_CATALOG.map(c => c.price || 0))), []);
+  const [priceRange, setPriceRange] = useState([0, maxPrice]);
+  const [coverageFilter, setCoverageFilter] = useState("all");
   const searchRef = useRef(null);
   const rowsRef = useRef(null);
+
+  const activeViewDef = VIEWS.find(v => v.id === view) || VIEWS[0];
+  const isCatalogueView = activeViewDef.group === "catalogue";
+  const isBookingView = view === "booking";
+  const hasGlobalSearch = !!search.trim() && !isBookingView;
+  const showBundleView = view === "bundles" && !hasGlobalSearch;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -477,7 +842,20 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     if (!visibleViews.find(v => v.id === view)) setView("lab");
   }, [visibleViews, view]);
 
-  const rows = useRows({ view, search, patient, buckets, priors, inCart });
+  const rawRows = useRows({ view, search, patient, buckets, priors, inCart });
+  // Apply catalogue filters (price range + coverage) only for catalogue views.
+  const rows = useMemo(() => {
+    if (!isCatalogueView) return rawRows;
+    return rawRows.filter(r => {
+      const p = r.price || 0;
+      if (p < priceRange[0] || p > priceRange[1]) return false;
+      if (coverageFilter === "all") return true;
+      const cov = getCoverage(r.id, insurance);
+      if (coverageFilter === "covered") return cov?.kind === "covered";
+      if (coverageFilter === "not-covered") return cov?.kind === "not-covered" || cov?.kind === "unconfirmed";
+      return true;
+    });
+  }, [rawRows, isCatalogueView, priceRange, coverageFilter, insurance]);
   const bundleRows = useMemo(() => {
     const all = buildBundleRows({ inCart });
     if (!search.trim()) return all;
@@ -488,6 +866,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       b.items.some(it => it.name.toLowerCase().includes(q))
     );
   }, [inCart, search]);
+  const showGlobalBundleResults = hasGlobalSearch && bundleRows.length > 0;
 
   // counts per view tab — small numerical hint that helps the user choose
   const counts = useMemo(() => {
@@ -575,9 +954,6 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     pushAddedToast(`${bundle.name} added · ${items.length} test${items.length > 1 ? "s" : ""}`, result);
   };
 
-  const activeView = VIEWS.find(v => v.id === view) || VIEWS[0];
-  const ActiveIcon = I[activeView.icon];
-
   // Keep highlight valid when rows change.
   useEffect(() => {
     if (rows.length === 0) { setHighlightId(null); return; }
@@ -598,6 +974,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       const tag = (target?.tagName || "").toLowerCase();
       const inSearch = target === searchRef.current;
       const isTyping = (tag === "input" || tag === "textarea" || target?.isContentEditable) && !inSearch;
+      const isEditingText = isTypingTarget(target);
       // Ignore key combos that include Cmd/Ctrl (besides our own shortcuts) when typing in non-search inputs
       if (isTyping) return;
 
@@ -619,6 +996,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
 
       // Cmd/Ctrl+A — select all visible (not in cart)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        if (isEditingText) return;
         e.preventDefault();
         setPicks(new Set(rows.filter(r => !r.inCart).map(r => r.id)));
         return;
@@ -693,144 +1071,370 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     return () => window.removeEventListener("keydown", handler);
   });
 
+  // Spec v12 §9: sticky bottom bar shows running total of selected items.
+  const picksTotal = useMemo(() => {
+    if (picks.size === 0) return 0;
+    return rawRows.filter(r => picks.has(r.id) && !r.inCart).reduce((s, r) => s + (r.price || 0), 0);
+  }, [picks, rawRows]);
+
+  // Group visible views for the left panel — Smart sources at top, Catalogue
+  // specialties below a divider. Mirrors spec §Step 4 layout.
+  const smartViews = visibleViews.filter(v => v.group === "smart");
+  const catalogueViews = visibleViews.filter(v => v.group === "catalogue");
+
+  // Close mobile picker on Escape or outside click.
+  useEffect(() => {
+    if (!mobilePickerOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setMobilePickerOpen(false); };
+    const onDown = (e) => {
+      if (mobilePickerRef.current && !mobilePickerRef.current.contains(e.target)) {
+        setMobilePickerOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown, { passive: true });
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [mobilePickerOpen]);
+  // When switching view, collapse the picker and reset search/why.
+  const selectView = (id) => {
+    setView(id);
+    setSearch("");
+    setWhyOpenId(null);
+    setMobilePickerOpen(false);
+  };
+  const activeView = visibleViews.find(v => v.id === view) || visibleViews[0];
+  const ActiveIco = (activeView && I[activeView.icon]) || I.Sparkles;
+  const activeCount = activeView ? (counts[activeView.id] || 0) : 0;
+
+  // Booking-code add helper — record the consumed code on the patient so the
+  // same code can't be redeemed twice.
+  const addFromBookingCode = (items, code) => {
+    const result = onAdd?.(items, { bookingCode: code });
+    if (result?.deferred) return;
+    onPushToast?.(`Booking code ${code} applied · ${items.length} test${items.length === 1 ? "" : "s"} added`,
+      "success",
+      result?.undo ? { actionLabel: "Undo", onAction: result.undo } : undefined);
+  };
+
   return (
-    <section className="card-soft atp">
-      {/* Header — view tabs replace the old separate sections */}
-      <header className="atp-head">
-        <div className="atp-head-tabs" role="tablist">
-          {visibleViews.map((v, i) => {
-            const Ico = I[v.icon];
-            const count = counts[v.id] || 0;
-            const keyHint = i < 9 ? String(i + 1) : null;
-            return (
-              <button
-                key={v.id}
-                type="button"
-                role="tab"
-                aria-selected={view === v.id}
-                className={"atp-tab" + (view === v.id ? " is-active" : "") + (v.id === "smart" ? " is-smart" : "")}
-                onClick={() => { setView(v.id); setSearch(""); setWhyOpenId(null); }}
-                title={keyHint ? `${v.label} · ${count} · press ${keyHint}` : `${v.label} · ${count}`}
-              >
-                <Ico size={11} />
-                <span className="atp-tab-label">{v.label}</span>
-                {keyHint && <kbd className="atp-tab-key" aria-hidden="true">{keyHint}</kbd>}
-              </button>
-            );
-          })}
-        </div>
-      </header>
-
-      {/* Toolbar — search + contextual action */}
-      <div className="atp-toolbar">
-        <div className="atp-search">
-          <I.Search size={11} className="atp-search-ico" />
-          <input
-            ref={searchRef}
-            type="text"
-            placeholder="Search test, service, package"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+    <section className="card-soft atp atp-v3">
+      {/* Mobile-only category picker — replaces the horizontal scroll bar.
+         Collapsed: a single pill showing the active category. Expanded:
+         a 2-column grid of all categories so the nurse can see every option
+         at once without sideways scrolling. */}
+      <div
+        className={"atp-mobile-picker" + (mobilePickerOpen ? " is-open" : "")}
+        ref={mobilePickerRef}
+      >
+        <button
+          type="button"
+          className="atp-mobile-trigger"
+          onClick={() => setMobilePickerOpen(o => !o)}
+          aria-expanded={mobilePickerOpen}
+          aria-controls="atp-mobile-grid"
+          aria-label={`Category: ${activeView?.label || "Smart"}. Tap to change.`}
+        >
+          <span className="atp-mobile-trigger-ico"><ActiveIco size={14} /></span>
+          <span className="atp-mobile-trigger-label">{activeView?.label || "Smart"}</span>
+          {activeCount > 0 && activeView?.id !== "booking" && (
+            <span className="atp-mobile-trigger-count">{fmtCount(activeCount)}</span>
+          )}
+          <I.ChevronDown
+            size={14}
+            className="atp-mobile-trigger-chev"
+            style={{ transform: mobilePickerOpen ? "rotate(180deg)" : "rotate(0deg)" }}
           />
-          {!search && (
-            <span className="atp-search-hint" aria-hidden="true"><Kbd>/</Kbd></span>
-          )}
-          {search && (
-            <button type="button" className="atp-search-clear" onClick={() => setSearch("")}>
-              <I.X size={10} />
-            </button>
-          )}
-        </div>
-        {view === "previous" && priors.length > 0 && (
-          <button type="button" className="atp-toolbar-action" onClick={orderSameAsLast}>
-            <I.RefreshCw size={11} /> Order same as last visit
-          </button>
-        )}
-        {onCcyToggle && (
-          <div className="atp-ccy" role="group" aria-label="Display currency">
-            {["USD", "KHR"].map(c => (
-              <button
-                key={c}
-                type="button"
-                className={"atp-ccy-tab" + (ccy === c ? " is-active" : "")}
-                onClick={() => onCcyToggle(c)}
-                aria-pressed={ccy === c}
-              >
-                {c}
-              </button>
-            ))}
+        </button>
+        {mobilePickerOpen && (
+          <div id="atp-mobile-grid" className="atp-mobile-grid" role="listbox" aria-label="Pick a category">
+            {smartViews.length > 0 && (
+              <>
+                <div className="atp-mobile-grouplabel">Smart sources</div>
+                <div className="atp-mobile-cells">
+                  {smartViews.map(v => {
+                    const Ico = I[v.icon] || I.Sparkles;
+                    const count = counts[v.id] || 0;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        role="option"
+                        aria-selected={view === v.id}
+                        className={"atp-mobile-cell" + (view === v.id ? " is-active" : "") + (v.id === "smart" ? " is-smart" : "")}
+                        onClick={() => selectView(v.id)}
+                      >
+                        <Ico size={14} />
+                        <span className="atp-mobile-cell-label">{v.label}</span>
+                        {count > 0 && v.id !== "booking" && (
+                          <span className="atp-mobile-cell-count">{fmtCount(count)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {catalogueViews.length > 0 && (
+              <>
+                <div className="atp-mobile-grouplabel">Catalogue</div>
+                <div className="atp-mobile-cells">
+                  {catalogueViews.map(v => {
+                    const Ico = I[v.icon] || I.FlaskConical;
+                    const count = counts[v.id] || 0;
+                    const meta = SPECIALTY_META[v.specialty];
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        role="option"
+                        aria-selected={view === v.id}
+                        className={"atp-mobile-cell" + (view === v.id ? " is-active" : "")}
+                        onClick={() => selectView(v.id)}
+                        style={meta ? { "--cell-accent": meta.color } : undefined}
+                      >
+                        <Ico size={14} />
+                        <span className="atp-mobile-cell-label">{v.label}</span>
+                        <span className="atp-mobile-cell-count">{fmtCount(count)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* Keyboard hint strip — compact, single line */}
-      <div className="atp-hints" aria-hidden="true">
-        <span><Kbd>/</Kbd> search</span>
-        <span><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-        <span><Kbd>Space</Kbd> select</span>
-        <span><Kbd>Enter</Kbd> add</span>
-        <span><Kbd>⇧</Kbd>+<Kbd>Enter</Kbd> add &amp; next</span>
-        <span><Kbd>{MOD_LABEL}</Kbd>+<Kbd>A</Kbd> all</span>
-        <span><Kbd>1</Kbd>–<Kbd>{visibleViews.length}</Kbd> tab</span>
-        <span><Kbd>Esc</Kbd> clear</span>
-      </div>
-
-      {/* Rows — bundles render as cards; everything else uses the universal TestRow */}
-      <div className={"atp-rows" + (view === "bundles" ? " is-bundles" : "")} ref={rowsRef}>
-        {view === "bundles" ? (
-          bundleRows.length === 0 ? (
-            <div className="atp-empty">
-              <I.Inbox size={16} />
-              <span>{search ? "No bundles match your search" : "No bundles configured"}</span>
+      {/* Spec v12 §Step 4: left side panel + main content (desktop layout) */}
+      <div className="atp-shell">
+        <aside className="atp-side" role="navigation" aria-label="Catalogue sections">
+          {smartViews.length > 0 && (
+            <div className="atp-side-group">
+              {smartViews.map((v, i) => {
+                const Ico = I[v.icon] || I.Sparkles;
+                const count = counts[v.id] || 0;
+                const keyHint = i < 9 ? String(i + 1) : null;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={"atp-side-item" + (view === v.id ? " is-active" : "") + (v.id === "smart" ? " is-smart" : "")}
+                    onClick={() => selectView(v.id)}
+                    title={keyHint ? `${v.label} · press ${keyHint}` : v.label}
+                  >
+                    <Ico size={13} />
+                    <span className="atp-side-label">{v.label}</span>
+                    {count > 0 && v.id !== "booking" && <span className="atp-side-count">{fmtCount(count)}</span>}
+                    {keyHint && <kbd className="atp-side-key">{keyHint}</kbd>}
+                  </button>
+                );
+              })}
             </div>
-          ) : (
-            bundleRows.map(bundle => (
-              <div key={bundle.id} data-bundle-id={bundle.id}>
-                <BundleRow
-                  bundle={bundle}
-                  ccy={ccy}
-                  inCart={inCart}
-                  onAddBundle={addBundle}
-                />
+          )}
+          {catalogueViews.length > 0 && (
+            <>
+              {smartViews.length > 0 && <div className="atp-side-divider" aria-hidden="true" />}
+              <div className="atp-side-group">
+                <div className="atp-side-grouplabel">Catalogue</div>
+                {catalogueViews.map((v, i) => {
+                  const Ico = I[v.icon] || I.FlaskConical;
+                  const count = counts[v.id] || 0;
+                  const idx = smartViews.length + i;
+                  const keyHint = idx < 9 ? String(idx + 1) : null;
+                  const meta = SPECIALTY_META[v.specialty];
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={"atp-side-item" + (view === v.id ? " is-active" : "")}
+                      onClick={() => selectView(v.id)}
+                      title={keyHint ? `${v.label} · press ${keyHint}` : v.label}
+                      style={meta ? { "--side-accent": meta.color } : undefined}
+                    >
+                      <Ico size={13} />
+                      <span className="atp-side-label">{v.label}</span>
+                      <span className="atp-side-count">{fmtCount(count)}</span>
+                      {keyHint && <kbd className="atp-side-key">{keyHint}</kbd>}
+                    </button>
+                  );
+                })}
               </div>
-            ))
-          )
-        ) : rows.length === 0 ? (
-          <div className="atp-empty">
-            <I.Inbox size={16} />
-            <span>{search ? "No tests match your search" : "Nothing to show in this view"}</span>
+            </>
+          )}
+        </aside>
+
+        <div className="atp-main">
+          {/* Toolbar — search + contextual action + currency */}
+          <div className="atp-toolbar">
+            <div className="atp-search">
+              <I.Search size={11} className="atp-search-ico" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder={isBookingView ? "Search not available — enter the code below" : "Search test, service, package"}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                disabled={isBookingView}
+              />
+              {!search && !isBookingView && (
+                <span className="atp-search-hint" aria-hidden="true"><Kbd>/</Kbd></span>
+              )}
+              {search && (
+                <button type="button" className="atp-search-clear" onClick={() => setSearch("")}>
+                  <I.X size={10} />
+                </button>
+              )}
+            </div>
+            {view === "previous" && priors.length > 0 && (
+              <button type="button" className="atp-toolbar-action" onClick={orderSameAsLast}>
+                <I.RefreshCw size={11} /> Order same as last visit
+              </button>
+            )}
+            {onCcyToggle && (
+              <div className="atp-ccy" role="group" aria-label="Display currency">
+                {["USD", "KHR"].map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={"atp-ccy-tab" + (ccy === c ? " is-active" : "")}
+                    onClick={() => onCcyToggle(c)}
+                    aria-pressed={ccy === c}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          rows.map(row => (
-            <TestRow
-              key={row.id}
-              row={row}
-              picked={picks.has(row.id)}
-              highlighted={highlightId === row.id}
-              rowClickEnabled={rowClickEnabled}
-              onTogglePick={togglePick}
-              onAdd={addOne}
-              whyOpen={whyOpenId === row.id}
-              onToggleWhy={toggleWhy}
-              t={t}
+
+          {/* Filter bar — only for catalogue views */}
+          {isCatalogueView && (
+            <CatalogueFilterBar
+              priceRange={priceRange}
+              setPriceRange={setPriceRange}
+              coverageFilter={coverageFilter}
+              setCoverageFilter={setCoverageFilter}
+              hasInsurance={hasInsurance}
+              maxPrice={maxPrice}
               ccy={ccy}
             />
-          ))
-        )}
-      </div>
+          )}
 
-      {/* Sticky pick-footer — only when picks > 0 */}
-      {picks.size > 0 && (
-        <footer className="atp-foot">
-          <span className="atp-foot-count"><strong>{picks.size}</strong> selected</span>
-          <button type="button" className="atp-foot-clear" onClick={() => setPicks(new Set())}>
-            Clear
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={addPicks}>
-            <I.Plus size={11} /> Add {picks.size} to cart
-          </button>
-        </footer>
-      )}
+          {/* Keyboard hint strip — hidden on booking view (no list nav) */}
+          {!isBookingView && (
+            <div className="atp-hints" aria-hidden="true">
+              <span><Kbd>/</Kbd> search</span>
+              <span><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
+              <span><Kbd>Space</Kbd> select</span>
+              <span><Kbd>Enter</Kbd> add</span>
+              <span><Kbd>⇧</Kbd>+<Kbd>Enter</Kbd> add &amp; next</span>
+              <span><Kbd>{MOD_LABEL}</Kbd>+<Kbd>A</Kbd> {searchFocused ? "select text" : "all rows"}</span>
+              <span><Kbd>Esc</Kbd> clear</span>
+            </div>
+          )}
+
+          {/* Booking code section — its own surface, replaces the row list */}
+          {isBookingView && (
+            <BookingCodeSection
+              patient={patient}
+              inCart={inCart}
+              onAddBundle={(items, code) => addFromBookingCode(items, code)}
+              onPushToast={onPushToast}
+              ccy={ccy}
+            />
+          )}
+
+          {/* Rows — bundles render as cards; everything else uses TestRow */}
+          {!isBookingView && (
+            <div className={"atp-rows" + (showBundleView ? " is-bundles" : "")} ref={rowsRef}>
+              {showBundleView ? (
+                bundleRows.length === 0 ? (
+                  <div className="atp-empty">
+                    <I.Inbox size={16} />
+                    <span>{search ? "No bundles match your search" : "No bundles configured"}</span>
+                  </div>
+                ) : (
+                  bundleRows.map(bundle => (
+                    <div key={bundle.id} data-bundle-id={bundle.id}>
+                      <BundleRow
+                        bundle={bundle}
+                        ccy={ccy}
+                        inCart={inCart}
+                        onAddBundle={addBundle}
+                      />
+                    </div>
+                  ))
+                )
+              ) : (
+                <>
+                  {showGlobalBundleResults && (
+                    <div className="atp-global-bundles">
+                      {bundleRows.map(bundle => (
+                        <div key={bundle.id} data-bundle-id={bundle.id}>
+                          <BundleRow
+                            bundle={bundle}
+                            ccy={ccy}
+                            inCart={inCart}
+                            onAddBundle={addBundle}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {rows.length === 0 ? (
+                    !showGlobalBundleResults && (
+                      <div className="atp-empty">
+                        <I.Inbox size={16} />
+                        <span>{search ? "No tests match your search" : "No tests match your filters"}</span>
+                      </div>
+                    )
+                  ) : (
+                    rows.map(row => (
+                      <TestRow
+                        key={row.id}
+                        row={row}
+                        picked={picks.has(row.id)}
+                        highlighted={highlightId === row.id}
+                        rowClickEnabled={rowClickEnabled}
+                        onTogglePick={togglePick}
+                        whyOpen={whyOpenId === row.id}
+                        onToggleWhy={toggleWhy}
+                        t={t}
+                        ccy={ccy}
+                        coverage={getCoverage(row.id, insurance)}
+                        specialtyMeta={getSpecialtyMeta(row)}
+                      />
+                    ))
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Spec v12 §9: sticky bottom bar shows count + running total + bulk add */}
+          {picks.size > 0 && (
+            <footer className="atp-foot atp-foot-v3">
+              <span className="atp-foot-count">
+                <strong>{picks.size}</strong> selected
+                <span className="atp-foot-total"> · {fmtPrice(picksTotal, ccy)}</span>
+              </span>
+              <button type="button" className="atp-foot-clear" onClick={() => setPicks(new Set())}>
+                Clear
+              </button>
+              <button type="button" className="btn btn-primary btn-sm atp-foot-add" onClick={addPicks}>
+                <I.Plus size={11} /> Add {picks.size} to cart
+              </button>
+            </footer>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
