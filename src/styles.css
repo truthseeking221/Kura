@@ -4290,6 +4290,28 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-header-next-success:not(.is-static):hover {
   background: var(--success-100, #d1fae5);
 }
+.next-action-target {
+  scroll-margin: 96px;
+}
+.next-action-target:focus {
+  outline: none;
+}
+.next-action-target.is-guided {
+  animation: nextActionTargetPulse 1050ms cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes nextActionTargetPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.34), var(--shadow-sm);
+    border-color: var(--warn-300, #fcd34d);
+  }
+  55% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.16), var(--shadow-md);
+    border-color: var(--warn-300, #fcd34d);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0), var(--shadow-sm);
+  }
+}
 
 .patient-header-chips {
   display: flex;
@@ -4638,15 +4660,19 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
-  margin: 4px -16px 0;
+  margin-top: 4px;
+}
+/* Step 2 only: sticky footer because Review is longest step. */
+.step-shell-review .step-footer {
   position: sticky;
   bottom: 0;
   z-index: 30;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--surface);
+  padding: 12px 0;
+  margin-top: 8px;
+  box-shadow: 0 -8px 12px -8px rgba(15, 23, 42, 0.08);
 }
 .step-footer-left, .step-footer-right {
   display: flex;

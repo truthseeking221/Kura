@@ -1360,6 +1360,7 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
     <StepShell
       title={t("step2.title")}
       subtitle={t("step2.sub")}
+      className="step-shell-review"
       right={
         lockedFields.length > 0 && (
           <button type="button" className="btn btn-ghost btn-unlock" onClick={() => setUnlockConfirmOpen(true)}>
@@ -1823,7 +1824,12 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
           </button>
         </section>
       ) : policies.length === 0 && !adding ? (
-        <section className="card-soft step3-empty">
+        <section
+          className="card-soft step3-empty next-action-target"
+          data-next-action="insurance"
+          tabIndex={-1}
+          aria-label="Choose insurance option"
+        >
           <div className="step3-empty-ico">
             <img className="step3-empty-icon-img" src={insuranceEmptyStateIcon} alt="" aria-hidden="true" />
           </div>
@@ -1876,7 +1882,12 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
           ))}
 
           {adding && (
-            <section className="card-soft">
+            <section
+              className="card-soft next-action-target"
+              data-next-action="insurance"
+              tabIndex={-1}
+              aria-label="Add insurance policy"
+            >
               <div className="group-head">
                 <h3 className="group-title">{t("step3.newPolicy")}</h3>
               </div>

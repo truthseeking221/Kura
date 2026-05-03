@@ -252,6 +252,17 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
     setStepSwitcherOpen(false);
     onStepClick?.(stepId);
   };
+  const guideToNextActionTarget = (selector, delay = 0) => {
+    if (!selector || typeof document === "undefined") return;
+    window.setTimeout(() => {
+      const target = document.querySelector(selector);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus?.({ preventScroll: true });
+      target.classList.add("is-guided");
+      window.setTimeout(() => target.classList.remove("is-guided"), 1100);
+    }, delay);
+  };
 
   return (
     <div className={"patient-header" + (stepSwitcherOpen ? " is-step-sheet-open" : "")}>
@@ -282,14 +293,24 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
         const NextIcon = I[nextAction.icon] || I.AlertCircle;
         const canJump = nextAction.target && nextAction.target !== currentStep
           && canNavigateToStep(nextAction.target, currentStep, gate);
+        const canGuideCurrent = nextAction.target === currentStep && !!nextAction.selector;
+        const isActionable = canJump || canGuideCurrent;
+        const handleNextAction = () => {
+          if (canJump) {
+            onStepClick?.(nextAction.target);
+            guideToNextActionTarget(nextAction.selector, 80);
+            return;
+          }
+          if (canGuideCurrent) guideToNextActionTarget(nextAction.selector);
+        };
         return (
           <button
             type="button"
-            className={"patient-header-next patient-header-next-" + nextAction.tone + (canJump ? "" : " is-static")}
-            onClick={() => canJump && onStepClick?.(nextAction.target)}
-            disabled={!canJump}
+            className={"patient-header-next patient-header-next-" + nextAction.tone + (isActionable ? "" : " is-static")}
+            onClick={handleNextAction}
+            disabled={!isActionable}
             aria-label={canJump ? `Next: ${nextAction.label}. Jump to step ${nextAction.target}` : nextAction.label}
-            title={canJump ? `Jump to step ${nextAction.target}` : undefined}
+            title={canJump ? `Jump to step ${nextAction.target}` : canGuideCurrent ? "Show required action" : undefined}
           >
             <NextIcon size={12} strokeWidth={2.25} />
             <span>{nextAction.label}</span>

@@ -350,7 +350,9 @@ function AppShell() {
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (isTypingTarget()) return;
     if (window.matchMedia?.("(max-width: 767px)").matches) return;
-    if (document.querySelector(".modal-overlay, .mobile-step-sheet, .mobile-cart-sheet")) return;
+    const hasVisibleOverlay = Array.from(document.querySelectorAll(".modal-overlay, .mobile-step-sheet, .mobile-cart-sheet"))
+      .some(el => el.offsetParent !== null || el.getClientRects().length > 0);
+    if (hasVisibleOverlay) return;
     const targetStep = Number(match[1]);
     e.preventDefault();
     if (targetStep !== currentStep && canNavigateToStep(targetStep, currentStep, gate)) {
@@ -541,7 +543,7 @@ function AppShell() {
     // Step-specific blocker copy, evaluated in step order.
     if (!gate.step1Done) return { label: "Capture identity", target: 1, tone: "warn", icon: "User" };
     if (!gate.step2Done) return { label: "Verify patient", target: 2, tone: "warn", icon: "AlertCircle" };
-    if (!gate.step3Done) return { label: "Acknowledge insurance", target: 3, tone: "warn", icon: "Shield" };
+    if (!gate.step3Done) return { label: "Choose insurance", target: 3, tone: "warn", icon: "Shield", selector: '[data-next-action="insurance"]' };
     if (activeItemCount === 0) return { label: "Add orders", target: 4, tone: "warn", icon: "Plus" };
     if (!payerReadyForPayment) return { label: "Choose payer", target: 4, tone: "warn", icon: "Shield" };
     if (pendingValidationCount > 0) return { label: "Resolve consent", target: 4, tone: "warn", icon: "AlertCircle" };
