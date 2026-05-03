@@ -12,7 +12,6 @@
 import React, { useMemo, useState } from "react";
 import { I } from "./icons";
 import { useLang } from "./i18n";
-import { deriveCart, cartTotals, paymentDueAmount } from "./OrderCart";
 
 // === Canonical step definitions ===
 export const STEP_DEFS = [
@@ -207,7 +206,7 @@ const AVATAR_COLORS = {
   "av-amber": "#d97706", "av-pink": "#e91e8c", "av-green": "#2e7d32",
 };
 
-export function PatientHeader({ patient, gate, currentStep = 1, onStepClick }) {
+export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nextAction = null }) {
   const t = useLang();
   const [stepSwitcherOpen, setStepSwitcherOpen] = useState(false);
   const currentDef = STEP_DEFS.find(s => s.id === currentStep) || STEP_DEFS[0];
@@ -232,45 +231,6 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick }) {
     return `${day} ${mo} ${yr} · ${age}y`;
   })();
 
-  // Spec v12: queue badges + status chips removed from header. Status now
-  // lives in the wizard progress bar only. Mobile keeps a single primary
-  // status pill so a nurse on a phone still sees "what should I do next?"
-  // without scrolling — desktop relies entirely on the progress bar.
-  const headerCart = useMemo(() => deriveCart(patient), [patient]);
-  const headerTotals = useMemo(() => cartTotals(headerCart), [headerCart]);
-  const cartItemCount = (headerCart.items || []).length;
-  const cartPaid = headerCart.payment?.status === "confirmed";
-  const cartPayLater = headerCart.payment?.status === "deferred";
-  const cartNoCharge = cartItemCount > 0 && paymentDueAmount(headerCart, headerTotals) <= 0;
-  const cartPaymentResolved = cartPaid || cartPayLater || cartNoCharge;
-  const pendingValidationCount = (headerCart.items || []).filter(i => {
-    const state = i.validationState || "idle";
-    return i.kind === "imaging" && state !== "signed" && state !== "verbal";
-  }).length;
-  const linePayers = (headerCart.items || []).map(i => i.payer || patient.payer || "direct");
-  const hasInsurancePaidLines = linePayers.includes("insurance");
-  const payerReady =
-    cartItemCount === 0 ||
-    (linePayers.every(Boolean) && (!hasInsurancePaidLines || (patient.insurance || []).length > 0));
-
-  // === Mobile primary status — single pill + concise secondary line ===
-  // The 4-chip horizontal scroll on mobile makes nurses guess what's hidden.
-  // Replace it with one big "what should I do next?" status and one small
-  // line summarising step state. Desktop keeps the 4 chips (CSS gates this).
-  const isCheckedIn = patient.status?.label === "Checked in";
-  const primaryStatus = (() => {
-    if (isCheckedIn) return { tone: "success", label: "Checked in", icon: "CheckCircle" };
-    if (pendingValidationCount > 0) return { tone: "warn", label: "Resolve consent", icon: "AlertCircle" };
-    if (!payerReady) return { tone: "warn", label: "Choose payer", icon: "AlertCircle" };
-    if (gate.step4Done && !gate.step5Done) return { tone: "warn", label: "Teleconsult next", icon: "Video" };
-    if (cartPaymentResolved && gate.step5Done) return { tone: "success", label: "Ready to check in", icon: "CheckCircle" };
-    if (cartPaymentResolved) return { tone: "info", label: cartPayLater ? "Pay later" : "Paid", icon: "Check" };
-    if (cartItemCount > 0 && gate.step2Done) return { tone: "info", label: "Ready to pay", icon: "CreditCard" };
-    if (cartItemCount > 0 && !gate.step2Done) return { tone: "warn", label: "Verify patient", icon: "AlertCircle" };
-    if (gate.step1Done && cartItemCount === 0) return { tone: "warn", label: "Orders needed", icon: "Plus" };
-    return { tone: "muted", label: "Capture identity", icon: "User" };
-  })();
-  const StatusIcon = I[primaryStatus.icon] || I.Clock;
   const stepSwitcherTitle = `Step ${currentStep}/${STEP_DEFS.length} · ${t(currentDef.labelKey)}`;
 
   const getStepDetail = (step, isCurrent, isNavigable) => {
@@ -312,12 +272,25 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick }) {
           </div>
         </div>
       </div>
-      {/* Mobile-only primary status pill — single answer to "what next?". */}
-      <div className={"patient-header-mobile-status patient-header-mobile-status-" + primaryStatus.tone}>
-        <span className="ph-mstatus-pill">
-          <StatusIcon size={12} strokeWidth={2.25} />
-          <span>{primaryStatus.label}</span>
-        </span>
+      {nextAction && (() => {
+        const NextIcon = I[nextAction.icon] || I.AlertCircle;
+        const canJump = nextAction.target && nextAction.target !== currentStep
+          && canNavigateToStep(nextAction.target, currentStep, gate);
+        return (
+          <button
+            type="button"
+            className={"patient-header-next patient-header-next-" + nextAction.tone + (canJump ? "" : " is-static")}
+            onClick={() => canJump && onStepClick?.(nextAction.target)}
+            disabled={!canJump}
+            aria-label={canJump ? `Next: ${nextAction.label}. Jump to step ${nextAction.target}` : nextAction.label}
+            title={canJump ? `Jump to step ${nextAction.target}` : undefined}
+          >
+            <NextIcon size={12} strokeWidth={2.25} />
+            <span>{nextAction.label}</span>
+          </button>
+        );
+      })()}
+      <div className="patient-header-mobile-status">
         <button
           type="button"
           className="ph-step-switcher"

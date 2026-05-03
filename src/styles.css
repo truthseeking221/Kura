@@ -1313,6 +1313,42 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   from { opacity: 1; transform: translateX(0)    scale(1); }
   to   { opacity: 0; transform: translateX(24px) scale(0.96); }
 }
+@media (max-width: 767px) {
+  .toast-stack {
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: 12px;
+    bottom: auto;
+    left: 12px;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .toast {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding: 11px 12px 11px 14px;
+    border-radius: 12px;
+    transform-origin: top center;
+    animation: toastInMobile 240ms cubic-bezier(.2, .8, .2, 1) both;
+  }
+
+  .toast-row.is-leaving {
+    margin-top: -6px;
+  }
+
+  .toast-row.is-leaving > .toast {
+    animation: toastOutMobile 180ms cubic-bezier(.4, 0, .55, 1) forwards;
+  }
+}
+@keyframes toastInMobile {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)     scale(1); }
+}
+@keyframes toastOutMobile {
+  from { opacity: 1; transform: translateY(0)     scale(1); }
+  to   { opacity: 0; transform: translateY(-8px)  scale(0.98); }
+}
 @keyframes toastInRm  { from { opacity: 0 } to { opacity: 1 } }
 @keyframes toastOutRm { from { opacity: 1 } to { opacity: 0 } }
 @media (prefers-reduced-motion: reduce) {
@@ -4122,7 +4158,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 24px;
+  padding: 14px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -4133,16 +4169,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-header-id {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 .patient-header-avatar {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: white;
   flex-shrink: 0;
@@ -4156,8 +4192,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   min-width: 0;
 }
 .patient-header-name {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16.5px;
+  font-weight: 760;
   color: var(--ink-900);
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -4165,24 +4201,81 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-header-sub {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
+  gap: 7px;
+  margin-top: 5px;
   flex-wrap: wrap;
 }
 .patient-header-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 1px 7px;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--ink-500);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 620;
+  color: var(--ink-600);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
   font-variant-numeric: tabular-nums;
 }
-.patient-header-pill svg { color: var(--ink-400); flex-shrink: 0; }
+.patient-header-pill svg { color: var(--brand-500); flex-shrink: 0; opacity: 0.7; }
+
+/* === Next-action pill — single answer to "what next?" for this patient ===
+   Renders on the right side of the patient header on both desktop and mobile.
+   Click jumps to the step that resolves the blocker. Tone reflects severity:
+   warn = unresolved, info = waiting, success = ready. */
+.patient-header-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.patient-header-next svg { flex-shrink: 0; opacity: 0.9; }
+.patient-header-next.is-static { cursor: default; }
+.patient-header-next:not(.is-static):hover { transform: translateY(-1px); }
+.patient-header-next:not(.is-static):active { transform: translateY(0); }
+.patient-header-next:focus-visible {
+  outline: 2px solid var(--brand-300);
+  outline-offset: 2px;
+}
+.patient-header-next-warn {
+  background: var(--warn-50);
+  border-color: var(--warn-200, #fde68a);
+  color: var(--warn-700, #b45309);
+}
+.patient-header-next-warn:not(.is-static):hover {
+  background: var(--warn-100, #fef3c7);
+  border-color: var(--warn-300, #fcd34d);
+}
+.patient-header-next-info {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+  color: var(--brand-700);
+}
+.patient-header-next-info:not(.is-static):hover {
+  background: var(--brand-100, #dbeafe);
+}
+.patient-header-next-success {
+  background: var(--success-50);
+  border-color: var(--success-200, #a7f3d0);
+  color: var(--success-700, #047857);
+}
+.patient-header-next-success:not(.is-static):hover {
+  background: var(--success-100, #d1fae5);
+}
 
 .patient-header-chips {
   display: flex;
@@ -5018,22 +5111,27 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .collision-banner {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 36px 1fr auto;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--warn-200, #fed7aa);
-  background: var(--warn-50, #fff7ed);
-  border-radius: 8px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn-500) 18%, var(--border));
+  border-left: 3px solid color-mix(in srgb, var(--warn-500) 72%, var(--surface));
+  background: color-mix(in srgb, var(--warn-50) 42%, var(--surface));
+  border-radius: 9px;
   align-items: center;
 }
 .collision-icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: var(--warn-500);
-  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 68% 72%, color-mix(in srgb, var(--warn-500) 18%, transparent) 0 24%, transparent 25%),
+    linear-gradient(180deg, color-mix(in srgb, var(--warn-50) 78%, var(--surface)), var(--surface));
+  color: var(--warn-600);
+  border: 1px solid color-mix(in srgb, var(--warn-500) 28%, var(--border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(138, 86, 0, 0.08);
   flex-shrink: 0;
 }
 .collision-body {
@@ -5043,9 +5141,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .collision-body strong {
   display: block;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
-  color: var(--warn-700, #b45309);
+  color: var(--ink-900);
   line-height: 1.3;
 }
 .collision-kicker {
@@ -5056,12 +5154,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--warn-600, #d97706);
-  opacity: 0.85;
+  color: var(--warn-600);
+  opacity: 0.78;
 }
 .collision-body p {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--ink-600);
   line-height: 1.4;
 }
@@ -6831,7 +6929,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 /* === Header === */
 .cart-hd2 {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding: 11px 14px 10px;
   border-bottom: 1px solid var(--border);
@@ -6865,10 +6963,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .cart-hd2-meta {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  padding-top: 1px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding-top: 0;
 }
 .cart-hd2-count {
   font-size: 11.5px;
@@ -6876,6 +6975,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   color: var(--ink-500);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  line-height: 1;
 }
 .cart-hd2-count span { font-weight: 500; color: var(--ink-500); }
 .cart-hd2-count-empty { font-style: italic; color: var(--ink-400); }
@@ -6885,7 +6985,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 2px 6px;
+  min-height: 24px;
+  padding: 2px 7px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -7306,6 +7407,25 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border-color: var(--brand-200, #bfdbfe);
 }
 
+.cart-validation-banner {
+  padding: 9px 16px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--warn-50) 48%, var(--surface));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warn-500) 60%, var(--surface));
+}
+.cart-validation-banner-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warn-500) 13%, var(--surface));
+  color: var(--warn-600);
+  border: 1px solid color-mix(in srgb, var(--warn-500) 20%, var(--border));
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 /* Spec v12 §Order Cart — pending-flag pill above the check-in CTA.
    Communicates "still open" concerns (payment not collected yet, KHQR
    waiting) without blocking the CTA, since per spec only identity +
@@ -7335,6 +7455,33 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   background: var(--brand-50);
   color: var(--brand-700);
   border: 1px solid var(--brand-200, #bfdbfe);
+}
+.cart-checkin-blockers {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+}
+.cart-checkin-blockers-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-500);
+  font-size: 10.5px;
+  font-weight: 720;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cart-checkin-blockers ul {
+  margin: 5px 0 0;
+  padding-left: 16px;
+  color: var(--ink-600);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.cart-checkin-blockers li + li {
+  margin-top: 3px;
 }
 
 /* Spec v12 Step 5 — teleconsult booking surface */
@@ -7367,22 +7514,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .step-shell-tele .tele-booked-summary {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--success-500) 22%, transparent);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--surface) 0%, var(--success-50) 100%);
+  gap: 10px;
+  padding: 6px 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .step-shell-tele .tele-booked-summary-icon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   border-radius: 999px;
   color: var(--success-600);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success-500) 18%, transparent);
+  background: var(--success-50);
+  box-shadow: none;
 }
 .step-shell-tele .tele-booked-summary-copy {
   min-width: 0;
@@ -7395,13 +7542,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .step-shell-tele .tele-booked-summary-copy strong {
   color: var(--ink-900);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
 }
 .step-shell-tele .tele-booked-summary-kicker {
   color: var(--success-600);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -7524,8 +7671,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   transition: background 100ms ease, color 100ms ease;
 }
 .step-shell-tele .tele-cal-day:hover:not(:disabled) {
-  background: var(--brand-50);
-  color: var(--brand-700);
+  background: var(--ink-50);
+  color: var(--ink-900);
 }
 .step-shell-tele .tele-cal-day.is-out {
   visibility: hidden;
@@ -7534,16 +7681,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   color: var(--ink-300);
   cursor: not-allowed;
 }
+.step-shell-tele .tele-cal-day.is-full {
+  color: var(--ink-300);
+  background: var(--surface-2);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
 .step-shell-tele .tele-cal-day.is-before-tat {
   color: var(--warn-700, #b45309);
   background: var(--warn-50, #fff7ed);
 }
 .step-shell-tele .tele-cal-day.is-today {
-  outline: 1.5px solid var(--brand-500);
+  outline: 1.5px solid var(--ink-300);
   outline-offset: -2px;
 }
 .step-shell-tele .tele-cal-day.is-selected {
-  background: var(--brand-500);
+  background: var(--ink-900);
   color: white;
 }
 .step-shell-tele .tele-cal-day.is-selected.is-before-tat {
@@ -7586,6 +7739,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   gap: 6px;
 }
 .step-shell-tele .tele-times-slot {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   padding: 6px 0;
   font-family: inherit;
   font-size: 12px;
@@ -7598,20 +7756,41 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+.step-shell-tele .tele-times-slot small {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--warn-700, #b45309);
+  line-height: 1.1;
+}
+.step-shell-tele .tele-times-slot.is-before-tat {
+  background: var(--warn-50, #fff7ed);
+  border-color: var(--warn-200, #fed7aa);
+}
+.step-shell-tele .tele-times-slot.is-active small {
+  color: rgba(255,255,255,0.82);
+}
 .step-shell-tele .tele-times-slot:hover {
-  background: var(--brand-50);
-  border-color: var(--brand-200, #bfdbfe);
-  color: var(--brand-700);
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--ink-900);
 }
 .step-shell-tele .tele-times-slot.is-active {
-  background: var(--brand-500);
+  background: var(--ink-900);
   color: white;
-  border-color: var(--brand-500);
+  border-color: var(--ink-900);
 }
 
 /* Spec v12 Step 6 — payment surface (order summary card above PaymentArea) */
 .step-shell-payment .step6-summary {
   padding: 12px 14px;
+}
+.step6-currency-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--ink-500);
+  white-space: nowrap;
 }
 .step-shell-payment .step6-summary-head {
   display: flex;
@@ -7800,6 +7979,25 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   color: var(--success-700, #047857);
   margin-top: 6px;
 }
+.step-shell-payment .step6-khqr-live {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--success-200, #a7f3d0);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.step-shell-payment .step6-khqr-copy {
+  font-size: 11px;
+  color: var(--ink-600);
+  line-height: 1.35;
+}
+.step-shell-payment .step6-khqr-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
 
 /* Inline expand panels */
 .order-cart .cart-line-expand {
@@ -7811,6 +8009,51 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-size: 11px;
   color: var(--ink-700);
   line-height: 1.4;
+}
+.order-cart .cart-line-validation-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  margin: 0 12px 9px 44px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  border-color: var(--border);
+}
+.cart-line-validation-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink-700);
+  font-size: 11px;
+  font-weight: 600;
+}
+.cart-line-validation-copy svg {
+  color: var(--ink-500);
+  flex-shrink: 0;
+}
+.cart-line-validation-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.cart-line-action.cart-line-action-primary,
+.cart-line-action.cart-line-action-warning {
+  justify-content: center;
+  min-height: 28px;
+  border-style: solid;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.cart-line-action-primary {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+  color: var(--brand-700);
+}
+.cart-line-action-warning {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--ink-700);
 }
 
 /* === Add tests button (dashed CTA) === */
@@ -8247,14 +8490,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .atp-row.is-incart { opacity: 0.55; }
 .atp-row.is-incart:hover { background: transparent; margin: 0; padding-left: 0; padding-right: 0; }
 .atp-row.is-highlighted {
-  background: rgba(var(--brand-rgb), 0.05);
-  margin: 0 -8px;
-  padding-left: 8px;
-  padding-right: 8px;
-  border-radius: 5px;
-  box-shadow: inset 2px 0 0 var(--brand-500);
+  background: rgba(var(--brand-rgb), 0.035);
+  margin: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
-.atp-row.is-highlighted.is-picked { background: rgba(var(--brand-rgb), 0.10); }
+.atp-row.is-highlighted.is-picked { background: rgba(var(--brand-rgb), 0.07); }
+.atp-row.is-unavailable {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.atp-row.is-unavailable:hover {
+  background: transparent;
+}
 
 /* Keyboard hint strip — sits below the toolbar on Step 4 */
 .atp-hints {
@@ -8353,6 +8603,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
                        text-transform: none; letter-spacing: 0.005em; font-weight: 500; }
 .atp-badge-sensitive { color: var(--warn-600);    background: var(--warn-50);     border-color: var(--warn-200, #fde68a); }
 .atp-badge-popular   { color: var(--brand-600);   background: var(--brand-50);    border-color: var(--brand-100); }
+.atp-badge-unavailable { color: var(--warn-700, #b45309); background: var(--warn-50, #fff7ed); border-color: var(--warn-200, #fed7aa); }
+.atp-notify-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--warn-300, #fdba74);
+  border-radius: 999px;
+  background: var(--warn-50, #fff7ed);
+  color: var(--warn-700, #b45309);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 .atp-price {
   font-size: 12px;
@@ -8624,6 +8886,75 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   color: var(--brand-700);
   border-color: var(--brand-200, #bfdbfe);
 }
+.atp-filter-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.atp-price-filter {
+  display: inline-grid;
+  grid-template-columns: 70px 110px auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.atp-price-hist {
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  height: 18px;
+}
+.atp-price-hist span {
+  width: 5px;
+  border-radius: 999px 999px 0 0;
+  background: var(--brand-200, #bfdbfe);
+}
+.atp-price-sliders {
+  position: relative;
+  height: 20px;
+}
+.atp-price-sliders input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  accent-color: var(--brand-500);
+}
+.atp-price-sliders input::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.atp-price-filter-label {
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--ink-700);
+  white-space: nowrap;
+}
+.atp-active-filters {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 19px;
+}
+.atp-active-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-600);
+  font-size: 10.5px;
+  font-weight: 600;
+}
 .atp-filterbar-reset {
   margin-left: auto;
   display: inline-flex;
@@ -8856,8 +9187,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     align-items: center;
     gap: 8px;
     width: 100%;
-    min-height: 44px;
-    padding: 8px 14px;
+    min-height: 40px;
+    padding: 6px 12px;
     background: transparent;
     border: 0;
     font-family: inherit;
@@ -8872,9 +9203,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .atp-mobile-trigger-ico {
     display: grid;
     place-items: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
     background: var(--brand-50);
     color: var(--brand-600);
     flex-shrink: 0;
@@ -9457,14 +9788,30 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .search-result,
   .topbar-search-result {
     min-height: 56px;
-    padding: 10px 12px;
+    align-items: flex-start;
+    padding: 11px 12px;
   }
   .topbar-search-result-name {
     font-size: 13.5px;
+    line-height: 1.25;
   }
-  .topbar-search-status,
+  .topbar-search-result-meta {
+    padding-top: 1px;
+    font-size: 11.75px;
+  }
   .topbar-search-match {
     display: none;
+  }
+  .topbar-search-status {
+    display: inline-flex;
+    align-items: center;
+    max-width: 42%;
+    margin-left: auto;
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10.5px;
+    line-height: 1.2;
   }
   .topbar-search-mini-icon,
   .topbar-search-action-icon {
@@ -9492,14 +9839,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     position: fixed;
     left: 12px;
     right: 12px;
-    top: calc(var(--mobile-topbar-h) + var(--mobile-search-h) + 8px);
-    bottom: calc(var(--mobile-cart-bar-h) + var(--mobile-safe-bottom) + 12px);
+    top: calc(var(--mobile-topbar-h) + var(--mobile-search-h) + 6px);
+    bottom: calc(var(--mobile-cart-bar-h) + var(--mobile-safe-bottom) + 10px);
     width: auto;
     max-width: none;
     z-index: 150;
     display: flex;
     flex-direction: column;
-    border-radius: 18px;
+    border-radius: 16px;
     border-color: rgba(213, 219, 232, 0.92);
     background: var(--surface);
     box-shadow:
@@ -9514,49 +9861,49 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .notif-panel .notif-head {
     align-items: flex-start;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 14px 14px 12px;
+    gap: 10px;
+    padding: 12px 12px 10px;
     background: linear-gradient(180deg, var(--surface), rgba(248, 250, 252, 0.96));
   }
   .notif-panel .notif-head-copy {
     flex: 1 1 140px;
   }
   .notif-panel .notif-title {
-    font-size: 18px;
-    font-weight: 780;
-    line-height: 1.15;
+    font-size: 17px;
+    font-weight: 760;
+    line-height: 1.12;
   }
   .notif-panel .notif-sub {
     display: inline-flex;
     align-items: center;
-    min-height: 22px;
-    margin-top: 6px;
-    padding: 0 9px;
+    min-height: 20px;
+    margin-top: 4px;
+    padding: 0 8px;
     border-radius: 999px;
     background: var(--brand-50);
     color: var(--brand-700);
-    font-size: 12px;
-    font-weight: 680;
+    font-size: 11.5px;
+    font-weight: 660;
   }
   .notif-panel .notif-head-actions {
     align-items: flex-start;
-    gap: 6px;
+    gap: 5px;
   }
   .notif-panel .notif-mark-read {
-    min-height: 38px;
-    padding: 0 10px;
+    min-height: 34px;
+    padding: 0 9px;
     border-radius: 999px;
     background: var(--surface);
     border: 1px solid var(--border);
-    font-size: 12px;
-    font-weight: 680;
+    font-size: 11.5px;
+    font-weight: 660;
     white-space: nowrap;
   }
   .notif-close {
     display: inline-grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--surface);
@@ -9574,8 +9921,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px;
+    gap: 6px;
+    padding: 8px;
     background: var(--surface-2);
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
@@ -9588,11 +9935,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   }
   .notif-panel .notif-item {
     flex: 0 0 auto;
-    min-height: 78px;
-    gap: 10px;
-    padding: 12px;
+    min-height: 64px;
+    gap: 7px;
+    padding: 9px;
     border: 1px solid var(--border);
-    border-radius: 15px;
+    border-radius: 12px;
     background: var(--surface);
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
@@ -9609,69 +9956,69 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
       var(--surface);
   }
   .notif-panel .notif-item-ico {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
   }
   .notif-panel .notif-item-title {
     padding-right: 18px;
-    font-size: 14px;
-    font-weight: 760;
-    line-height: 1.22;
+    font-size: 13px;
+    font-weight: 740;
+    line-height: 1.15;
   }
   .notif-panel .notif-item-text {
-    margin-top: 4px;
+    margin-top: 1px;
     color: var(--ink-600);
-    font-size: 13px;
-    line-height: 1.36;
+    font-size: 11.5px;
+    line-height: 1.24;
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
   }
   .notif-panel .notif-item-foot {
     align-items: center;
-    min-height: 34px;
-    margin-top: 9px;
+    min-height: 26px;
+    margin-top: 5px;
   }
   .notif-panel .notif-item-time {
-    font-size: 12px;
+    font-size: 10.5px;
     color: var(--ink-500);
   }
   .notif-panel .notif-action {
     flex-shrink: 0;
-    min-height: 34px;
-    padding: 0 10px 0 11px;
+    min-height: 28px;
+    padding: 0 8px 0 9px;
     border: 1px solid var(--brand-100);
     border-radius: 999px;
     background: var(--brand-50);
     color: var(--brand-700);
-    font-size: 12.5px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 680;
   }
   .notif-panel .notif-dot {
-    top: 14px;
-    right: 13px;
-    width: 8px;
-    height: 8px;
+    top: 11px;
+    right: 11px;
+    width: 6px;
+    height: 6px;
     box-shadow: 0 0 0 3px var(--surface);
   }
   .notif-panel .notif-foot {
     flex-shrink: 0;
-    padding: 9px 10px calc(10px + var(--mobile-safe-bottom));
+    padding: 7px 8px calc(7px + var(--mobile-safe-bottom));
     background: var(--surface);
   }
   .notif-panel .notif-foot .link-btn {
     width: 100%;
-    min-height: 42px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: 10px;
     border: 1px solid var(--border);
     background: var(--surface-2);
-    font-size: 13px;
-    font-weight: 720;
+    font-size: 12px;
+    font-weight: 700;
   }
   .notif-panel .notif-empty {
     min-height: 260px;
@@ -9685,96 +10032,122 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 
   /* === PatientHeader compact === */
   .patient-header {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) minmax(128px, 42%);
+    grid-template-rows: auto auto;
     position: sticky;
     top: calc(var(--mobile-topbar-h) + var(--mobile-search-h));
     z-index: 70;
-    padding: 9px 12px;
-    gap: 8px;
-    align-items: flex-start;
-    background: var(--surface);
+    padding: 11px 12px;
+    gap: 6px 10px;
+    align-items: center;
+    background: color-mix(in srgb, var(--surface) 94%, var(--brand-50));
     border-bottom: 1px solid var(--border);
-    flex-wrap: nowrap;
   }
   .patient-header.is-step-sheet-open {
     z-index: 180;
   }
   .patient-header-id {
-    gap: 9px;
-    min-width: 0;
-    flex: 1;
+    display: contents;
   }
   .patient-header-avatar {
-    width: 34px;
-    height: 34px;
-    font-size: 12px;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    width: 40px;
+    height: 40px;
+    font-size: 12.5px;
+    box-shadow: 0 0 0 3px var(--surface);
   }
-  .patient-header-meta { min-width: 0; }
+  .patient-header-meta {
+    display: contents;
+  }
   .patient-header-name {
-    font-size: 14px;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    min-width: 0;
+    font-size: 16px;
     line-height: 1.15;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .patient-header-sub {
-    gap: 0;
-    margin-top: 4px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
+    grid-column: 2 / 4;
+    grid-row: 2;
+    align-self: start;
+    gap: 5px;
+    margin-top: 0;
+    flex-wrap: wrap;
+    overflow: visible;
+    scrollbar-width: auto;
   }
   .patient-header-sub::-webkit-scrollbar { display: none; }
   .patient-header-pill {
-    flex: 0 0 auto;
-    background: transparent;
-    border: 0;
-    padding: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 3px 7px;
     font-size: 11.5px;
-    color: var(--ink-500);
-    gap: 0;
+    color: var(--ink-600);
+    gap: 3px;
+    line-height: 1.1;
   }
-  .patient-header-pill svg { display: none; }
+  .patient-header-pill svg {
+    display: block;
+    color: var(--brand-500);
+    opacity: 0.65;
+  }
   .patient-header-pill + .patient-header-pill {
-    margin-left: 8px;
-    position: relative;
-    padding-left: 10px;
+    margin-left: 0;
+    position: static;
+    padding-left: 7px;
   }
   .patient-header-pill + .patient-header-pill::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 50%;
-    width: 2px;
-    height: 2px;
-    border-radius: 50%;
-    background: var(--ink-300);
-    transform: translateY(-50%);
+    content: none;
   }
   /* Hide the desktop 4-chip horizontal scroll block on mobile — replaced
      by a single primary status pill + a tight secondary line below. */
   .patient-header-chips {
     display: none !important;
   }
-  /* Single primary status — answers "what should I do next?" without the
-     nurse needing to interpret 4 separate chips. */
   .patient-header-mobile-status {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-end;
-    flex: 0 0 auto;
-    margin-left: auto;
+    flex-direction: row;
+    grid-column: 3;
+    grid-row: 2;
+    gap: 0;
+    align-items: center;
+    justify-content: flex-end;
+    align-self: start;
+    justify-self: end;
+    margin-left: 0;
     min-width: 0;
   }
+  /* Mobile: next-action pill takes row 1 of the third grid column,
+     sitting beside the patient name. Step switcher sits below in row 2. */
+  .patient-header-next {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+    height: 26px;
+    padding: 0 11px 0 9px;
+    font-size: 11.5px;
+    margin-left: 0;
+  }
+  .patient-header-next svg { width: 12px; height: 12px; }
   .ph-mstatus-pill {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    height: 24px;
-    padding: 0 10px 0 8px;
+    height: 28px;
+    padding: 0 11px 0 9px;
     border-radius: 999px;
-    font-size: 11.5px;
-    font-weight: 650;
+    font-size: 12px;
+    font-weight: 700;
     letter-spacing: -0.005em;
     white-space: nowrap;
     border: 1px solid transparent;
@@ -9803,6 +10176,23 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     color: var(--ink-700);
     border-color: var(--border);
   }
+  .collision-banner {
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: flex-start;
+  }
+  .collision-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+    gap: 6px;
+  }
+  .collision-actions .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 34px;
+    min-width: 0;
+  }
   .ph-mstatus-sub {
     display: inline-flex;
     align-items: center;
@@ -9823,12 +10213,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .ph-step-switcher {
     display: inline-flex;
     align-items: baseline;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 6px;
-    max-width: min(50vw, 200px);
-    min-height: 26px;
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+    min-height: 30px;
+    width: 100%;
     margin: 0;
-    padding: 4px 8px 4px 10px;
+    padding: 5px 8px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--surface);
@@ -10136,7 +10529,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     right: 12px;
     bottom: calc(10px + var(--mobile-safe-bottom));
     min-height: 64px;
-    border: 1px solid var(--border-strong, var(--ink-200));
+    border: 0;
     border-radius: 18px;
     background: var(--surface);
     box-shadow: 0 18px 46px rgba(11, 20, 36, 0.18);
@@ -10144,16 +10537,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     align-items: stretch;
     gap: 8px;
     padding: 8px;
-    transition: border-color 160ms, box-shadow 160ms;
+    transition: background 160ms, box-shadow 160ms;
   }
   .mobile-cart-bar.mobile-cart-bar-state-paid {
-    border-color: var(--success-200, #a7f3d0);
+    background: color-mix(in srgb, var(--success-50) 22%, var(--surface));
   }
   .mobile-cart-bar.mobile-cart-bar-state-empty {
-    border-color: var(--border);
+    background: var(--surface);
   }
   .mobile-cart-bar.mobile-cart-bar-state-review-gate {
-    border-color: var(--warn-200, #fde68a);
+    background: color-mix(in srgb, var(--warn-50) 36%, var(--surface));
     box-shadow: 0 18px 46px rgba(180, 83, 9, 0.14);
   }
 
@@ -10321,9 +10714,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     border: 0;
   }
   .mobile-cart-bar.mobile-cart-bar-state-review-gate .mobile-cart-bar-cta {
-    background: var(--warn-50);
+    background: color-mix(in srgb, var(--warn-500) 10%, var(--surface));
     color: var(--warn-700, #92400e);
-    border: 1px solid var(--warn-300, #fcd34d);
+    border: 0;
   }
 
   .mobile-cart-scrim {
@@ -10472,6 +10865,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(164px + var(--mobile-safe-bottom));
   }
   .mobile-cart-sheet-body-add {
     padding: 0;
@@ -10488,6 +10882,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     border-radius: 0 !important;
     box-shadow: none !important;
     margin: 0 !important;
+    padding: 0 !important;
   }
   .mobile-cart-sheet-body-add > .atp-v3,
   .mobile-cart-sheet-body-add > section {
@@ -10518,7 +10913,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     --cart-mobile-col-gap: 8px;
     max-height: none !important;
     height: auto;
-    padding-bottom: 78px;
+    padding-bottom: 0;
     border-radius: 0;
     border-left: 0;
     border-right: 0;
@@ -10558,8 +10953,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
       "summary-copy summary-copy summary-total summary-blank";
     align-items: center;
     column-gap: var(--cart-mobile-col-gap);
-    margin: 8px 12px 6px;
-    padding: 10px 0 10px 12px;
+    margin: 8px 10px 6px;
+    padding: 8px 0 8px 10px;
     border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -10595,14 +10990,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     text-overflow: ellipsis;
   }
   .cart-mobile-summary-sub {
-    margin-top: 0;
-    font-size: 11.5px;
-    line-height: 1.35;
-    color: var(--ink-600);
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    display: none;
   }
   .cart-mobile-summary-total {
     grid-area: summary-total;
@@ -10642,11 +11030,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .mobile-cart-sheet-mode-cart .cart-validation-banner {
     display: none !important;
   }
+  .mobile-cart-sheet .order-cart .cart-line-validation-panel {
+    margin: 0 12px 10px 44px;
+    padding: 9px;
+  }
+  .mobile-cart-sheet .cart-line-validation-actions {
+    grid-template-columns: 1fr;
+  }
+  .mobile-cart-sheet .cart-line-action.cart-line-action-primary,
+  .mobile-cart-sheet .cart-line-action.cart-line-action-warning {
+    min-height: 32px;
+    font-size: 11.5px;
+  }
   .mobile-cart-sheet .order-cart .cart-group-head {
     grid-template-columns: minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
-    min-height: 44px;
+    min-height: 36px;
     padding: 0 12px;
     gap: var(--cart-mobile-col-gap);
+  }
+  .mobile-cart-sheet .order-cart .cart-group-label {
+    font-size: 13px;
   }
   .mobile-cart-sheet .order-cart .cart-group-label {
     grid-column: 1;
@@ -10665,6 +11068,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     width: 100%;
     min-width: 0;
     text-align: right;
+    font-size: 13px;
   }
   .mobile-cart-sheet .order-cart .cart-group-chev {
     grid-column: 4;
@@ -10672,35 +11076,35 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     justify-self: center;
   }
   .mobile-cart-sheet .order-cart .cart-group-body {
-    padding: 0 12px 8px;
+    padding: 0 12px 4px;
   }
   .mobile-cart-sheet .order-cart .cart-line-row {
-    grid-template-columns: 30px minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
-    min-height: 54px;
+    grid-template-columns: 28px minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
+    min-height: 42px;
     height: auto;
     gap: var(--cart-mobile-col-gap);
-    padding: 8px 0;
+    padding: 4px 0;
   }
   .mobile-cart-sheet .order-cart .cart-line-ico {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
   }
   .mobile-cart-sheet .order-cart .cart-line-name {
     grid-column: 2 / 4;
     flex-wrap: wrap;
-    row-gap: 4px;
+    row-gap: 2px;
   }
   .mobile-cart-sheet .order-cart .cart-line-name-text {
-    font-size: 13px;
+    font-size: 12.5px;
     white-space: normal;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
   }
   .mobile-cart-sheet .order-cart .cart-line-price {
     grid-column: 4;
-    font-size: 13px;
+    font-size: 12.5px;
     justify-self: end;
     width: 100%;
     min-width: 0;
@@ -10713,10 +11117,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     justify-self: center;
     opacity: 1;
     width: var(--cart-mobile-action-col);
-    height: 44px;
-  }
-  .mobile-cart-sheet .order-cart .cart-line-row {
-    min-height: 44px;
+    height: 34px;
   }
   .mobile-cart-sheet .order-cart .cart-total-toggle {
     grid-template-columns: minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
@@ -10737,13 +11138,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   }
   .mobile-cart-sheet .cart-primary-cta-wrap {
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 5;
-    padding: 10px 14px calc(12px + var(--mobile-safe-bottom)) !important;
-    background: linear-gradient(180deg, rgba(255,255,255,0.92), var(--surface) 24%);
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + var(--mobile-safe-bottom));
+    z-index: 220;
+    padding: 8px 12px calc(10px + var(--mobile-safe-bottom)) !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), var(--surface) 28%);
     box-shadow: 0 -10px 24px rgba(11, 20, 36, 0.08);
+    backdrop-filter: blur(8px);
   }
   .mobile-cart-sheet .cart-tat-footer {
     display: none;
@@ -10986,16 +11388,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
-    padding: 4px 12px 0;
+    padding: 2px 10px 0;
   }
   .atp-row {
     grid-template-columns: 22px minmax(0, 1fr) auto;
     grid-template-areas:
       "check name add"
       ".     price why";
-    gap: 3px 9px;
-    min-height: 50px;
-    padding: 7px 0;
+    gap: 2px 8px;
+    min-height: 46px;
+    padding: 5px 0;
     cursor: pointer;
   }
   .atp-row.is-row-click-disabled {
@@ -11006,39 +11408,39 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     outline-offset: -2px;
     border-radius: 8px;
   }
-  .atp-check { grid-area: check; width: 22px; height: 22px; }
-  .atp-row-name { grid-area: name; }
+  .atp-check { grid-area: check; width: 20px; height: 20px; }
+  .atp-row-name { grid-area: name; gap: 1px; }
   .atp-name {
-    font-size: 13px;
-    line-height: 1.2;
+    font-size: 12.5px;
+    line-height: 1.15;
   }
   .atp-badges {
     gap: 3px;
   }
   .atp-badge {
-    font-size: 10px;
-    padding: 0 5px;
-    line-height: 1.45;
+    font-size: 9.5px;
+    padding: 0 4px;
+    line-height: 1.32;
   }
-  .atp-price { grid-area: price; text-align: left; color: var(--ink-600); }
+  .atp-price { grid-area: price; text-align: left; color: var(--ink-600); font-size: 11.5px; }
   .atp-add-btn,
   .atp-incart {
     grid-area: add;
     min-width: 60px;
-    height: 40px;
+    height: 34px;
     border-radius: 8px;
   }
   .atp-why-btn {
     grid-area: why;
     justify-self: end;
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
   }
   /* Cart remove must be tappable with one thumb on mobile. The desktop
      hover-reveal pattern doesn't work on touch. */
   .mobile-cart-sheet .order-cart .cart-line-row .cart-line-remove {
-    width: 44px !important;
-    height: 44px !important;
+    width: 34px !important;
+    height: 34px !important;
   }
   /* Payment cash input + confirm hardcode 32/34px inline heights. Override
      to a comfortable 48px / 44px on mobile so the nurse can hit them with

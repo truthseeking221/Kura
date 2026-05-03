@@ -92,7 +92,8 @@ function AppShell() {
     const state = item.validationState || "idle";
     return state === "signed" || state === "verbal";
   };
-  const patientReadyForCheckIn = (target) => {
+  const checkInBlockersFor = (target) => {
+    if (!target) return ["Select a patient first"];
     const targetCart = deriveCart(target);
     const targetTotals = cartTotals(targetCart);
     const targetPaymentDue = paymentDueAmount(targetCart, targetTotals);
@@ -113,18 +114,24 @@ function AppShell() {
     const teleInCart = targetItems.some(i => i.kind === "telecon" || i.id === "telecon");
     const tele = target.teleconsult || {};
     const teleResolved = tele.booked || tele.skipped || !teleInCart;
-    return (
-      paymentResolved &&
-      targetItems.length > 0 &&
-      !!target.name &&
-      !!target.dob &&
-      !!target.sexAtBirth &&
-      !!(target.otpVerified || target.telegramVerified) &&
-      payerReady &&
-      !pendingValidation &&
-      teleResolved
-    );
+
+    const blockers = [];
+    if (targetItems.length === 0) blockers.push("Add at least one order");
+    if (!target.name) blockers.push("Patient name is missing");
+    if (!target.dob) blockers.push("Date of birth is missing");
+    if (!target.sexAtBirth) blockers.push("Sex at birth is missing");
+    if (!(target.otpVerified || target.telegramVerified)) blockers.push("Verify one contact channel");
+    if (!payerReady) blockers.push("Choose payer or mark direct pay");
+    if (pendingValidation) blockers.push("Resolve imaging consent");
+    if (!teleResolved) blockers.push("Book or skip teleconsult");
+    if (!paymentResolved) {
+      blockers.push(targetCart.payment?.status === "waiting"
+        ? "Payment is still waiting for confirmation"
+        : "Take payment in Step 6 or mark pay-later");
+    }
+    return blockers;
   };
+  const patientReadyForCheckIn = (target) => checkInBlockersFor(target).length === 0;
 
   // Infer initial step from gate (resume where they left off).
   // Spec v12: 6-step wizard. Step 6 (Payment) is the final step before
@@ -413,6 +420,16 @@ function AppShell() {
   };
   const handleSearch = (id) => {
     setActiveId(id);
+    // Cross-patient context switch: forget the saved wizard step so the
+    // patient lands on their first incomplete step (inferStep takes over).
+    // Receptionist's intent in searching = act on this patient now,
+    // not resume their previous bookmark.
+    setWizardStepMap(m => {
+      if (!(id in m)) return m;
+      const next = { ...m };
+      delete next[id];
+      return next;
+    });
     const p = patients.find(x => x.id === id);
     if (p) pushToast(`Opened ${p.name} · ${p.queueNumber}`);
   };
@@ -435,9 +452,11 @@ function AppShell() {
   // CTA: complete check-in — fired from the cart rail / Step 6 after payment is resolved or deferred.
   const handleCheckIn = (patientOverride = active) => {
     const target = patientOverride || active;
-    if (!patientReadyForCheckIn(target)) {
-      openSheet("receipt");
-      pushToast("Resolve blockers before check-in", "error");
+    const checkInBlockers = checkInBlockersFor(target);
+    if (checkInBlockers.length > 0) {
+      openSheet("cart");
+      const extra = checkInBlockers.length > 1 ? ` +${checkInBlockers.length - 1} more` : "";
+      pushToast(`${checkInBlockers[0]}${extra}`, "error");
       return;
     }
     pushToast(`${target.name} checked in · ${target.queueNumber}`, "success");
@@ -474,7 +493,7 @@ function AppShell() {
   //
   const isContactVerified = !!(active.otpVerified || active.telegramVerified);
   const pendingValidationCount = activeCart.items.filter(i => i.kind === "imaging" && !isValidationResolved(i)).length;
-  const cartReadyForPayment = activeItemCount > 0 && gate.step2Done && gate.step5Done && payerReadyForPayment && pendingValidationCount === 0;
+  const cartReadyForPayment = activeItemCount > 0 && gate.step2Done && gate.step5Done && payerReadyForPayment;
   const cartPaymentResolved = cartPaid || cartPayLater || (cartNoCharge && cartReadyForPayment);
   const cartReadyForCheckIn = patientReadyForCheckIn(active);
   const isCheckedIn = !!active.checkedInAt || active.status?.label === "Checked in";
@@ -485,7 +504,7 @@ function AppShell() {
     : !payerReadyForPayment
       ? "Select payer before payment"
       : pendingValidationCount > 0
-        ? "Resolve consent before payment"
+        ? "Resolve consent before check-in"
         : !gate.step5Done
           ? "Book or skip teleconsult before payment"
           : "Review order before payment";
@@ -496,6 +515,26 @@ function AppShell() {
   else if (paymentWaiting) dockState = "waiting";
   else if (!cartReadyForPayment) dockState = "review-gate";
   else dockState = "pay";
+
+  // === Single "what next?" answer for the patient header ===
+  // The pill must be clickable and land the user on a step they can act on,
+  // so target = first non-done step (which is always navigable). The label
+  // names the most pressing blocker for that step. Deep blockers (e.g.
+  // "resolve consent" on step 4) only surface once their gating step is done.
+  const nextAction = (() => {
+    if (isCheckedIn) return { label: "Checked in", target: currentStep, tone: "success", icon: "CheckCircle" };
+    // Step-specific blocker copy, evaluated in step order.
+    if (!gate.step1Done) return { label: "Capture identity", target: 1, tone: "warn", icon: "User" };
+    if (!gate.step2Done) return { label: "Verify patient", target: 2, tone: "warn", icon: "AlertCircle" };
+    if (!gate.step3Done) return { label: "Acknowledge insurance", target: 3, tone: "warn", icon: "Shield" };
+    if (activeItemCount === 0) return { label: "Add orders", target: 4, tone: "warn", icon: "Plus" };
+    if (!payerReadyForPayment) return { label: "Choose payer", target: 4, tone: "warn", icon: "Shield" };
+    if (pendingValidationCount > 0) return { label: "Resolve consent", target: 4, tone: "warn", icon: "AlertCircle" };
+    if (!gate.step5Done) return { label: "Book teleconsult", target: 5, tone: "warn", icon: "Video" };
+    if (paymentWaiting) return { label: "Waiting on payment", target: 6, tone: "info", icon: "Clock" };
+    if (!cartPaymentResolved) return { label: "Take payment", target: 6, tone: "warn", icon: "CreditCard" };
+    return { label: "Ready to check in", target: 6, tone: "success", icon: "CheckCircle" };
+  })();
 
   let cartBarTitle, cartBarSub, cartBarCta, dockCtaDisabled = false;
   if (dockState === "done") {
@@ -587,6 +626,7 @@ function AppShell() {
         onLangChange={setUiLang}
         mobileOpen={mobileNavOpen}
         onMobileClose={closeMobileNav}
+        onTestBlankState={startNewWalkIn}
       />
       {mobileNavOpen && (
         <button
@@ -615,7 +655,7 @@ function AppShell() {
           onSearch={handleSearch}
         />
 
-        <PatientHeader patient={active} gate={gate} currentStep={currentStep} onStepClick={handleStepClick} />
+        <PatientHeader patient={active} gate={gate} currentStep={currentStep} onStepClick={handleStepClick} nextAction={nextAction} />
 
         <WizardProgress
           currentStep={currentStep}
