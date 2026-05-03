@@ -19,6 +19,7 @@ import { useLang } from "./i18n";
 import { ORDER_CATALOG } from "./OrderCart";
 import { useAIRecommendations, TEST_INFO, WhyCard } from "./AIPanel";
 import { Kbd, MOD_LABEL, isTypingTarget } from "./shared";
+import { getCoverage } from "./coverage";
 
 const KHR_RATE = 4100;
 const fmtPrice = (usd, ccy) => ccy === "KHR"
@@ -214,6 +215,21 @@ function getSpecialtyMeta(row) {
   return SPECIALTY_META[row.kind];
 }
 
+const FILTER_SPECIALTIES = [
+  { id: "Biochemistry", label: "Biochemistry" },
+  { id: "Haematology", label: "Haematology" },
+  { id: "Immunology", label: "Serology / Immunology" },
+  { id: "Microbiology", label: "Microbiology" },
+  { id: "Urinalysis", label: "Urinalysis" },
+  { id: "imaging", label: "Imaging" },
+  { id: "ecg", label: "Cardio / ECG" },
+  { id: "vitals", label: "Vitals" },
+];
+
+function rowSpecialtyKey(row) {
+  return row.category || row.kind;
+}
+
 function rowMatchesSearch(row, query) {
   const specialty = getSpecialtyMeta(row);
   return [
@@ -222,41 +238,6 @@ function rowMatchesSearch(row, query) {
     row.category,
     specialty?.label,
   ].filter(Boolean).some(value => value.toLowerCase().includes(query));
-}
-
-// === Mock insurer coverage map — Spec v12 §4 ===
-//   In real life this comes from the insurer eligibility API (Phase 4).
-//   Until then we use a mock based on test id so coverage labels can ship now.
-//   covered: percentage covered (0-100). preauth: requires pre-auth before claim.
-//   When the patient has no insurance policy, no labels are shown.
-const MOCK_COVERAGE = {
-  cbc:         { covered: 80 },
-  glucose:     { covered: 80 },
-  hba1c:       { covered: 80 },
-  lipid:       { covered: 80 },
-  urinalysis:  { covered: 60 },
-  lft:         { covered: 80 },
-  kft:         { covered: 80 },
-  tsh:         { covered: 80 },
-  amh:         { covered: 0 },
-  "preg-bhcg": { covered: 0 },
-  "xray-chest":{ covered: 60 },
-  "us-pelvis": { covered: 0 },
-  "ct-head":   { covered: 100, preauth: true },
-  "mri-brain": { covered: 100, preauth: true },
-  "ecg-12":    { covered: 80 },
-  "vit-bp":    { covered: 100 },
-  "vit-bmi":   { covered: 100 },
-};
-
-function getCoverage(testId, insurance = []) {
-  const hasPolicy = (insurance || []).length > 0;
-  if (!hasPolicy) return null;
-  const c = MOCK_COVERAGE[testId];
-  if (!c) return { kind: "unconfirmed" };
-  if (c.preauth) return { kind: "preauth", insurer: insurance[0]?.provider || "Insurer" };
-  if (c.covered === 0) return { kind: "not-covered" };
-  return { kind: "covered", percent: c.covered, insurer: insurance[0]?.provider || "Insurer" };
 }
 
 // === Bundles — curated multi-test packages defined by the medical director ===
@@ -346,6 +327,9 @@ function useRows({ view, search, patient, buckets, priors, inCart }) {
         price: catItem.price,
         kind: catItem.kind,
         category: catItem.category,
+        unavailable: !!catItem.unavailable,
+        unavailableReason: catItem.unavailableReason,
+        availableBack: catItem.availableBack,
         inCart: inCart.has(catItem.id),
         badges: {
           ai: ai?.confidence,
@@ -481,17 +465,17 @@ function CoverageLabel({ coverage }) {
 // === TestRow — the universal row ===
 //   Spec v12 §9: per-row [+ Add] button removed. Rows select via checkbox /
 //   row tap; bulk add fires from the sticky bottom bar.
-function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, whyOpen, onToggleWhy, t, ccy, coverage, specialtyMeta }) {
-  const { id, name, price, inCart, badges } = row;
+function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onNotifyUnavailable, whyOpen, onToggleWhy, t, ccy, coverage, specialtyMeta }) {
+  const { id, name, price, inCart, badges, unavailable } = row;
   const hasReason = !!badges.reason || !!badges.details;
-  const rowInteractive = rowClickEnabled && !inCart;
+  const rowInteractive = rowClickEnabled && !inCart && !unavailable;
   const handleRowPick = () => {
     if (rowInteractive) onTogglePick(id);
   };
   return (
     <div
       data-row-id={id}
-      className={"atp-row" + (picked ? " is-picked" : "") + (inCart ? " is-incart" : "") + (highlighted ? " is-highlighted" : "") + (!rowClickEnabled ? " is-row-click-disabled" : "")}
+      className={"atp-row" + (picked ? " is-picked" : "") + (inCart ? " is-incart" : "") + (highlighted ? " is-highlighted" : "") + (unavailable ? " is-unavailable" : "") + (!rowClickEnabled ? " is-row-click-disabled" : "")}
       role={rowInteractive ? "button" : undefined}
       tabIndex={rowInteractive ? 0 : undefined}
       onClick={rowInteractive ? handleRowPick : undefined}
@@ -506,8 +490,8 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, whyO
       <button
         type="button"
         className="atp-check"
-        onClick={(e) => { e.stopPropagation(); !inCart && onTogglePick(id); }}
-        disabled={inCart}
+        onClick={(e) => { e.stopPropagation(); !inCart && !unavailable && onTogglePick(id); }}
+        disabled={inCart || unavailable}
         aria-checked={picked}
         role="checkbox"
         aria-label={picked ? "Deselect" : "Select"}
@@ -518,13 +502,20 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, whyO
         <span className="atp-name">{name}</span>
         <div className="atp-badges">
           {specialtyMeta && (
-            <span className="atp-specialty" style={{ color: specialtyMeta.color, background: specialtyMeta.bg }}>{specialtyMeta.label}</span>
+            <span className="atp-specialty" style={{ color: specialtyMeta.color, background: specialtyMeta.bg }}>
+              {unavailable ? "UNAVAILABLE" : specialtyMeta.label}
+            </span>
           )}
           {badges.ai && <BadgeAI conf={badges.ai} />}
           {badges.previous && <BadgePrev date={badges.previous} />}
           {badges.sensitive && <BadgeSensitive />}
           {badges.popular && !badges.ai && !badges.previous && <BadgePopular />}
           <CoverageLabel coverage={coverage} />
+          {unavailable && (
+            <span className="atp-badge atp-badge-unavailable" title={row.unavailableReason || "Temporarily unavailable"}>
+              <I.AlertTriangle size={9} /> Back ~{row.availableBack || "soon"}
+            </span>
+          )}
         </div>
       </div>
 
@@ -532,6 +523,12 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, whyO
 
       {inCart && (
         <span className="atp-incart"><I.Check size={10} strokeWidth={3} /> {t("atp.added")}</span>
+      )}
+
+      {unavailable && !inCart && (
+        <button type="button" className="atp-notify-btn" onClick={(e) => { e.stopPropagation(); onNotifyUnavailable?.(row); }}>
+          Notify me
+        </button>
       )}
 
       {hasReason && (
@@ -661,8 +658,8 @@ function BookingCodeSection({ patient, inCart, onAddBundle, onPushToast, ccy }) 
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => check()}>
           <I.Check size={11} /> Check
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => check("BC-2026042-DIA3")} title="Try a sample code">
-          <I.Sparkles size={11} /> Sample
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => check("BC-2026042-DIA3")} title="Simulate scanning a booking QR/barcode">
+          <I.Scan size={11} /> Scan booking code
         </button>
       </div>
 
@@ -718,13 +715,18 @@ function BookingCodeSection({ patient, inCart, onAddBundle, onPushToast, ccy }) 
 //   a single row of preset chips (covers ~95% of intent) plus an optional
 //   coverage row when insurance is on file. Filter chrome should never
 //   dominate the content it filters.
-function CatalogueFilterBar({ priceRange, setPriceRange, coverageFilter, setCoverageFilter, hasInsurance, maxPrice, ccy = "USD" }) {
+function CatalogueFilterBar({
+  priceRange, setPriceRange,
+  coverageFilter, setCoverageFilter,
+  specialtyFilters, setSpecialtyFilters,
+  hasInsurance, maxPrice, ccy = "USD"
+}) {
   const fmt = (usd) => ccy === "KHR"
     ? "៛" + Math.round((usd || 0) * KHR_RATE).toLocaleString()
     : "$" + Math.round(usd || 0);
   const setRange = (lo, hi) => setPriceRange([lo, hi]);
-  const reset = () => { setPriceRange([0, maxPrice]); setCoverageFilter("all"); };
-  const isFiltered = priceRange[0] !== 0 || priceRange[1] !== maxPrice || coverageFilter !== "all";
+  const reset = () => { setPriceRange([0, maxPrice]); setCoverageFilter("all"); setSpecialtyFilters([]); };
+  const isFiltered = specialtyFilters.length > 0 || priceRange[0] !== 0 || priceRange[1] !== maxPrice || coverageFilter !== "all";
   const pricePresets = [
     { id: "all",      label: "Any",          range: [0, maxPrice] },
     { id: "free",     label: "Free",         range: [0, 0] },
@@ -738,9 +740,27 @@ function CatalogueFilterBar({ priceRange, setPriceRange, coverageFilter, setCove
     { id: "covered", label: "Covered" },
     { id: "not-covered", label: "Not covered" },
   ];
+  const toggleSpecialty = (id) => {
+    setSpecialtyFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
   return (
     <div className="atp-filterbar" role="region" aria-label="Catalogue filters">
       <I.Filter size={11} className="atp-filterbar-ico" aria-hidden="true" />
+      <span className="atp-filterbar-label">Specialty</span>
+      <div className="atp-filterbar-chips" role="group" aria-label="Specialty filter">
+        {FILTER_SPECIALTIES.map(opt => (
+          <button
+            key={opt.id}
+            type="button"
+            className={"atp-filter-chip" + (specialtyFilters.includes(opt.id) ? " is-active" : "")}
+            onClick={() => toggleSpecialty(opt.id)}
+            aria-pressed={specialtyFilters.includes(opt.id)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <span className="atp-filterbar-sep" aria-hidden="true" />
       <span className="atp-filterbar-label">Price</span>
       <div className="atp-filterbar-chips" role="group" aria-label="Price filter">
         {pricePresets.map(preset => (
@@ -755,29 +775,42 @@ function CatalogueFilterBar({ priceRange, setPriceRange, coverageFilter, setCove
           </button>
         ))}
       </div>
-      {hasInsurance && (
-        <>
-          <span className="atp-filterbar-sep" aria-hidden="true" />
-          <span className="atp-filterbar-label">Coverage</span>
-          <div className="atp-filterbar-chips" role="group" aria-label="Coverage filter">
-            {coverageOpts.map(opt => (
-              <button
-                key={opt.id}
-                type="button"
-                className={"atp-filter-chip" + (coverageFilter === opt.id ? " is-active" : "")}
-                onClick={() => setCoverageFilter(opt.id)}
-                aria-pressed={coverageFilter === opt.id}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <span className="atp-filterbar-sep" aria-hidden="true" />
+      <span className="atp-filterbar-label">Coverage</span>
+      <div className="atp-filterbar-chips" role="group" aria-label="Coverage filter">
+        {coverageOpts.map(opt => (
+          <button
+            key={opt.id}
+            type="button"
+            className={"atp-filter-chip" + (coverageFilter === opt.id ? " is-active" : "")}
+            onClick={() => hasInsurance && setCoverageFilter(opt.id)}
+            aria-pressed={coverageFilter === opt.id}
+            disabled={!hasInsurance}
+            title={!hasInsurance ? "Add an eligible insurance policy to filter by coverage" : ""}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
       {isFiltered && (
         <button type="button" className="atp-filterbar-reset" onClick={reset} title="Clear all filters">
           <I.X size={10} /> Reset
         </button>
+      )}
+      {isFiltered && (
+        <div className="atp-active-filters" aria-label="Active filters">
+          {specialtyFilters.map(id => (
+            <button key={id} type="button" onClick={() => toggleSpecialty(id)}>
+              {FILTER_SPECIALTIES.find(s => s.id === id)?.label || id} <I.X size={9} />
+            </button>
+          ))}
+          {(priceRange[0] !== 0 || priceRange[1] !== maxPrice) && (
+            <button type="button" onClick={() => setRange(0, maxPrice)}>{fmt(priceRange[0])}–{fmt(priceRange[1])} <I.X size={9} /></button>
+          )}
+          {coverageFilter !== "all" && (
+            <button type="button" onClick={() => setCoverageFilter("all")}>{coverageFilter === "covered" ? "Covered only" : "Not covered"} <I.X size={9} /></button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -808,7 +841,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const [picks, setPicks] = useState(new Set());
   const [whyOpenId, setWhyOpenId] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
-  const [rowClickEnabled, setRowClickEnabled] = useState(() => !isMobileViewport());
+  const rowClickEnabled = true;
   const [searchFocused, setSearchFocused] = useState(false);
   // Mobile category picker — collapsed pill trigger + popover grid.
   // Replaces the horizontal scroll bar so nurses don't have to hunt for
@@ -819,6 +852,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const maxPrice = useMemo(() => Math.ceil(Math.max(...ORDER_CATALOG.map(c => c.price || 0))), []);
   const [priceRange, setPriceRange] = useState([0, maxPrice]);
   const [coverageFilter, setCoverageFilter] = useState("all");
+  const [specialtyFilters, setSpecialtyFilters] = useState([]);
   const searchRef = useRef(null);
   const rowsRef = useRef(null);
 
@@ -827,15 +861,6 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const isBookingView = view === "booking";
   const hasGlobalSearch = !!search.trim() && !isBookingView;
   const showBundleView = view === "bundles" && !hasGlobalSearch;
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 767px)");
-    const sync = () => setRowClickEnabled(!mq.matches);
-    sync();
-    mq.addEventListener?.("change", sync);
-    return () => mq.removeEventListener?.("change", sync);
-  }, []);
 
   // If active view becomes hidden (e.g. after data update) reset to Lab.
   useEffect(() => {
@@ -847,6 +872,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const rows = useMemo(() => {
     if (!isCatalogueView) return rawRows;
     return rawRows.filter(r => {
+      if (specialtyFilters.length > 0 && !specialtyFilters.includes(rowSpecialtyKey(r))) return false;
       const p = r.price || 0;
       if (p < priceRange[0] || p > priceRange[1]) return false;
       if (coverageFilter === "all") return true;
@@ -855,7 +881,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       if (coverageFilter === "not-covered") return cov?.kind === "not-covered" || cov?.kind === "unconfirmed";
       return true;
     });
-  }, [rawRows, isCatalogueView, priceRange, coverageFilter, insurance]);
+  }, [rawRows, isCatalogueView, specialtyFilters, priceRange, coverageFilter, insurance]);
   const bundleRows = useMemo(() => {
     const all = buildBundleRows({ inCart });
     if (!search.trim()) return all;
@@ -886,12 +912,17 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   }, [buckets, priors]);
 
   const togglePick = useCallback((id) => {
+    const row = rawRows.find(r => r.id === id);
+    if (row?.unavailable) {
+      onPushToast?.(`${row.name} is unavailable · back ~${row.availableBack || "soon"}`, "error");
+      return;
+    }
     setPicks(prev => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
-  }, []);
+  }, [rawRows, onPushToast]);
   const toggleWhy = useCallback((id) => {
     setWhyOpenId(prev => prev === id ? null : id);
   }, []);
@@ -901,6 +932,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   };
 
   const addOne = (row) => {
+    if (row.unavailable) {
+      onPushToast?.(`${row.name} is unavailable · use Notify me`, "error");
+      return;
+    }
     const sourceEl = rowsRef.current?.querySelector(`[data-row-id="${row.id}"]`);
     flyToCart(sourceEl, { name: row.name, kind: row.kind });
     const result = onAdd?.([{ testId: row.id, name: row.name, price: row.price, kind: row.kind }]);
@@ -909,7 +944,13 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const addPicks = () => {
     if (picks.size === 0) return;
     const items = rows.filter(r => picks.has(r.id) && !r.inCart)
+      .filter(r => !r.unavailable)
       .map(r => ({ testId: r.id, name: r.name, price: r.price, kind: r.kind }));
+    if (items.length === 0) {
+      onPushToast?.("Selected tests are unavailable", "error");
+      setPicks(new Set());
+      return;
+    }
     items.forEach((it, i) => {
       const el = rowsRef.current?.querySelector(`[data-row-id="${it.testId}"]`);
       if (i === 0) flyToCart(el, { name: it.name, kind: it.kind });
@@ -940,6 +981,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const addBundle = (bundle) => {
     const items = bundle.items
       .filter(it => !inCart.has(it.id))
+      .filter(it => !it.unavailable)
       .map(it => ({ testId: it.id, name: it.name, price: it.price, kind: it.kind }));
     if (items.length === 0) {
       onPushToast?.("All bundle tests already in cart", "error");
@@ -952,6 +994,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     });
     const result = onAdd?.(items);
     pushAddedToast(`${bundle.name} added · ${items.length} test${items.length > 1 ? "s" : ""}`, result);
+  };
+
+  const notifyUnavailable = (row) => {
+    onPushToast?.(`${row.name} flagged for follow-up when available`, "success");
   };
 
   // Keep highlight valid when rows change.
@@ -998,7 +1044,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
         if (isEditingText) return;
         e.preventDefault();
-        setPicks(new Set(rows.filter(r => !r.inCart).map(r => r.id)));
+        setPicks(new Set(rows.filter(r => !r.inCart && !r.unavailable).map(r => r.id)));
         return;
       }
 
@@ -1074,7 +1120,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   // Spec v12 §9: sticky bottom bar shows running total of selected items.
   const picksTotal = useMemo(() => {
     if (picks.size === 0) return 0;
-    return rawRows.filter(r => picks.has(r.id) && !r.inCart).reduce((s, r) => s + (r.price || 0), 0);
+    return rawRows.filter(r => picks.has(r.id) && !r.inCart && !r.unavailable).reduce((s, r) => s + (r.price || 0), 0);
   }, [picks, rawRows]);
 
   // Group visible views for the left panel — Smart sources at top, Catalogue
@@ -1321,6 +1367,8 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
               setPriceRange={setPriceRange}
               coverageFilter={coverageFilter}
               setCoverageFilter={setCoverageFilter}
+              specialtyFilters={specialtyFilters}
+              setSpecialtyFilters={setSpecialtyFilters}
               hasInsurance={hasInsurance}
               maxPrice={maxPrice}
               ccy={ccy}
@@ -1404,6 +1452,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
                         highlighted={highlightId === row.id}
                         rowClickEnabled={rowClickEnabled}
                         onTogglePick={togglePick}
+                        onNotifyUnavailable={notifyUnavailable}
                         whyOpen={whyOpenId === row.id}
                         onToggleWhy={toggleWhy}
                         t={t}

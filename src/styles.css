@@ -5111,7 +5111,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .collision-banner {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
+  grid-template-columns: 34px 1fr auto;
   gap: 10px;
   padding: 9px 11px;
   border: 1px solid color-mix(in srgb, var(--warn-500) 18%, var(--border));
@@ -5123,15 +5123,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .collision-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at 68% 72%, color-mix(in srgb, var(--warn-500) 18%, transparent) 0 24%, transparent 25%),
-    linear-gradient(180deg, color-mix(in srgb, var(--warn-50) 78%, var(--surface)), var(--surface));
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--warn-50) 34%, var(--surface));
   color: var(--warn-600);
-  border: 1px solid color-mix(in srgb, var(--warn-500) 28%, var(--border));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 1px 2px rgba(138, 86, 0, 0.08);
+  border: 1px solid color-mix(in srgb, var(--warn-500) 22%, var(--border));
+  box-shadow: 0 1px 2px rgba(138, 86, 0, 0.06);
   flex-shrink: 0;
 }
 .collision-body {
@@ -8890,51 +8888,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   opacity: 0.45;
   cursor: not-allowed;
 }
-.atp-price-filter {
-  display: inline-grid;
-  grid-template-columns: 70px 110px auto;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
-}
-.atp-price-hist {
-  display: flex;
-  align-items: end;
-  gap: 2px;
-  height: 18px;
-}
-.atp-price-hist span {
-  width: 5px;
-  border-radius: 999px 999px 0 0;
-  background: var(--brand-200, #bfdbfe);
-}
-.atp-price-sliders {
-  position: relative;
-  height: 20px;
-}
-.atp-price-sliders input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 20px;
-  margin: 0;
-  background: transparent;
-  pointer-events: none;
-  accent-color: var(--brand-500);
-}
-.atp-price-sliders input::-webkit-slider-thumb {
-  pointer-events: auto;
-}
-.atp-price-filter-label {
-  font-family: 'SF Mono', ui-monospace, monospace;
-  font-size: 10.5px;
-  font-weight: 650;
-  color: var(--ink-700);
-  white-space: nowrap;
-}
 .atp-active-filters {
   flex: 1 0 100%;
   display: flex;
@@ -10177,7 +10130,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     border-color: var(--border);
   }
   .collision-banner {
-    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr);
     align-items: flex-start;
   }
   .collision-actions {
