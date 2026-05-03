@@ -4217,8 +4217,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border: 1px solid var(--border-strong);
   border-radius: 7px;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 .patient-header-pill svg { color: var(--brand-500); flex-shrink: 0; opacity: 0.7; }
+.patient-header-pill-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* === Next-action pill — single answer to "what next?" for this patient ===
    Renders on the right side of the patient header on both desktop and mobile.
@@ -5207,7 +5215,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-record-drawer {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 100;
   pointer-events: none;
 }
 .patient-record-drawer-scrim {
@@ -5235,12 +5243,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px;
+  padding: 20px 20px 18px;
   border-bottom: 1px solid var(--border);
+}
+.patient-record-drawer-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.patient-record-drawer-id-text {
+  min-width: 0;
 }
 .patient-record-drawer-kicker {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.06em;
@@ -5249,57 +5266,83 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .patient-record-drawer-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
+  line-height: 1.25;
   color: var(--ink-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.patient-record-drawer-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--ink-500);
+  font-variant-numeric: tabular-nums;
 }
 .patient-record-drawer-body {
-  padding: 18px;
+  padding: 6px 20px 20px;
   overflow: auto;
 }
 .patient-record-drawer-avatar {
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: var(--brand-500);
-  color: white;
-  font-weight: 750;
-  margin-bottom: 16px;
-}
-.patient-record-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 0;
-}
-.patient-record-grid div {
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-}
-.patient-record-grid dt {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-500);
+  background: var(--brand-50, #eef2ff);
+  color: var(--brand-600, #4f46e5);
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
-.patient-record-grid dd {
-  margin: 4px 0 0;
-  font-size: 12.5px;
+.patient-record-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.patient-record-list > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.patient-record-list > div:last-child {
+  border-bottom: 0;
+}
+.patient-record-list dt {
+  font-size: 12px;
+  color: var(--ink-500);
+  font-weight: 550;
+}
+.patient-record-list dd {
+  margin: 0;
+  font-size: 13px;
   color: var(--ink-900);
-  font-weight: 650;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.patient-record-status-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-700, var(--ink-900));
 }
 .patient-record-drawer-actions {
   margin-top: auto;
-  padding: 14px 18px;
+  padding: 14px 20px;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  background: var(--surface-2);
 }
 .clearable-input {
   position: relative;
@@ -9986,13 +10029,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   /* === PatientHeader compact === */
   .patient-header {
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) minmax(128px, 42%);
+    grid-template-columns: 40px minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     position: sticky;
     top: calc(var(--mobile-topbar-h) + var(--mobile-search-h));
     z-index: 70;
     padding: 11px 12px;
-    gap: 6px 10px;
+    gap: 4px 10px;
     align-items: center;
     background: color-mix(in srgb, var(--surface) 94%, var(--brand-50));
     border-bottom: 1px solid var(--border);
@@ -10025,59 +10068,69 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Mobile metadata: span full width under the name (col 2 → end) so all
+     three pills (DOB+age, sex, phone) fit without truncation. Pills drop
+     their borders + icons and become plain inline text with subtle dot
+     separators — matches desktop pattern, ~30% more chars per row. */
   .patient-header-sub {
-    grid-column: 2 / 4;
+    grid-column: 2 / -1;
     grid-row: 2;
     align-self: start;
-    gap: 5px;
+    min-width: 0;
+    gap: 0;
     margin-top: 0;
-    flex-wrap: wrap;
-    overflow: visible;
-    scrollbar-width: auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
   .patient-header-sub::-webkit-scrollbar { display: none; }
   .patient-header-pill {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 3px 7px;
-    font-size: 11.5px;
+    height: auto;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    font-size: 12px;
     color: var(--ink-600);
-    gap: 3px;
-    line-height: 1.1;
+    gap: 0;
+    line-height: 1.3;
+    white-space: nowrap;
   }
-  .patient-header-pill svg {
-    display: block;
-    color: var(--brand-500);
-    opacity: 0.65;
-  }
+  .patient-header-pill svg { display: none; }
   .patient-header-pill + .patient-header-pill {
-    margin-left: 0;
-    position: static;
-    padding-left: 7px;
+    margin-left: 8px;
+    position: relative;
+    padding-left: 10px;
   }
   .patient-header-pill + .patient-header-pill::before {
-    content: none;
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: var(--ink-300);
+    transform: translateY(-50%);
+  }
+  .patient-header-pill-text {
+    min-width: 0;
   }
   /* Hide the desktop 4-chip horizontal scroll block on mobile — replaced
      by a single primary status pill + a tight secondary line below. */
   .patient-header-chips {
     display: none !important;
   }
+  /* On mobile the next-action pill in the header already navigates steps
+     (click → jump to target step), and the WizardProgress dots below
+     give random-step access. The step-switcher chip would be a third nav
+     for the same job — drop it to free row 2 for the metadata. */
   .patient-header-mobile-status {
-    display: flex;
-    flex-direction: row;
-    grid-column: 3;
-    grid-row: 2;
-    gap: 0;
-    align-items: center;
-    justify-content: flex-end;
-    align-self: start;
-    justify-self: end;
-    margin-left: 0;
-    min-width: 0;
+    display: none;
   }
   /* Mobile: next-action pill takes row 1 of the third grid column,
      sitting beside the patient name. Step switcher sits below in row 2. */
@@ -10086,12 +10139,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     grid-row: 1;
     justify-self: end;
     align-self: center;
+    max-width: 100%;
+    min-width: 0;
     height: 26px;
     padding: 0 11px 0 9px;
     font-size: 11.5px;
     margin-left: 0;
   }
   .patient-header-next svg { width: 12px; height: 12px; }
+  .patient-header-next span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .ph-mstatus-pill {
     display: inline-flex;
     align-items: center;
@@ -10165,7 +10226,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .ph-mstatus-dot { color: var(--ink-300); margin: 0 1px; }
   .ph-step-switcher {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: center;
     gap: 6px;
     flex: 1 1 auto;
@@ -10187,7 +10248,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     cursor: pointer;
     transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
   }
+  .ph-step-switcher > span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
   .ph-step-switcher strong {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -11540,7 +11606,52 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 
 /* Phone — narrowest devices need extra forgiveness. */
 @media (max-width: 359px) {
-  .patient-header-chips { max-width: 36vw; }
+  .patient-header {
+    grid-template-columns: 36px minmax(0, 1fr) minmax(102px, 38%);
+    gap: 5px 7px;
+    padding: 9px 10px;
+  }
+  .patient-header-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 11.5px;
+  }
+  .patient-header-name {
+    font-size: 15px;
+  }
+  .patient-header-sub {
+    gap: 3px;
+  }
+  .patient-header-pill {
+    height: 24px;
+    padding: 0 5px;
+    border-radius: 6px;
+    font-size: 10px;
+    gap: 2px;
+  }
+  .patient-header-pill:nth-child(3) {
+    display: none;
+  }
+  .patient-header-next {
+    height: 24px;
+    padding: 0 8px;
+    font-size: 10.5px;
+  }
+  .patient-header-next svg {
+    display: none;
+  }
+  .ph-step-switcher {
+    min-height: 26px;
+    gap: 4px;
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+  .ph-step-prefix-word {
+    display: none;
+  }
+  .ph-step-switcher strong {
+    font-size: 10.5px;
+  }
   .id-captured-grid { grid-template-columns: 1fr; }
   .mobile-cart-bar { left: 8px; right: 8px; }
   .mobile-cart-bar-add {
