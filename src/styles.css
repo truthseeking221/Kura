@@ -258,6 +258,43 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .sidebar-lang:hover { background: var(--ink-50); }
 .sidebar.collapsed .sidebar-lang { justify-content: center; padding: 0; }
+.sidebar-dev-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  margin: 4px 12px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-300, #93c5fd);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(var(--brand-rgb), 0.12);
+}
+.sidebar-dev-blank:hover {
+  background: var(--brand-100, #dbeafe);
+}
+.sidebar-dev-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--brand-500);
+  color: white;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+.sidebar.collapsed .sidebar-dev-blank {
+  padding: 0;
+}
+.sidebar.collapsed .sidebar-dev-badge {
+  padding: 0 5px;
+}
 
 /* === Main column === */
 .main {
@@ -851,6 +888,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .help.error { color: var(--danger-500); }
 .help.ok { color: var(--success-600); }
+.help.warn { color: var(--warn-700, #b45309); display: inline-flex; align-items: center; gap: 4px; }
 
 /* Payer Model cards */
 .payer-grid {
@@ -2787,7 +2825,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* === TAT compact (replaces horizontal timeline) === */
-.tat-compact { padding: 14px 16px 12px; }
+.tat-compact {
+  --tat-fast-bg: color-mix(in srgb, var(--brand-500) 9%, var(--surface));
+  --tat-fast-fg: color-mix(in srgb, var(--brand-700) 78%, var(--ink-600));
+  --tat-fast-border: color-mix(in srgb, var(--brand-500) 13%, var(--border));
+  --tat-mid-bg: color-mix(in srgb, var(--secondary-light-500) 11%, var(--surface));
+  --tat-mid-fg: color-mix(in srgb, var(--secondary-light-700) 64%, var(--ink-600));
+  --tat-mid-border: color-mix(in srgb, var(--secondary-light-500) 14%, var(--border));
+  --tat-slow-bg: color-mix(in srgb, var(--secondary-deep-500) 7%, var(--surface));
+  --tat-slow-fg: color-mix(in srgb, var(--secondary-deep-700) 58%, var(--ink-600));
+  --tat-slow-border: color-mix(in srgb, var(--secondary-deep-500) 10%, var(--border));
+  padding: 14px 16px 12px;
+}
 .tat-compact-head {
   display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
 }
@@ -2816,11 +2865,27 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .tat-compact-ico {
   display: inline-grid; place-items: center;
   width: 22px; height: 22px; border-radius: 5px;
+  border: 1px solid transparent;
   flex-shrink: 0;
 }
-.tat-compact-ico-fast { background: var(--brand-50); color: var(--brand-600); }
-.tat-compact-ico-mid  { background: var(--warn-50); color: var(--warn-600); }
-.tat-compact-ico-slow { background: var(--ink-100); color: var(--ink-700); }
+.tat-compact-ico svg {
+  stroke-width: 1.85;
+}
+.tat-compact-ico-fast {
+  background: var(--tat-fast-bg);
+  color: var(--tat-fast-fg);
+  border-color: var(--tat-fast-border);
+}
+.tat-compact-ico-mid {
+  background: var(--tat-mid-bg);
+  color: var(--tat-mid-fg);
+  border-color: var(--tat-mid-border);
+}
+.tat-compact-ico-slow {
+  background: var(--tat-slow-bg);
+  color: var(--tat-slow-fg);
+  border-color: var(--tat-slow-border);
+}
 .tat-compact-label {
   font-size: 12.5px; font-weight: 600; color: var(--ink-900);
 }
@@ -4953,53 +5018,64 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .collision-banner {
   display: grid;
-  grid-template-columns: 24px 1fr auto;
+  grid-template-columns: 28px 1fr auto;
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--warn-200, #fed7aa);
   background: var(--warn-50, #fff7ed);
   border-radius: 8px;
-  align-items: start;
+  align-items: center;
 }
 .collision-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   background: var(--warn-500);
   color: white;
+  flex-shrink: 0;
+}
+.collision-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .collision-body strong {
   display: block;
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--warn-700, #b45309);
+  line-height: 1.3;
 }
 .collision-kicker {
   display: inline-flex;
   align-items: center;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--warn-700, #b45309);
+  color: var(--warn-600, #d97706);
+  opacity: 0.85;
 }
 .collision-body p {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  color: var(--ink-700);
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ink-600);
   line-height: 1.4;
 }
 .collision-body em {
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--ink-800);
 }
 .collision-actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
 }
 .collision-override {
   grid-column: 1 / -1;
@@ -5031,6 +5107,135 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border-radius: 6px;
   font-family: 'SF Mono', ui-monospace, monospace;
   letter-spacing: 0.2em;
+}
+.patient-record-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+.patient-record-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.22);
+  pointer-events: auto;
+}
+.patient-record-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-xl);
+  pointer-events: auto;
+}
+.patient-record-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.patient-record-drawer-kicker {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn-600, #d97706);
+}
+.patient-record-drawer-head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--ink-900);
+}
+.patient-record-drawer-body {
+  padding: 18px;
+  overflow: auto;
+}
+.patient-record-drawer-avatar {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--brand-500);
+  color: white;
+  font-weight: 750;
+  margin-bottom: 16px;
+}
+.patient-record-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+}
+.patient-record-grid div {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.patient-record-grid dt {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-500);
+  font-weight: 700;
+}
+.patient-record-grid dd {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-900);
+  font-weight: 650;
+}
+.patient-record-drawer-actions {
+  margin-top: auto;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--surface-2);
+}
+.clearable-input {
+  position: relative;
+}
+.clearable-input .input {
+  width: 100%;
+  padding-right: 32px;
+}
+.clearable-input-btn,
+.clearable-input-ico {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.clearable-input-btn {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-400);
+  cursor: pointer;
+}
+.clearable-input-btn:hover {
+  background: var(--ink-50);
+  color: var(--ink-700);
+}
+.clearable-input-ico {
+  color: var(--ink-400);
 }
 
 /* Spec v12 §Step 3 — eligibility check states */
@@ -9069,7 +9274,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   body { background: var(--bg); overscroll-behavior-y: contain; }
   body.is-mobile-overlay-open {
     overflow: hidden;
-    touch-action: none;
   }
 
   .app.app-v2 {
@@ -9513,7 +9717,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     text-overflow: ellipsis;
   }
   .patient-header-sub {
-    gap: 4px;
+    gap: 0;
     margin-top: 4px;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -9522,8 +9726,29 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .patient-header-sub::-webkit-scrollbar { display: none; }
   .patient-header-pill {
     flex: 0 0 auto;
-    font-size: 10.5px;
-    padding: 2px 6px;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 11.5px;
+    color: var(--ink-500);
+    gap: 0;
+  }
+  .patient-header-pill svg { display: none; }
+  .patient-header-pill + .patient-header-pill {
+    margin-left: 8px;
+    position: relative;
+    padding-left: 10px;
+  }
+  .patient-header-pill + .patient-header-pill::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: var(--ink-300);
+    transform: translateY(-50%);
   }
   /* Hide the desktop 4-chip horizontal scroll block on mobile — replaced
      by a single primary status pill + a tight secondary line below. */
@@ -9535,7 +9760,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .patient-header-mobile-status {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 6px;
     align-items: flex-end;
     flex: 0 0 auto;
     margin-left: auto;
@@ -9546,13 +9771,17 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     align-items: center;
     gap: 5px;
     height: 24px;
-    padding: 0 9px;
+    padding: 0 10px 0 8px;
     border-radius: 999px;
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 650;
     letter-spacing: -0.005em;
     white-space: nowrap;
     border: 1px solid transparent;
+  }
+  .ph-mstatus-pill svg {
+    flex-shrink: 0;
+    opacity: 0.85;
   }
   .patient-header-mobile-status-success .ph-mstatus-pill {
     background: var(--success-50);
@@ -9593,35 +9822,49 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .ph-mstatus-dot { color: var(--ink-300); margin: 0 1px; }
   .ph-step-switcher {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: flex-end;
-    gap: 4px;
-    max-width: min(46vw, 178px);
-    min-height: 28px;
-    margin: 0 -4px 0 0;
-    padding: 3px 4px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
+    gap: 6px;
+    max-width: min(50vw, 200px);
+    min-height: 26px;
+    margin: 0;
+    padding: 4px 8px 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
     color: var(--ink-500);
     font-family: inherit;
-    font-size: 9.5px;
-    font-weight: 760;
-    letter-spacing: 0.02em;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
   }
   .ph-step-switcher strong {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--ink-700);
-    font-size: 10px;
-    letter-spacing: 0.03em;
+    color: var(--ink-800);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    text-transform: none;
   }
+  .ph-step-switcher svg {
+    align-self: center;
+    color: var(--ink-500);
+    flex-shrink: 0;
+  }
+  .ph-step-switcher:hover,
   .ph-step-switcher:active {
-    background: var(--ink-50);
+    background: var(--surface-2);
+    border-color: var(--ink-200, #d4d6de);
+    color: var(--ink-700);
+  }
+  .ph-step-switcher:hover svg {
+    color: var(--ink-700);
   }
   .ph-step-switcher:focus-visible {
     outline: 2px solid var(--brand-300);
@@ -10232,6 +10475,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   }
   .mobile-cart-sheet-body-add {
     padding: 0;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
   /* AddTestsPanel inside the sheet — neutralise its own card frame so it
      fills the sheet body cleanly. */
@@ -10242,6 +10488,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     border-radius: 0 !important;
     box-shadow: none !important;
     margin: 0 !important;
+  }
+  .mobile-cart-sheet-body-add > .atp-v3,
+  .mobile-cart-sheet-body-add > section {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .mobile-cart-sheet-body-add .atp-shell,
+  .mobile-cart-sheet-body-add .atp-main {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   /* Neutralise the inline sticky/maxHeight set by OrderCart. The sheet's
@@ -10721,8 +10979,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .atp-tab-key,
   .atp-search-hint { display: none; }
   .atp-rows {
-    min-height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
     max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
     padding: 4px 12px 0;
   }
   .atp-row {
