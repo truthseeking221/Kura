@@ -6,6 +6,7 @@ import { I } from "./icons";
 import { QRGlyph, mockInsurerDecide, playDrawerDing, DisabledTooltip, TatCompact } from "./shared";
 import { useLang } from "./i18n";
 import { ORDER_CATALOG } from "./orderCatalog";
+import { getCoverage } from "./coverage";
 
 const KHR_RATE = 4100;
 const fmtCcy = (usd, ccy) => ccy === "KHR" ? "៛" + Math.round(usd * KHR_RATE).toLocaleString() : "$" + usd.toFixed(2);
@@ -737,7 +738,7 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 //   Layout: [icon] name [status icons] · price · [×]
 //   Payer tag is tucked into a hover tooltip (title attr on the row).
 //   Validation / policy info collapses to small badge icons that expand inline on click.
-function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, hideValidationLabel }) {
+function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, coverage, hideValidationLabel }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
   const requiresValidation = item.kind === "imaging";
@@ -774,6 +775,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
                                                t("validate.requiresPatient")
               }
               aria-label={t("validate.requiresPatient")}
+              aria-expanded={openExpand === "validation" || (requiresValidation && validationState !== "signed" && validationState !== "verbal")}
             >
               {validationState === "signed"
                 ? <I.ShieldCheck size={10} strokeWidth={2.5} />
@@ -791,6 +793,18 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
               <I.AlertCircle size={10} />
             </button>
           )}
+          {coverage && (
+            <span className={"cart-line-coverage atp-cov atp-cov-" + (
+              coverage.kind === "covered" ? "yes" :
+              coverage.kind === "not-covered" ? "no" :
+              coverage.kind === "preauth" ? "preauth" : "unsure"
+            )}>
+              {coverage.kind === "covered" && <><I.Check size={9} strokeWidth={3} /> {coverage.insurer} {coverage.percent}%</>}
+              {coverage.kind === "not-covered" && <><I.X size={9} /> Not covered</>}
+              {coverage.kind === "unconfirmed" && <>? Unconfirmed</>}
+              {coverage.kind === "preauth" && <><I.Lock size={9} /> Pre-auth</>}
+            </span>
+          )}
         </div>
         <div className="cart-line-price">
           {item.price === 0 ? "—" : fmtCcy((item.price || 0) * (item.qty || 1), ccy)}
@@ -805,33 +819,39 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
           <I.X size={10} strokeWidth={2.5} />
         </button>
       </div>
-      {openExpand === "validation" && (
-        <div className="cart-line-expand">
+      {(openExpand === "validation" || (requiresValidation && validationState !== "signed" && validationState !== "verbal")) && (
+        <div className="cart-line-expand cart-line-validation-panel">
           {validationState === "idle" ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={onSendValidation}
-                className="cart-line-action"
-              >
-                <I.Smartphone size={10} /> {t("validate.sendPhone")}
-              </button>
-              {/* Spec v12 §1 — Verbal consent fallback for no-phone patients */}
-              {item.onVerbalConsent && (
+            <>
+              <div className="cart-line-validation-copy">
+                <I.AlertTriangle size={11} />
+                <span>Patient consent required before imaging.</span>
+              </div>
+              <div className="cart-line-validation-actions">
                 <button
                   type="button"
-                  onClick={item.onVerbalConsent}
-                  className="cart-line-action"
-                  style={{ borderColor: "var(--warn-200, #fed7aa)", color: "var(--warn-700, #b45309)" }}
+                  onClick={onSendValidation}
+                  className="cart-line-action cart-line-action-primary"
                 >
-                  <I.MessageSquare size={10} /> Capture verbal consent
+                  <I.Smartphone size={10} /> Send sign-off
                 </button>
-              )}
-            </div>
+                {/* Spec v12 §1 — Verbal consent fallback for no-phone patients */}
+                {item.onVerbalConsent && (
+                  <button
+                    type="button"
+                    onClick={item.onVerbalConsent}
+                    className="cart-line-action cart-line-action-warning"
+                  >
+                    <I.MessageSquare size={10} /> Verbal consent
+                  </button>
+                )}
+              </div>
+            </>
           ) : validationState === "sent" ? (
-            <span className="cart-line-action-info">
-              <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1 }} /> {t("validate.sent")}
-            </span>
+            <div className="cart-line-validation-copy">
+              <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1 }} />
+              <span>{t("validate.sent")} · waiting for patient signature</span>
+            </div>
           ) : validationState === "verbal" ? (
             <span className="cart-line-action-info" style={{ color: "var(--ink-700)" }}>
               <I.MessageSquare size={10} /> Verbal consent · {item.consentBy || "nurse"} · {item.consentAt?.slice(11, 16) || ""}
@@ -1387,35 +1407,51 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const teleInCart = cart.items.some(i => i.kind === "telecon" || i.id === "telecon");
   const tele = patient.teleconsult || {};
   const hasTeleconsultBlocker = teleInCart && !tele.booked && !tele.skipped;
-  const ctaDisabled = !(hasName && hasDob && hasSex && isVerified) || hasPendingValidations || hasTeleconsultBlocker;
+  const paymentResolved = isPaid || cart.payment.status === "deferred" || isNoCharge;
   const isPaymentWaiting = cart.payment.status === "waiting";
-  // Build the precise list of what's missing — feeds the disabled tooltip.
-  const ctaReasons = [];
-  if (!hasName)    ctaReasons.push(t("disabled.checkin.name"));
-  if (!hasDob)     ctaReasons.push(t("disabled.checkin.dob"));
-  if (!hasSex)     ctaReasons.push("Sex at birth required");
-  if (!isVerified) ctaReasons.push(t("disabled.checkin.contact"));
-  if (hasPendingValidations) ctaReasons.push(t("disabled.checkin.validation"));
-  if (hasTeleconsultBlocker) ctaReasons.push("Book or skip teleconsult");
+  // Build the precise list of what's missing. This is visible above the CTA
+  // because a disabled button or generic toast is not enough operationally.
+  const checkInBlockers = [];
+  if (!hasName) checkInBlockers.push({ id: "name", text: "Patient name is missing" });
+  if (!hasDob) checkInBlockers.push({ id: "dob", text: "Date of birth is missing" });
+  if (!hasSex) checkInBlockers.push({ id: "sex", text: "Sex at birth is missing" });
+  if (!isVerified) checkInBlockers.push({ id: "contact", text: "Verify one contact channel" });
+  if (!payerReady) checkInBlockers.push({ id: "payer", text: "Choose payer or mark direct pay" });
+  if (hasPendingValidations) {
+    checkInBlockers.push({
+      id: "validation",
+      text: `${pendingValidations.length} imaging consent ${pendingValidations.length === 1 ? "is" : "are"} unresolved`,
+    });
+  }
+  if (hasTeleconsultBlocker) checkInBlockers.push({ id: "teleconsult", text: "Book or skip teleconsult" });
+  if (!paymentResolved) {
+    checkInBlockers.push({
+      id: "payment",
+      text: isPaymentWaiting
+        ? "Payment is still waiting for confirmation"
+        : "Take payment in Step 6 or mark pay-later",
+    });
+  }
+  const ctaReasons = checkInBlockers.map(b => b.text);
+  const ctaDisabled = checkInBlockers.length > 0;
   const mobileBlockers = [];
   if (!hasName || !hasDob) mobileBlockers.push("Complete identity");
   if (!isVerified) mobileBlockers.push("Verify contact");
   if (!payerReady) mobileBlockers.push("Choose payer");
+  if (hasPendingValidations) mobileBlockers.push("Resolve consent");
   if (hasTeleconsultBlocker) mobileBlockers.push("Resolve teleconsult");
-  if (hasPendingValidations) {
-    mobileBlockers.push(`Complete consent${pendingValidations.length > 1 ? ` (${pendingValidations.length})` : ""}`);
-  }
+  if (!paymentResolved) mobileBlockers.push("Resolve payment");
   const mobileSummaryTone =
     itemCount === 0 ? "empty" :
     isCheckedIn ? "done" :
-    (isPaid || isNoCharge) ? (ctaDisabled ? "blocked" : "paid") :
+    paymentResolved ? (ctaDisabled ? "blocked" : "paid") :
     isPaymentWaiting ? "waiting" :
     ctaDisabled ? "blocked" :
     "ready";
   const mobileSummaryTitle =
     itemCount === 0 ? "Add orders" :
     isCheckedIn ? "Checked in" :
-    (isPaid || isNoCharge) ? (ctaDisabled ? "Resolve check-in" : "Ready to check in") :
+    paymentResolved ? (ctaDisabled ? "Resolve check-in" : "Ready to check in") :
     isPaymentWaiting ? "Payment in progress" :
     ctaDisabled ? "Resolve blockers" :
     "Ready to pay";
@@ -1574,6 +1610,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                           onRemove={() => removeItem(item.id)}
                           onSendValidation={() => sendValidation(item.id)}
                           policyDecision={policyDecisions[item.id]}
+                          coverage={getCoverage(item.id, patient.insurance || [])}
                           t={t}
                         />
                       ))}
@@ -1708,30 +1745,6 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             )}
           </div>
 
-          {/* === Chain-of-custody banner (imaging not yet validated by patient) === */}
-          {pendingValidations.length > 0 && cart.payment.status !== "confirmed" && (
-            <div className="cart-validation-banner" style={{
-              padding: "10px 16px", borderTop: "1px solid var(--border)",
-              background: "var(--warn-50)",
-            }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                <div style={{
-                  width: 22, height: 22, borderRadius: 5,
-                  background: "var(--warn-500)", color: "white",
-                  display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1,
-                }}>
-                  <I.AlertTriangle size={12} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-900)" }}>{t("validate.bannerTitle")}</div>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-700)", marginTop: 1, lineHeight: 1.4 }}>
-                    {t("validate.bannerBody")}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* === Auto-split hint (when insurance is in the mix) === */}
           {insItems.length > 0 && cart.payment.status !== "confirmed" && (
             <div style={{
@@ -1758,18 +1771,28 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
           </>)}
 
           {/* Spec v12 §Order Cart — single "Check in & confirm order" CTA.
-             Strict gate (no bypass): items + name + dob + sex + verified contact.
-             Payment is in Step 6 and does NOT gate this CTA. The CTA shows a
-             "still pending" pill for payment once payment is in scope, plus
-             teleconsult / consent blockers so the nurse knows what's still
-             open even though it doesn't block them. */}
+             Strict gate (no bypass): identity, payer, consent, teleconsult,
+             and payment blockers are listed visibly before the CTA. */}
           {itemCount > 0 && !isCheckedIn && (
             <div className="cart-primary-cta-wrap" style={{ padding: "10px 16px 14px", borderTop: "1px solid var(--border)" }}>
-              {!isPaid && !isPaymentWaiting && currentStep >= 6 && (
+              {!paymentResolved && !isPaymentWaiting && currentStep >= 6 && !ctaDisabled && (
                 <div className="cart-pending-flags" role="status" aria-live="polite">
                   <span className="cart-pending-flag cart-pending-flag-pay">
                     <I.CreditCard size={10} /> {t("cart.flag.paymentPending") || "Payment pending — collect in Step 6"}
                   </span>
+                </div>
+              )}
+              {checkInBlockers.length > 0 && (
+                <div className="cart-checkin-blockers" role="status" aria-live="polite">
+                  <div className="cart-checkin-blockers-head">
+                    <I.AlertCircle size={12} />
+                    <span>Before check-in</span>
+                  </div>
+                  <ul>
+                    {checkInBlockers.map(blocker => (
+                      <li key={blocker.id}>{blocker.text}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
               {isPaymentWaiting && (
