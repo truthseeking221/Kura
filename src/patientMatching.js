@@ -57,9 +57,9 @@ export function findPatientCollisionCandidates(draft, patients = []) {
       const sexMatch = sexComparable && draftSex === patientSex;
       const sexMismatch = sexComparable && draftSex !== patientSex;
 
-      // Keep this strict: shared phones alone are common in clinics and should
-      // not block review unless paired with identity evidence.
-      const isDuplicateRisk = idMatch || (phoneMatch && nameDobMatch) || (nameDobMatch && sexMatch);
+      // v12 requires any one of the three signals to flag a possible duplicate:
+      // national ID exact, phone exact/normalised, or name + DOB exact.
+      const isDuplicateRisk = idMatch || phoneMatch || nameDobMatch;
       if (!isDuplicateRisk) return null;
 
       const signals = [];

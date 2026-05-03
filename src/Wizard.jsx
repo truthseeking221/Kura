@@ -12,6 +12,7 @@
 import React, { useMemo, useState } from "react";
 import { I } from "./icons";
 import { useLang } from "./i18n";
+import { Kbd } from "./shared";
 
 // === Canonical step definitions ===
 export const STEP_DEFS = [
@@ -160,6 +161,10 @@ export function WizardProgress({ currentStep, gate, onStepClick }) {
             </React.Fragment>
           );
         })}
+        <span className="wiz-shortcut-hint" title="Switch steps with F1-F6">
+          <Kbd>F1-F6</Kbd>
+          <span>steps</span>
+        </span>
       </div>
 
       <div className="wiz-progress-mobile" role="navigation" aria-label="Check-in progress">
@@ -167,7 +172,7 @@ export function WizardProgress({ currentStep, gate, onStepClick }) {
           <span>Step {currentStep} of {STEP_DEFS.length}</span>
           <strong>{t(currentDef.labelKey)}</strong>
         </div>
-        <div className="wiz-mobile-dots" aria-hidden="true">
+        <div className="wiz-mobile-dots">
           {STEP_DEFS.map(s => {
             const status = gate.stepStatus[s.id];
             const isCurrent = currentStep === s.id;
@@ -184,6 +189,7 @@ export function WizardProgress({ currentStep, gate, onStepClick }) {
                 className={cls}
                 onClick={() => isNavigable && onStepClick?.(s.id)}
                 disabled={!isClickable}
+                aria-current={isCurrent ? "step" : undefined}
                 aria-label={`${s.id}. ${t(s.labelKey)}`}
               >
                 {status === "done" && !isCurrent
@@ -261,13 +267,13 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
             {/* Spec v12 §Global Layout: queue badge removed. Identity bar shows
                 name · DOB · age · sex (and phone when captured), nothing else. */}
             {dobDisplay && (
-              <span className="patient-header-pill"><I.Calendar size={9} /> {dobDisplay}</span>
+              <span className="patient-header-pill"><I.Calendar size={9} /> <span className="patient-header-pill-text">{dobDisplay}</span></span>
             )}
             {patient.sexAtBirth && (
-              <span className="patient-header-pill"><I.User size={9} /> {patient.sexAtBirth.charAt(0).toUpperCase()}</span>
+              <span className="patient-header-pill"><I.User size={9} /> <span className="patient-header-pill-text">{patient.sexAtBirth.charAt(0).toUpperCase()}</span></span>
             )}
             {phoneDisplay !== "—" && (
-              <span className="patient-header-pill"><I.Phone size={9} /> {phoneDisplay}</span>
+              <span className="patient-header-pill"><I.Phone size={9} /> <span className="patient-header-pill-text">{phoneDisplay}</span></span>
             )}
           </div>
         </div>
@@ -299,7 +305,7 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
           aria-expanded={stepSwitcherOpen}
           aria-label={`Open check-in steps. ${stepSwitcherTitle}`}
         >
-          <span>Step {currentStep}/{STEP_DEFS.length}</span>
+          <span className="ph-step-prefix"><span className="ph-step-prefix-word">Step </span>{currentStep}/{STEP_DEFS.length}</span>
           <strong>{t(currentDef.labelKey)}</strong>
           <I.ChevronDown size={10} strokeWidth={2.4} />
         </button>

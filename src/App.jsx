@@ -72,6 +72,7 @@ function AppShell() {
 
   const active = patients.find(p => p.id === activeId) || patients[0];
   const gate = useWizardGate(active);
+  const isBlankState = isPristineBlankPatient(active);
 
   // Cart summary for the mobile bottom-bar (hidden on desktop via CSS).
   const activeCart = useMemo(() => deriveCart(active), [active]);
@@ -342,6 +343,20 @@ function AppShell() {
     e.preventDefault();
     setCheatsheetOpen(true);
   }, []);
+
+  useKeydown((e) => {
+    const match = /^F([1-6])$/.exec(e.key || "");
+    if (!match) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (isTypingTarget()) return;
+    if (window.matchMedia?.("(max-width: 767px)").matches) return;
+    if (document.querySelector(".modal-overlay, .mobile-step-sheet, .mobile-cart-sheet")) return;
+    const targetStep = Number(match[1]);
+    e.preventDefault();
+    if (targetStep !== currentStep && canNavigateToStep(targetStep, currentStep, gate)) {
+      setCurrentStep(targetStep);
+    }
+  }, [currentStep, gate, activeId]);
 
   const pushToast = (text, tone = "success", options = {}) => {
     const id = toastIdRef.current++;
@@ -655,7 +670,13 @@ function AppShell() {
           onSearch={handleSearch}
         />
 
-        <PatientHeader patient={active} gate={gate} currentStep={currentStep} onStepClick={handleStepClick} nextAction={nextAction} />
+        <PatientHeader
+          patient={active}
+          gate={gate}
+          currentStep={currentStep}
+          onStepClick={handleStepClick}
+          nextAction={isBlankState ? null : nextAction}
+        />
 
         <WizardProgress
           currentStep={currentStep}
@@ -674,6 +695,7 @@ function AppShell() {
                 allPatients={patients.filter(p => p.id !== active.id && p.name)}
                 onSelectPatient={setActiveId}
                 gate={gate}
+                blankState={isBlankState}
               />
             )}
             {currentStep === 2 && (
@@ -902,6 +924,7 @@ function AppShell() {
 	                    onOpenAdd={() => setSheetMode("add")}
                     onOpenPay={() => setSheetMode("pay")}
 	                    payerReady={payerReadyForPayment}
+	                    blankState={isBlankState}
                   />
                 </div>
               )}
@@ -926,6 +949,7 @@ function AppShell() {
                 }}
                 onOpenPay={() => setSheetMode("pay")}
                 payerReady={payerReadyForPayment}
+                blankState={isBlankState}
               />
             </div>
           </div>
@@ -947,12 +971,17 @@ function isPristineBlankPatient(patient = {}) {
   return (
     !patient.name &&
     !patient.dob &&
+    !patient.sexAtBirth &&
     !patient.idNumber &&
     !patient.phoneNumber &&
     !patient.mobile &&
+    !patient.telegramHandle &&
     !(patient.visitReason || []).length &&
     !patient.otpVerified &&
     !patient.telegramVerified &&
+    !patient.idScanned &&
+    !patient.manualEntry &&
+    !patient.identity?.source &&
     hasOnlyDefaultOrders
   );
 }

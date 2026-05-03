@@ -65,6 +65,13 @@ function firstVisible(candidates) {
   }) || candidates.find(Boolean) || null;
 }
 
+function visibleDesktopCart() {
+  const scopedCart = document.querySelector(".desktop-cart-rail-body .order-cart");
+  const fallbackCarts = Array.from(document.querySelectorAll(".order-cart"))
+    .filter(el => !el.closest(".mobile-cart-sheet"));
+  return firstVisible([scopedCart, ...fallbackCarts]);
+}
+
 function getMobileCartTab() {
   return document.querySelector('.mobile-cart-sheet:not([aria-hidden]) [data-mobile-cart-tab="cart"]');
 }
@@ -77,7 +84,14 @@ function getFlyTarget() {
       document.querySelector(".mobile-cart-bar:not([hidden]) .mobile-cart-bar-summary"),
     ]);
   }
-  return document.querySelector(".cart-hd2-ico");
+  const cart = visibleDesktopCart();
+  return firstVisible([
+    cart?.querySelector(".cart-hd2-ico"),
+    cart?.querySelector(".cart-hd2-count"),
+    cart?.querySelector(".cart-hd2"),
+    cart,
+    ...Array.from(document.querySelectorAll(".cart-hd2-ico")),
+  ]);
 }
 
 function getBumpTarget() {
@@ -88,7 +102,7 @@ function getBumpTarget() {
       document.querySelector(".mobile-cart-bar:not([hidden]) .mobile-cart-bar-summary"),
     ]);
   }
-  return document.querySelector(".order-cart");
+  return visibleDesktopCart();
 }
 
 function bumpCart() {

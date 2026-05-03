@@ -824,8 +824,8 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
           {validationState === "idle" ? (
             <>
               <div className="cart-line-validation-copy">
-                <I.AlertTriangle size={11} />
-                <span>Patient consent required before imaging.</span>
+                <I.ClipboardList size={11} />
+                <span>Consent needed before imaging.</span>
               </div>
               <div className="cart-line-validation-actions">
                 <button
@@ -1165,7 +1165,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
 //   The cart is the always-visible rail for Steps 1–4. It owns payment (KHQR /
 //   Cash) and the Complete check-in CTA — there is no longer a separate Step 5
 //   panel that mirrors it.
-export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1, requestPaidEdit, onOpenAdd, onOpenPay, payerReady = true }) {
+export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1, requestPaidEdit, onOpenAdd, onOpenPay, payerReady = true, blankState = false }) {
   const t = useLang();
   const cart = useMemo(() => deriveCart(patient), [patient]);
   const totals = cartTotals(cart);
@@ -1453,8 +1453,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     isCheckedIn ? "Checked in" :
     paymentResolved ? (ctaDisabled ? "Resolve check-in" : "Ready to check in") :
     isPaymentWaiting ? "Payment in progress" :
-    ctaDisabled ? "Resolve blockers" :
-    "Ready to pay";
+    "Patient pays";
   const mobileSummarySub =
     itemCount === 0 ? "Search tests, services, or packages." :
     isCheckedIn ? `${patient.name || "Patient"} · ${patient.queueNumber || "checked in"}` :
@@ -1474,12 +1473,6 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             <div className="cart-hd2-ico"><I.ShoppingCart size={16} strokeWidth={2} /></div>
             <div className="cart-hd2-text">
               <h2 className="cart-hd2-title">{t("cart.title")}</h2>
-              {patient.name && (
-                <div className="cart-hd2-sub">
-                  {patient.name}
-                  {patient.queueNumber && <> · {patient.queueNumber}</>}
-                </div>
-              )}
             </div>
             <div className="cart-hd2-meta">
               <div className="cart-hd2-count">
@@ -1782,11 +1775,11 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                   </span>
                 </div>
               )}
-              {checkInBlockers.length > 0 && (
+              {checkInBlockers.length > 0 && !blankState && (
                 <div className="cart-checkin-blockers" role="status" aria-live="polite">
                   <div className="cart-checkin-blockers-head">
-                    <I.AlertCircle size={12} />
-                    <span>Before check-in</span>
+                    <I.ClipboardList size={12} />
+                    <span>Still needed</span>
                   </div>
                   <ul>
                     {checkInBlockers.map(blocker => (

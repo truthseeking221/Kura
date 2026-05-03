@@ -8,7 +8,7 @@ import kuraLogo from "./assets/kura-logo.svg";
 
 const LANGUAGES = ["Khmer", "English", "Vietnamese", "Thai", "French", "Korean"];
 
-export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange, mobileOpen = false, onMobileClose }) {
+export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangChange, mobileOpen = false, onMobileClose, onTestBlankState }) {
   const t = useLang();
   const sidebarRef = useRef(null);
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
@@ -99,6 +99,18 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
           </select>
         )}
       </div>
+
+      {onTestBlankState && (
+        <button
+          type="button"
+          className="sidebar-dev-blank"
+          onClick={onTestBlankState}
+          title="Test blank state"
+        >
+          <span className="sidebar-dev-badge">DEV</span>
+          {!collapsed && <span>Test blank state</span>}
+        </button>
+      )}
 
       <button className="collapse-btn" onClick={onToggle}>
         <I.ChevronsLeft size={14} style={{ transform: collapsed ? "rotate(180deg)" : "" }} />

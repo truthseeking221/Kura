@@ -635,6 +635,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   white-space: nowrap;
 }
 .btn:active { transform: translateY(0.5px); }
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .btn-primary {
   background: var(--brand-500);
   color: white;
@@ -4413,6 +4419,25 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .wiz-connector.is-done {
   background: var(--success-200, #a7f3d0);
 }
+.wiz-shortcut-hint {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-400);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.wiz-shortcut-hint .kbd {
+  height: 16px;
+  min-width: 0;
+  padding: 0 5px;
+  margin: 0;
+  color: var(--ink-500);
+  background: var(--surface-2);
+}
 
 /* === Wizard workspace (content + cart) === */
 .wizard-workspace {
@@ -4613,9 +4638,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding-top: 14px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border);
-  margin-top: 4px;
+  margin: 4px -16px 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .step-footer-left, .step-footer-right {
   display: flex;
@@ -5215,7 +5246,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .patient-record-drawer {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 210;
   pointer-events: none;
 }
 .patient-record-drawer-scrim {
@@ -9621,7 +9652,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   }
   .main.main-step-4 {
     display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     height: 100dvh;
     min-height: 0;
     overflow: hidden;
@@ -9814,6 +9845,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     width: 34px;
     height: 34px;
     border-radius: 10px;
+  }
+  .patient-record-drawer-panel {
+    width: calc(100vw - 24px);
+    max-width: none;
+  }
+  .patient-record-drawer-actions {
+    padding-bottom: calc(14px + var(--mobile-safe-bottom));
   }
 
   /* Notifications on mobile are a contained center, not the desktop popover.
@@ -10029,7 +10067,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   /* === PatientHeader compact === */
   .patient-header {
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-columns: 40px minmax(0, 1fr) minmax(116px, 40%);
     grid-template-rows: auto auto;
     position: sticky;
     top: calc(var(--mobile-topbar-h) + var(--mobile-search-h));
@@ -10068,12 +10106,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* Mobile metadata: span full width under the name (col 2 → end) so all
-     three pills (DOB+age, sex, phone) fit without truncation. Pills drop
-     their borders + icons and become plain inline text with subtle dot
-     separators — matches desktop pattern, ~30% more chars per row. */
+  /* Mobile metadata stays in the identity lane; step navigation sits in the
+     action lane below the next-action chip. This keeps the header at exactly
+     two rows while preserving the bottom-sheet step switcher. */
   .patient-header-sub {
-    grid-column: 2 / -1;
+    grid-column: 2 / 3;
     grid-row: 2;
     align-self: start;
     min-width: 0;
@@ -10125,12 +10162,19 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .patient-header-chips {
     display: none !important;
   }
-  /* On mobile the next-action pill in the header already navigates steps
-     (click → jump to target step), and the WizardProgress dots below
-     give random-step access. The step-switcher chip would be a third nav
-     for the same job — drop it to free row 2 for the metadata. */
   .patient-header-mobile-status {
-    display: none;
+    display: flex;
+    flex-direction: row;
+    grid-column: 3;
+    grid-row: 2;
+    gap: 0;
+    align-items: center;
+    justify-content: flex-end;
+    align-self: start;
+    justify-self: end;
+    width: 100%;
+    margin-left: 0;
+    min-width: 0;
   }
   /* Mobile: next-action pill takes row 1 of the third grid column,
      sitting beside the patient name. Step switcher sits below in row 2. */
@@ -10228,22 +10272,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    flex: 1 1 auto;
+    gap: 4px;
+    flex: 0 1 auto;
     max-width: none;
     min-width: 0;
-    min-height: 30px;
-    width: 100%;
+    min-height: 26px;
+    width: auto;
     margin: 0;
-    padding: 5px 8px;
+    padding: 3px 7px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--surface);
     color: var(--ink-500);
     font-family: inherit;
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
     cursor: pointer;
     transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
@@ -10253,13 +10297,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     white-space: nowrap;
   }
   .ph-step-switcher strong {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--ink-800);
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: -0.005em;
     text-transform: none;
@@ -10268,6 +10312,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     align-self: center;
     color: var(--ink-500);
     flex-shrink: 0;
+    width: 9px;
+    height: 9px;
   }
   .ph-step-switcher:hover,
   .ph-step-switcher:active {
@@ -10443,10 +10489,24 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     color: var(--success-700, #047857);
   }
 
-  /* === Wizard progress: patient header owns mobile orientation. === */
+  /* === Wizard progress: desktop-only on mobile; patient header owns mobile step navigation. === */
   .wiz-progress,
   .wiz-progress-desktop,
   .wiz-progress-mobile { display: none; }
+  .wiz-progress-mobile {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: var(--mobile-progress-h);
+    padding: 6px 12px;
+    position: sticky;
+    top: calc(var(--mobile-topbar-h) + var(--mobile-search-h) + var(--mobile-patient-h));
+    z-index: 64;
+    background: color-mix(in srgb, var(--surface) 96%, var(--brand-50));
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 rgba(11, 20, 36, 0.02);
+  }
   .wiz-mobile-copy {
     min-width: 0;
     display: flex;
@@ -11641,16 +11701,34 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     display: none;
   }
   .ph-step-switcher {
-    min-height: 26px;
-    gap: 4px;
-    padding: 4px 6px;
-    font-size: 9px;
+    min-height: 24px;
+    gap: 2px;
+    padding: 3px 5px;
+    font-size: 8.5px;
   }
   .ph-step-prefix-word {
     display: none;
   }
   .ph-step-switcher strong {
-    font-size: 10.5px;
+    font-size: 10px;
+  }
+  .wiz-progress-mobile {
+    gap: 7px;
+    padding: 5px 10px;
+  }
+  .wiz-mobile-copy span {
+    font-size: 9.5px;
+  }
+  .wiz-mobile-copy strong {
+    font-size: 12px;
+  }
+  .wiz-mobile-dots {
+    gap: 4px;
+  }
+  .wiz-mobile-dot {
+    width: 25px;
+    height: 25px;
+    font-size: 10px;
   }
   .id-captured-grid { grid-template-columns: 1fr; }
   .mobile-cart-bar { left: 8px; right: 8px; }

@@ -33,6 +33,7 @@ export const CORE_ORDER_CATALOG = [
   { id: "esr",          kind: "lab",     name: "ESR (Sed Rate)",               price: 5,  category: "Haematology" },
   { id: "ferritin",     kind: "lab",     name: "Ferritin",                     price: 9,  category: "Biochemistry" },
   { id: "ptinr",        kind: "lab",     name: "PT / INR",                     price: 8,  category: "Coagulation" },
+  { id: "hbsag",        kind: "lab",     name: "Hepatitis B Surface Antigen (HBsAg)", price: 9, category: "Immunology", unavailable: true, unavailableReason: "Reagents restocking", availableBack: "7 May" },
   { id: "covid",        kind: "lab",     name: "COVID-19 PCR",                 price: 18, category: "Microbiology", vaccine: true },
   { id: "stool",        kind: "lab",     name: "Stool Culture",                price: 11, category: "Microbiology" },
   { id: "vit-d",        kind: "lab",     name: "Vitamin D",                    price: 25, category: "Biochemistry", fasting: true },
@@ -319,4 +320,3 @@ export const LAB_CATALOG = ORDER_CATALOG
     popular: !!popular,
     price,
   }));
-

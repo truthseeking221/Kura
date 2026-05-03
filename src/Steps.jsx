@@ -15,10 +15,11 @@ import { I } from "./icons";
 import { useLang, VISIT_REASON_KEYS, VISIT_REASON_POPULAR } from "./i18n";
 import { ORDER_CATALOG, paymentAfterPaidEdit, useCartPayment, PaymentArea, paymentDueAmount } from "./OrderCart";
 import { DisabledTooltip, VisitReasonPills, VISIT_REASONS, AuthorBadge, SLOT_OPTIONS, computeTatPlan, fmtTatHours } from "./shared";
+import { coveragePaymentShare } from "./coverage";
 import { LAB_CATALOG, LAB_CATEGORIES, INSURANCE_PROVIDERS } from "./data";
 import { AddTestsPanel } from "./AddTestsPanel";
 import { DateInput, GhostPlaceholder, formatByPattern, digitsOnly } from "./DateInput";
-import { findBestPatientCollision } from "./patientMatching";
+import { findPatientCollisionCandidates } from "./patientMatching";
 import scanQrIcon from "./assets/icons/identity-scan-qr.svg";
 import idCardIcon from "./assets/icons/identity-id-card.svg";
 import manualEntryIcon from "./assets/icons/identity-manual-entry.svg";
@@ -47,7 +48,7 @@ function StepShell({ title, subtitle, right, children, className = "" }) {
   );
 }
 
-function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, secondary, className = "" }) {
+function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, secondary, showBlockerChip = true, className = "" }) {
   const t = useLang();
   return (
     <div className={"step-footer" + (className ? " " + className : "")}>
@@ -60,7 +61,7 @@ function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, seconda
         {secondary}
       </div>
       <div className="step-footer-right">
-        {onNext && nextDisabled && blockers && blockers.length > 0 && (
+        {onNext && showBlockerChip && nextDisabled && blockers && blockers.length > 0 && (
           <span className="step-footer-blocker">
             <I.AlertCircle size={11} /> {blockers[0]}
           </span>
@@ -87,11 +88,13 @@ function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, seconda
 //   QR/NFC auto-populate name+dob+sex+id and lock those fields.
 //   Manual moves directly to Step 2 with empty form.
 //
-export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatients = [], onSelectPatient, gate }) {
+export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatients = [], onSelectPatient, gate, blankState = false }) {
   const t = useLang();
   const [searchQ, setSearchQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [scanState, setScanState] = useState("idle"); // idle | scanning | done
+  const [scanCollisions, setScanCollisions] = useState([]);
+  const [drawerPatientId, setDrawerPatientId] = useState(null);
   // Spec v12 §Step 1: NFC is "coming soon" — visible, disabled, COMING SOON badge.
   const [nfcAvailable] = useState(false);
   const [recapturing, setRecapturing] = useState(false);
@@ -106,13 +109,34 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
   const matches = useMemo(() => {
     if (!searchQ.trim()) return [];
     const q = searchQ.toLowerCase();
-    return allPatients.filter(p =>
-      (p.name || "").toLowerCase().includes(q) ||
-      (p.queueNumber || "").toLowerCase().includes(q) ||
-      (p.phoneNumber || "").includes(q) ||
-      (p.idNumber || "").includes(q)
-    ).slice(0, 5);
+    return allPatients.filter(p => {
+      const bookingCodes = [
+        p.bookingCode,
+        ...(p.bookingCodes || []),
+        ...(p.consumedBookingCodes || []),
+      ].filter(Boolean).join(" ");
+      return (
+        (p.name || "").toLowerCase().includes(q) ||
+        (p.nameKhmer || "").toLowerCase().includes(q) ||
+        (p.phoneNumber || "").includes(q) ||
+        (p.mobile || "").includes(q) ||
+        (p.idNumber || "").toLowerCase().includes(q) ||
+        bookingCodes.toLowerCase().includes(q)
+      );
+    }).slice(0, 5);
   }, [searchQ, allPatients]);
+
+  const drawerPatient = drawerPatientId ? allPatients.find(p => p.id === drawerPatientId) : null;
+
+  const handleOverrideCollision = (collisionToAck, pin) => {
+    const id = collisionToAck?.patient?.id;
+    const next = commitCollisionOverride(patient, collisionToAck, pin);
+    if (!id || !next) return false;
+    onUpdate(next);
+    setScanCollisions(prev => prev.filter(c => c.patient.id !== id));
+    onPushToast?.("Override accepted · supervisor PIN logged", "success");
+    return true;
+  };
 
   const handleQRScan = () => {
     setScanState("scanning");
@@ -132,7 +156,14 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
           scannedAt: new Date().toISOString(),
         },
       };
-      onUpdate({ ...patient, ...data });
+      const next = { ...patient, ...data, collisionAcked: [] };
+      const collisions = findPatientCollisionCandidates(next, allPatients);
+      onUpdate(next);
+      if (collisions.length > 0) {
+        setScanCollisions(collisions);
+        onPushToast?.("Possible duplicate found — review before continuing", "error");
+        return;
+      }
       onPushToast?.("National ID scanned — name, DOB, sex auto-filled & locked", "success");
       setTimeout(() => onNext(), 600);
     }, 1100);
@@ -175,6 +206,13 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
     setSearchQ("");
   };
 
+  const handleLoadDrawerPatient = () => {
+    if (!drawerPatient) return;
+    handleSelectExisting(drawerPatient);
+    setDrawerPatientId(null);
+    setScanCollisions([]);
+  };
+
   const sourceLabel = (() => {
     const s = patient.identity?.source;
     if (s === "qr") return "QR scan";
@@ -201,9 +239,7 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
   };
 
   const fmtDob = (iso) => {
-    if (!iso) return "—";
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-    return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+    return formatDobDisplay(iso);
   };
 
   const lockedCount = (patient.identity?.lockedFields || []).length;
@@ -288,10 +324,31 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
           </div>
         )}
 
+        {scanCollisions.length > 0 && (
+          <div className="collision-stack">
+            {scanCollisions.map(c => (
+              <CollisionBanner
+                key={c.patient.id}
+                patient={patient}
+                collision={c}
+                onView={setDrawerPatientId}
+                onDismiss={handleOverrideCollision}
+              />
+            ))}
+          </div>
+        )}
+
         <StepFooter
           onNext={onNext}
-          nextDisabled={!gate.step1Done}
-          blockers={gate.blockers[1]}
+          nextDisabled={!gate.step1Done || scanCollisions.length > 0}
+          blockers={scanCollisions.length > 0 ? ["Resolve possible duplicate patient"] : gate.blockers[1]}
+          showBlockerChip={!blankState}
+        />
+        <PatientRecordDrawer
+          patient={drawerPatient}
+          open={!!drawerPatient}
+          onClose={() => setDrawerPatientId(null)}
+          onLoad={handleLoadDrawerPatient}
         />
       </StepShell>
     );
@@ -344,6 +401,20 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
           </div>
         )}
       </section>
+
+      {scanCollisions.length > 0 && (
+        <div className="collision-stack">
+          {scanCollisions.map(c => (
+            <CollisionBanner
+              key={c.patient.id}
+              patient={patient}
+              collision={c}
+              onView={setDrawerPatientId}
+              onDismiss={handleOverrideCollision}
+            />
+          ))}
+        </div>
+      )}
 
       {/* OR divider */}
       <div className="step1-or">
@@ -412,8 +483,15 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
 
       <StepFooter
         onNext={onNext}
-        nextDisabled={!gate.step1Done}
-        blockers={gate.blockers[1]}
+        nextDisabled={!gate.step1Done || scanCollisions.length > 0}
+        blockers={scanCollisions.length > 0 ? ["Resolve possible duplicate patient"] : gate.blockers[1]}
+        showBlockerChip={!blankState}
+      />
+      <PatientRecordDrawer
+        patient={drawerPatient}
+        open={!!drawerPatient}
+        onClose={() => setDrawerPatientId(null)}
+        onLoad={handleLoadDrawerPatient}
       />
     </StepShell>
   );
@@ -422,9 +500,9 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
 // =====================================================================
 // STEP 2 — Review & Confirm
 // =====================================================================
-function MaskedDob({ value, onChange, locked, error, placeholder = "DD MM YYYY" }) {
+function MaskedDob({ value, onChange, locked, error, placeholder = "DD-MM-YYYY" }) {
   const t = useLang();
-  // Stored format: YYYY-MM-DD. Display format: DD MM YYYY
+  // Stored format: YYYY-MM-DD. Display format: DD-MM-YYYY
   const [draft, setDraft] = useState(() => stringFromIso(value));
 
   useEffect(() => {
@@ -434,8 +512,8 @@ function MaskedDob({ value, onChange, locked, error, placeholder = "DD MM YYYY" 
   function stringFromIso(iso) {
     if (!iso) return "";
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-    if (!m) return iso.replace(/-/g, " "); // fallback
-    return `${m[3]} ${m[2]} ${m[1]}`;
+    if (!m) return iso.replace(/[\/\s]+/g, "-"); // fallback
+    return `${m[3]}-${m[2]}-${m[1]}`;
   }
 
   function isoFromDigits(digits) {
@@ -450,8 +528,8 @@ function MaskedDob({ value, onChange, locked, error, placeholder = "DD MM YYYY" 
     if (locked) return;
     const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
     let formatted = digits;
-    if (digits.length > 2) formatted = digits.slice(0, 2) + " " + digits.slice(2);
-    if (digits.length > 4) formatted = digits.slice(0, 2) + " " + digits.slice(2, 4) + " " + digits.slice(4);
+    if (digits.length > 2) formatted = digits.slice(0, 2) + "-" + digits.slice(2);
+    if (digits.length > 4) formatted = digits.slice(0, 2) + "-" + digits.slice(2, 4) + "-" + digits.slice(4);
     setDraft(formatted);
 
     if (digits.length === 8) {
@@ -491,6 +569,27 @@ function MaskedDob({ value, onChange, locked, error, placeholder = "DD MM YYYY" 
   );
 }
 
+function ClearableInput({ value, onChange, locked, className = "", ...props }) {
+  return (
+    <div className={"clearable-input" + (locked ? " is-locked" : "")}>
+      <input
+        {...props}
+        className={"input" + (className ? " " + className : "") + (locked ? " is-locked" : "")}
+        value={value || ""}
+        onChange={e => onChange(e.target.value)}
+        readOnly={locked}
+      />
+      {locked ? (
+        <I.Lock size={12} className="clearable-input-ico" />
+      ) : !!value && (
+        <button type="button" className="clearable-input-btn" onClick={() => onChange("")} aria-label="Clear field">
+          <I.X size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // =====================================================================
 // Visit details — clinical intake the patient owns from their phone,
 // with a "fill on behalf" escape hatch for staff. Lives inside Step 2 so
@@ -518,15 +617,22 @@ function Step2VisitDetails({ patient, onUpdate, onSendIntake, onPushToast, chann
     visitDetailsAuthors: { ...authors, [k]: "nurse" },
   });
 
-  // Five-section status feed — receptionist scans which intake bits the
-  // patient has answered without opening the form. Order mirrors the form
-  // below so the cursor jumps top-to-bottom on edit.
+  const sensitiveItems = (patient.cart?.items || []).filter(i => i.kind === "imaging" || /hiv|sti|genetic/i.test(i.name || ""));
+  const femaleRequired = (patient.sexAtBirth || patient.gender) === "Female";
+  const womenFilled = !femaleRequired || !!(fields.womensHealth || "").trim();
+  const sensitiveFilled = sensitiveItems.length === 0 || !!(fields.sensitiveConsent || "").trim();
+
+  // v12 PWA architecture: 8 adaptive intake sections. The nurse sees the same
+  // high-level sections as the patient PWA, with structured fallback fields.
   const sections = [
-    { key: "visitReason",    labelKey: "vd.visitReason",    filled: visitReason.length > 0,                      preview: visitReason.join(" · ") },
-    { key: "chiefComplaint", labelKey: "vd.chiefComplaint", filled: !!(fields.chiefComplaint || "").trim(),     preview: fields.chiefComplaint },
-    { key: "medicalHistory", labelKey: "vd.medicalHistory", filled: !!(fields.medicalHistory || "").trim(),     preview: fields.medicalHistory },
-    { key: "medications",    labelKey: "vd.medications",    filled: !!(fields.medications || "").trim(),         preview: fields.medications },
-    { key: "allergies",      labelKey: "vd.allergies",      filled: !!(fields.allergies || "").trim(),           preview: fields.allergies },
+    { key: "today",          label: "Today's visit",          filled: visitReason.length > 0 && !!(fields.chiefComplaint || "").trim(), preview: [visitReason.join(" · "), fields.chiefComplaint].filter(Boolean).join(" · ") },
+    { key: "prep",           label: "Pre-test prep",          filled: !!(fields.preTestPrep || "").trim(),       preview: fields.preTestPrep },
+    { key: "medications",    label: "Medications & supplements", filled: !!(fields.medications || "").trim(),    preview: fields.medications },
+    { key: "womensHealth",   label: "Women's health",         filled: womenFilled,                               preview: femaleRequired ? fields.womensHealth : "Not applicable" },
+    { key: "recentEvents",   label: "Recent health events",   filled: !!(fields.recentEvents || "").trim(),      preview: fields.recentEvents },
+    { key: "lifestyle",      label: "Lifestyle snapshot",     filled: !!(fields.lifestyle || "").trim(),         preview: fields.lifestyle },
+    { key: "sampleComfort",  label: "Sample comfort",         filled: !!(fields.sampleComfort || "").trim(),     preview: fields.sampleComfort },
+    { key: "sensitiveConsent", label: "Consent & sensitive tests", filled: sensitiveFilled,                      preview: sensitiveItems.length === 0 ? "No sensitive tests" : fields.sensitiveConsent },
   ];
   const filledCount = sections.filter(s => s.filled).length;
   const total = sections.length;
@@ -675,7 +781,7 @@ function Step2VisitDetails({ patient, onUpdate, onSendIntake, onPushToast, chann
               <span className="vd2-check-mark" aria-hidden="true">
                 {s.filled && <I.Check size={9} strokeWidth={3} />}
               </span>
-              <span className="vd2-check-label">{t(s.labelKey)}</span>
+              <span className="vd2-check-label">{s.label || t(s.labelKey)}</span>
               {s.filled && s.preview ? (
                 <span className="vd2-check-preview" title={s.preview}>{s.preview}</span>
               ) : (
@@ -720,7 +826,13 @@ function Step2VisitDetails({ patient, onUpdate, onSendIntake, onPushToast, chann
             </div>
             {renderField("chiefComplaint", "vd.chiefComplaint", "vd.chiefComplaint.placeholder", true)}
             {renderField("medicalHistory", "vd.medicalHistory", "vd.medicalHistory.placeholder", true)}
-            {renderField("medications", "vd.medications", "vd.medications.placeholder", false)}
+            {renderField("preTestPrep", "Pre-test prep", "Food, alcohol, exercise, hydration, urine timing", true)}
+            {renderField("medications", "vd.medications", "vd.medications.placeholder", true)}
+            {femaleRequired && renderField("womensHealth", "Women's health", "LMP, pregnancy possibility, breastfeeding, contraception, HRT", true)}
+            {renderField("recentEvents", "Recent health events", "Illness, vaccine, surgery, travel, injury, sleep", true)}
+            {renderField("lifestyle", "Lifestyle snapshot", "Smoking, alcohol, exercise, diet", true)}
+            {renderField("sampleComfort", "Sample collection comfort", "Fainting history, preferred arm, difficult veins, latex allergy, PICC/fistula", true)}
+            {sensitiveItems.length > 0 && renderField("sensitiveConsent", "Consent & sensitive tests", "Digital consent status, authorised third parties, supervisor witness if verbal", true)}
             {renderField("allergies", "vd.allergies", "vd.allergies.placeholder", false)}
           </div>
         </>
@@ -966,6 +1078,12 @@ function queueOrdinal(patient = {}) {
   return Number.isFinite(n) && n > 0 ? n : Number.POSITIVE_INFINITY;
 }
 
+function formatDobDisplay(iso) {
+  if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
+}
+
 function collisionCopyFor(currentPatient, collision) {
   const currentQueue = queueOrdinal(currentPatient);
   const targetQueue = queueOrdinal(collision?.patient);
@@ -984,61 +1102,131 @@ function collisionCopyFor(currentPatient, collision) {
   };
 }
 
+function commitCollisionOverride(patient, collisionToAck, pin, staffId = "Linh Nguyen") {
+  const cleanPin = (pin || "").trim();
+  const id = collisionToAck?.patient?.id;
+  if (!id || cleanPin.length < 4) return null;
+  const acked = patient.collisionAcked || [];
+  return {
+    ...patient,
+    collisionAcked: [...new Set([...acked, id])],
+    collisionOverrides: [
+      ...(patient.collisionOverrides || []),
+      {
+        patientId: id,
+        signals: collisionToAck.signals || [],
+        staffId,
+        overriddenAt: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
 function CollisionBanner({ patient, collision, onView, onDismiss }) {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [pin, setPin] = useState("");
   if (!collision) return null;
   const c = collision;
   const copy = collisionCopyFor(patient, c);
+  const handleConfirm = (e) => {
+    e.preventDefault();
+    const accepted = onDismiss?.(c, pin);
+    if (accepted === false) return;
+    setOverrideOpen(false);
+    setPin("");
+  };
   return (
-    <div className="collision-stack">
-      <div className="collision-banner">
-        <div className="collision-icon"><I.AlertTriangle size={14} /></div>
-        <div className="collision-body">
-          <span className="collision-kicker">{c.strength} · {c.signals.join(" + ")}</span>
-          <strong>{copy.title}</strong>
-          <p>
-            <em>{c.patient.name}</em>
-            {c.patient.dob && <> · {c.patient.dob}</>}
-            {c.patient.sexAtBirth && <> · {c.patient.sexAtBirth}</>}
-            {c.patient.lastVisitAt && <> · last visit {c.patient.lastVisitAt}</>}
-          </p>
-        </div>
-        <div className="collision-actions">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onView?.(c.patient.id)}>
-            {copy.primary}
-          </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOverrideOpen(true)}>
-            {copy.secondary}
-          </button>
-        </div>
-        {overrideOpen && (
-          <div className="collision-override">
-            <strong>Supervisor PIN required</strong>
-            <p>This override is logged with timestamp and staff ID. Cannot be undone without admin intervention.</p>
-            <div className="collision-override-row">
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="PIN"
-                value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, ""))}
-                autoFocus
-              />
-              <button
-                type="button"
-                className="btn btn-danger btn-sm"
-                onClick={() => { onDismiss?.(c, pin); setOverrideOpen(false); setPin(""); }}
-                disabled={pin.length < 4}
-              >
-                Confirm override
-              </button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setOverrideOpen(false); setPin(""); }}>Cancel</button>
+    <div className="collision-banner">
+      <div className="collision-icon"><I.DuplicateIdentity size={18} strokeWidth={1.9} /></div>
+      <div className="collision-body">
+        <span className="collision-kicker">{c.strength} · {c.signals.join(" + ")}</span>
+        <strong>{copy.title}</strong>
+        <p>
+          <em>{c.patient.name}</em>
+          {c.patient.dob && <> · {formatDobDisplay(c.patient.dob)}</>}
+          {c.patient.sexAtBirth && <> · {c.patient.sexAtBirth}</>}
+          {c.patient.lastVisitAt && <> · last visit {c.patient.lastVisitAt}</>}
+        </p>
+      </div>
+      <div className="collision-actions">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => onView?.(c.patient.id)}>
+          {copy.primary}
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOverrideOpen(true)}>
+          {copy.secondary}
+        </button>
+      </div>
+      {overrideOpen && (
+        <form className="collision-override" onSubmit={handleConfirm}>
+          <strong>Supervisor PIN required</strong>
+          <p>This override is logged with timestamp and staff ID. Cannot be undone without admin intervention.</p>
+          <div className="collision-override-row">
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="PIN"
+              value={pin}
+              onChange={e => setPin(e.target.value.replace(/\D/g, ""))}
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="btn btn-danger btn-sm"
+              disabled={pin.length < 4}
+            >
+              Confirm override
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setOverrideOpen(false); setPin(""); }}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function PatientRecordDrawer({ patient, open, onClose, onLoad }) {
+  if (!open || !patient) return null;
+  return (
+    <div className="patient-record-drawer" role="dialog" aria-modal="true" aria-label="Existing patient record">
+      <button type="button" className="patient-record-drawer-scrim" onClick={onClose} aria-label="Close existing patient drawer" />
+      <aside className="patient-record-drawer-panel">
+        <header className="patient-record-drawer-head">
+          <div className="patient-record-drawer-id">
+            <div className="patient-record-drawer-avatar" aria-hidden="true">{patient.initials || "P"}</div>
+            <div className="patient-record-drawer-id-text">
+              <span className="patient-record-drawer-kicker">Existing record</span>
+              <h2>{patient.name || "Unnamed patient"}</h2>
+              {patient.idNumber && <span className="patient-record-drawer-sub">ID · {patient.idNumber}</span>}
             </div>
           </div>
-        )}
-      </div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+            <I.X size={14} />
+          </button>
+        </header>
+        <div className="patient-record-drawer-body">
+          <dl className="patient-record-list">
+            <div><dt>DOB</dt><dd>{formatDobDisplay(patient.dob)}</dd></div>
+            <div><dt>Sex</dt><dd>{patient.sexAtBirth || patient.gender || "—"}</dd></div>
+            <div><dt>Phone</dt><dd>{patient.phoneNumber || patient.mobile || "—"}</dd></div>
+            <div><dt>Last visit</dt><dd>{patient.lastVisitAt || patient.arrivedRaw || "—"}</dd></div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                {patient.status?.label
+                  ? <span className="patient-record-status-chip">{patient.status.label}</span>
+                  : "—"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <footer className="patient-record-drawer-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Keep reviewing</button>
+          <button type="button" className="btn btn-primary" onClick={onLoad}>
+            <I.Check size={13} /> Load this patient
+          </button>
+        </footer>
+      </aside>
     </div>
   );
 }
@@ -1047,14 +1235,16 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
   const t = useLang();
   const lockedFields = patient.identity?.lockedFields || [];
   const isLocked = (field) => lockedFields.includes(field);
-  const collision = useMemo(() => findBestPatientCollision(patient, allPatients), [patient, allPatients]);
+  const collisionCandidates = useMemo(() => findPatientCollisionCandidates(patient, allPatients), [patient, allPatients]);
   const acked = patient.collisionAcked || [];
-  const liveCollision = collision && !(collision.candidateIds || [collision.patient.id]).every(id => acked.includes(id))
-    ? collision
-    : null;
-  const handleAckCollision = (collisionToAck) => {
-    const ids = collisionToAck?.candidateIds || [collisionToAck?.patient?.id].filter(Boolean);
-    onUpdate({ ...patient, collisionAcked: [...new Set([...acked, ...ids])] });
+  const liveCollisions = collisionCandidates.filter(c => !acked.includes(c.patient.id));
+  const [drawerPatientId, setDrawerPatientId] = useState(null);
+  const drawerPatient = drawerPatientId ? allPatients.find(p => p.id === drawerPatientId) : null;
+  const handleAckCollision = (collisionToAck, pin) => {
+    const next = commitCollisionOverride(patient, collisionToAck, pin);
+    if (!next) return false;
+    onUpdate(next);
+    return true;
   };
 
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
@@ -1154,7 +1344,7 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       onPushToast?.("Please complete required fields", "error");
       return;
     }
-    if (liveCollision) {
+    if (liveCollisions.length > 0) {
       onPushToast?.("Resolve possible duplicate patient before continuing", "error");
       return;
     }
@@ -1178,17 +1368,41 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
         )
       }
     >
-      {/* Spec v12 §Step 1 collision detection — surfaces inline above identity */}
-      <CollisionBanner
-        patient={patient}
-        collision={liveCollision}
-        onView={(id) => onSelectPatient?.(id)}
-        onDismiss={(collisionToAck, pin) => {
-          if (!pin || pin.length < 4) return;
-          handleAckCollision(collisionToAck);
-          onPushToast?.(`Override accepted · supervisor PIN logged`, "success");
-        }}
-      />
+      {/* Spec v12 §Step 1 collision detection — multiple signals/candidates surface inline before creation. */}
+      {liveCollisions.length > 0 && (
+        <div className="collision-stack">
+          {liveCollisions.map(c => (
+            <CollisionBanner
+              key={c.patient.id}
+              patient={patient}
+              collision={c}
+              onView={setDrawerPatientId}
+              onDismiss={(collisionToAck, pin) => {
+                const accepted = handleAckCollision(collisionToAck, pin);
+                if (accepted) onPushToast?.(`Override accepted · supervisor PIN logged`, "success");
+                return accepted;
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Unlock confirm — v12 requires this at the top of the Identity section. */}
+      {unlockConfirmOpen && (
+        <div className="unlock-confirm unlock-confirm-top">
+          <I.AlertTriangle size={12} className="unlock-confirm-ico" />
+          <div className="unlock-confirm-body">
+            <div className="unlock-confirm-title">{t("step2.unlock.title")}</div>
+            <div className="unlock-confirm-sub">{t("step2.unlock.sub")}</div>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUnlockConfirmOpen(false)}>
+            {t("step2.unlock.cancel")}
+          </button>
+          <button type="button" className="btn btn-danger btn-sm" onClick={handleUnlock}>
+            {t("step2.unlock.confirm")}
+          </button>
+        </div>
+      )}
 
       {/* Identity group */}
       <section className="card-soft">
@@ -1203,25 +1417,24 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
         <div className="form-grid form-grid-3">
           <div className="field">
             <label className="label">{t("step2.fullNameLatin")} <span className="req">*</span></label>
-            <input
+            <ClearableInput
               type="text"
-              className={"input" + (errors.name ? " invalid" : "") + (isLocked("name") ? " is-locked" : "")}
+              className={errors.name ? "invalid" : ""}
               value={patient.name || ""}
-              onChange={e => update("name", e.target.value)}
+              onChange={v => update("name", v)}
               placeholder={t("step2.fullNameLatin.ph")}
-              readOnly={isLocked("name")}
+              locked={isLocked("name")}
             />
             {errors.name && <div className="help error">{errors.name}</div>}
           </div>
           <div className="field">
             <label className="label">{t("step2.fullNameKhmer")}</label>
-            <input
+            <ClearableInput
               type="text"
-              className={"input" + (isLocked("nameKhmer") ? " is-locked" : "")}
               value={patient.nameKhmer || ""}
-              onChange={e => update("nameKhmer", e.target.value)}
+              onChange={v => update("nameKhmer", v)}
               placeholder="សុខ ស្រីម៉ៅ"
-              readOnly={isLocked("nameKhmer")}
+              locked={isLocked("nameKhmer")}
             />
           </div>
           <div className="field">
@@ -1251,12 +1464,11 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
           </div>
           <div className="field">
             <label className="label">{t("step2.idNumber")}</label>
-            <input
+            <ClearableInput
               type="text"
-              className={"input" + (isLocked("idNumber") ? " is-locked" : "")}
               value={patient.idNumber || ""}
-              onChange={e => update("idNumber", e.target.value)}
-              readOnly={isLocked("idNumber")}
+              onChange={v => update("idNumber", v)}
+              locked={isLocked("idNumber")}
             />
           </div>
           <div className="field">
@@ -1382,20 +1594,10 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
               </button>
             </div>
           </div>
-        )}
+      )}
       </section>
 
-      {/* Visit details — clinical intake the patient owns
-         (or that staff can fill on behalf when the patient can't). */}
-      <Step2VisitDetails
-        patient={patient}
-        onUpdate={onUpdate}
-        onSendIntake={onSendIntake}
-        onPushToast={onPushToast}
-        channelReady={tgVerified || otpVerified}
-      />
-
-      {/* Address (collapsed by default) */}
+      {/* Address (collapsed by default) — placed above Visit Details per v12. */}
       <section className="card-soft">
         <button type="button" className="addr-toggle" onClick={() => setAddrOpen(o => !o)}>
           <I.Home size={12} />
@@ -1409,15 +1611,34 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
             <div className="form-grid form-grid-2">
               <div className="field">
                 <label className="label">{t("step2.address.province")}</label>
-                <input className="input" value={patient.address?.province || ""} onChange={e => updateAddr("province", e.target.value)} />
+                <select className="select" value={patient.address?.province || ""} onChange={e => updateAddr("province", e.target.value)}>
+                  <option value="">Select province / city</option>
+                  <option>Phnom Penh</option>
+                  <option>Kandal</option>
+                  <option>Siem Reap</option>
+                  <option>Battambang</option>
+                  <option>Kampong Cham</option>
+                </select>
               </div>
               <div className="field">
                 <label className="label">{t("step2.address.district")}</label>
-                <input className="input" value={patient.address?.district || ""} onChange={e => updateAddr("district", e.target.value)} />
+                <select className="select" value={patient.address?.district || ""} onChange={e => updateAddr("district", e.target.value)} disabled={!patient.address?.province}>
+                  <option value="">Select district / khan</option>
+                  <option>Chamkar Mon</option>
+                  <option>Daun Penh</option>
+                  <option>Toul Kork</option>
+                  <option>Mean Chey</option>
+                </select>
               </div>
               <div className="field">
                 <label className="label">{t("step2.address.commune")}</label>
-                <input className="input" value={patient.address?.commune || ""} onChange={e => updateAddr("commune", e.target.value)} />
+                <select className="select" value={patient.address?.commune || ""} onChange={e => updateAddr("commune", e.target.value)} disabled={!patient.address?.district}>
+                  <option value="">Select commune / sangkat</option>
+                  <option>Boeung Keng Kang</option>
+                  <option>Tonle Bassac</option>
+                  <option>Phsar Thmei</option>
+                  <option>Tuol Sangke</option>
+                </select>
               </div>
               <div className="field">
                 <label className="label">{t("step2.address.village")}</label>
@@ -1426,6 +1647,9 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label className="label">{t("step2.address.street")}</label>
                 <input className="input" value={patient.address?.street || ""} onChange={e => updateAddr("street", e.target.value)} placeholder="House #, street name" />
+                {(patient.cart?.items || []).some(i => i.kind === "delivery") && !patient.address?.street && (
+                  <div className="help warn"><I.AlertTriangle size={10} /> Delivery address incomplete.</div>
+                )}
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label className="label">{t("step2.address.notes")}</label>
@@ -1443,28 +1667,31 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
         )}
       </section>
 
-      {/* Unlock confirm */}
-      {unlockConfirmOpen && (
-        <div className="unlock-confirm">
-          <I.AlertTriangle size={12} className="unlock-confirm-ico" />
-          <div className="unlock-confirm-body">
-            <div className="unlock-confirm-title">{t("step2.unlock.title")}</div>
-            <div className="unlock-confirm-sub">{t("step2.unlock.sub")}</div>
-          </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUnlockConfirmOpen(false)}>
-            {t("step2.unlock.cancel")}
-          </button>
-          <button type="button" className="btn btn-danger btn-sm" onClick={handleUnlock}>
-            {t("step2.unlock.confirm")}
-          </button>
-        </div>
-      )}
+      {/* Visit details — clinical intake the patient owns
+         (or that staff can fill on behalf when the patient can't). */}
+      <Step2VisitDetails
+        patient={patient}
+        onUpdate={onUpdate}
+        onSendIntake={onSendIntake}
+        onPushToast={onPushToast}
+        channelReady={tgVerified || otpVerified}
+      />
 
       <StepFooter
         onPrev={onPrev}
         onNext={handleNext}
-        nextDisabled={!gate.step2Done || !!liveCollision}
-        blockers={liveCollision ? ["Resolve possible duplicate patient"] : gate.blockers[2]}
+        nextDisabled={!gate.step2Done || liveCollisions.length > 0}
+        blockers={liveCollisions.length > 0 ? ["Resolve possible duplicate patient"] : gate.blockers[2]}
+      />
+      <PatientRecordDrawer
+        patient={drawerPatient}
+        open={!!drawerPatient}
+        onClose={() => setDrawerPatientId(null)}
+        onLoad={() => {
+          if (!drawerPatient) return;
+          onSelectPatient?.(drawerPatient.id);
+          setDrawerPatientId(null);
+        }}
       />
     </StepShell>
   );
@@ -1970,6 +2197,7 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
     return new Date(y, m - 1, d);
   }, [selectedDay]);
   const selectedDayBeforeTAT = selectedDate < earliestReadyDay;
+  const fullyBookedDay = (d) => d.getDay() === 5 && d.getDate() % 2 === 0;
   const bookedDate = useMemo(() => {
     if (!tele.slot?.date) return null;
     const [y, m, d] = tele.slot.date.split("-").map(Number);
@@ -2066,7 +2294,8 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
             <div className="tele-booked-summary-copy">
               <span className="tele-booked-summary-kicker">{t("step5.booked")}</span>
               <strong>{bookedSlotLabel || t("step5.bookedSlotFallback")}</strong>
-              <span>{bookedSpecialty?.label || specialty} · {t("step5.notifyQueued")}</span>
+              <span>{bookedSpecialty?.label || specialty} · Dr. Sopheap Chan · ~10 min · INCLUDED</span>
+              <span>{t("step5.notifyQueued")}</span>
             </div>
             <div className="tele-booked-summary-actions">
               <button type="button" className="btn btn-secondary btn-sm" onClick={startReschedule}>
@@ -2125,10 +2354,12 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
                   const isToday = dayKey(d) === dayKey(today);
                   const isPast = d < today;
                   const isBeforeTat = d < earliestReadyDay;
+                  const isFullyBooked = inMonth && fullyBookedDay(d);
                   const isSelected = dayKey(d) === selectedDay;
                   const cls = "tele-cal-day"
                     + (inMonth ? "" : " is-out")
                     + (isPast ? " is-past" : "")
+                    + (isFullyBooked ? " is-full" : "")
                     + (isBeforeTat && !isPast ? " is-before-tat" : "")
                     + (isToday ? " is-today" : "")
                     + (isSelected ? " is-selected" : "");
@@ -2137,9 +2368,9 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
                       key={dayKey(d)}
                       type="button"
                       className={cls}
-                      disabled={isPast || !inMonth}
+                      disabled={isPast || !inMonth || isFullyBooked}
                       onClick={() => setSelectedDay(dayKey(d))}
-                      title={isBeforeTat && !isPast ? "Results not ready yet on this date" : ""}
+                      title={isFullyBooked ? "Fully booked" : (isBeforeTat && !isPast ? "Results not ready yet on this date" : "")}
                       aria-current={isToday ? "date" : undefined}
                       aria-pressed={isSelected}
                     >
@@ -2166,10 +2397,11 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
                     <button
                       key={time}
                       type="button"
-                      className={"tele-times-slot" + (active ? " is-active" : "")}
+                      className={"tele-times-slot" + (active ? " is-active" : "") + (selectedDayBeforeTAT ? " is-before-tat" : "")}
                       onClick={() => setPickedTime(time)}
                     >
-                      {time}
+                      <span>{time}</span>
+                      {selectedDayBeforeTAT && <small>Results not ready yet</small>}
                     </button>
                   );
                 })}
@@ -2300,17 +2532,39 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
     const out = { direct: [], insurance: [], preauth: [] };
     cart.items.forEach(it => {
       if (!hasInsurance) { out.direct.push(it); return; }
-      const cov = MOCK_COVERAGE_FOR_STEP6[it.id];
-      if (cov?.preauth) out.preauth.push(it);
-      else if (cov?.covered > 0) out.insurance.push({ ...it, _coverage: cov });
-      else out.direct.push(it);
+      const { payer, coverage } = coveragePaymentShare(it.id, insurance);
+      if (payer === "preauth") out.preauth.push({ ...it, _coverage: coverage });
+      else if (payer === "insurance") out.insurance.push({ ...it, _coverage: coverage });
+      else out.direct.push({ ...it, _coverage: coverage });
     });
     return out;
-  }, [cart.items, hasInsurance]);
+  }, [cart.items, hasInsurance, insurance]);
   const hasAutoSplit = hasInsurance && (groupedByPayer.insurance.length > 0 || groupedByPayer.preauth.length > 0);
 
   return (
-    <StepShell title={t("step6.title") || "Payment"} subtitle={t("step6.sub") || "Collect payment and confirm the order."} className="step-shell-payment">
+    <StepShell
+      title={t("step6.title") || "Payment"}
+      subtitle={t("step6.sub") || "Collect payment and confirm the order."}
+      className="step-shell-payment"
+      right={
+        <div className="step6-currency-control">
+          <div className="atp-ccy" role="group" aria-label="Payment currency">
+            {["USD", "KHR"].map(c => (
+              <button
+                key={c}
+                type="button"
+                className={"atp-ccy-tab" + (ccy === c ? " is-active" : "")}
+                onClick={() => pay.onCcyToggle(c)}
+                aria-pressed={ccy === c}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          <span>1 USD = 4,100 KHR</span>
+        </div>
+      }
+    >
       <section className="card-soft step6-summary">
         <header className="step6-summary-head">
           <strong>{t("step6.summaryTitle") || "Order summary"}</strong>
@@ -2340,12 +2594,12 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
             <div className="step6-autosplit-group">
               <div className="step6-autosplit-grouphead">
                 <span>Invoice -A · {insurance[0]?.provider || "Insurance"}</span>
-                <span>${groupedByPayer.insurance.reduce((s, it) => s + (it.price || 0) * ((it._coverage?.covered || 0) / 100), 0).toFixed(2)}</span>
+                <span>${groupedByPayer.insurance.reduce((s, it) => s + (it.price || 0) * ((it._coverage?.percent || 0) / 100), 0).toFixed(2)}</span>
               </div>
               {groupedByPayer.insurance.map(it => (
                 <div key={it.id} className="step6-autosplit-row">
                   <span>{it.name}</span>
-                  <span>{it._coverage.covered}% covered · patient ${(it.price * (1 - it._coverage.covered / 100)).toFixed(2)}</span>
+                  <span>{it._coverage.percent}% covered · patient ${(it.price * (1 - it._coverage.percent / 100)).toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -2427,6 +2681,20 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
                   {splitFullyPaid ? <><I.Check size={12} strokeWidth={3} /> Step 2: KHQR confirmed</> : <><I.CreditCard size={12} /> Step 2: Show KHQR ${khqrRemainder.toFixed(2)}</>}
                 </button>
               </div>
+              {cashStepDone && !splitFullyPaid && (
+                <div className="step6-khqr-live">
+                  <span className="khqr-cfd-live"><span className="khqr-cfd-live-dot" /> Live · Bakong webhook <span className="khqr-cfd-clock">09:58</span></span>
+                  <span className="step6-khqr-copy">QR is on the patient display. Auto-confirm will close this invoice; use manual fallback only after verifying Bakong receipt.</span>
+                  <div className="step6-khqr-actions">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => onPushToast?.("KHQR regenerated · 10 min expiry reset", "info")}>
+                      <I.RefreshCw size={11} /> Regenerate
+                    </button>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={confirmKhqrStep}>
+                      <I.Check size={11} /> Mark received
+                    </button>
+                  </div>
+                </div>
+              )}
               {splitFullyPaid && (
                 <div className="step6-split-done"><I.CheckCircle size={12} /> Invoice paid in full — split cash + KHQR</div>
               )}
@@ -2477,15 +2745,3 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
     </StepShell>
   );
 }
-
-// Step6 mock coverage map mirrors the AddTestsPanel one — keeps payment
-// auto-split aligned with the labels nurse saw on each row in Step 4.
-const MOCK_COVERAGE_FOR_STEP6 = {
-  cbc: { covered: 80 }, glucose: { covered: 80 }, hba1c: { covered: 80 },
-  lipid: { covered: 80 }, urinalysis: { covered: 60 }, lft: { covered: 80 },
-  kft: { covered: 80 }, tsh: { covered: 80 }, amh: { covered: 0 },
-  "preg-bhcg": { covered: 0 }, "xray-chest": { covered: 60 },
-  "us-pelvis": { covered: 0 }, "ct-head": { covered: 100, preauth: true },
-  "mri-brain": { covered: 100, preauth: true }, "ecg-12": { covered: 80 },
-  "vit-bp": { covered: 100 }, "vit-bmi": { covered: 100 },
-};

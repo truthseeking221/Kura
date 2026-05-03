@@ -44,6 +44,7 @@ export const I = {
   CheckCircle: (p) => <Icon {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></Icon>,
   AlertCircle: (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></Icon>,
   AlertTriangle: (p) => <Icon {...p}><path d="m10.29 3.86-8.18 14.14a2 2 0 0 0 1.71 3h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></Icon>,
+  DuplicateIdentity: (p) => <Icon {...p}><rect x="7" y="5" width="10" height="12" rx="2"/><path d="M4 9V7a2 2 0 0 1 2-2h8"/><path d="M10 10h4"/><path d="M10 13h2.5"/><circle cx="17.5" cy="17.5" r="2.8"/><path d="M17.5 16.25v1.1"/><path d="M17.5 18.65h.01"/></Icon>,
   X: (p) => <Icon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>,
   XCircle: (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></Icon>,
   CreditCard: (p) => <Icon {...p}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></Icon>,
