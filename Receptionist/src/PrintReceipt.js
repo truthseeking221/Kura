@@ -209,9 +209,16 @@ function patientFields(patient) {
   };
 }
 
+function patientPhotoSrc(patient) {
+  const src = patient?.photoDataUrl || patient?.photo?.dataUrl || "";
+  if (typeof src !== "string") return "";
+  return /^data:image\/(png|jpe?g|webp|gif|bmp|svg\+xml);/i.test(src) ? src : "";
+}
+
 // ---------- Bill page (lab + paid items) ----------
 function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }) {
   const fields = patientFields(patient);
+  const photoSrc = patientPhotoSrc(patient);
   const due = totals.total;
   const dueVnd = Math.round(due * 23000); // mock VND for words display only
   const { bundleGroups, standalone } = groupItemsByBundle(items, bundles);
@@ -240,7 +247,8 @@ function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLi
   return `
   <section class="page bill-page">
     <header class="bp-header">
-      <div class="bp-brand">
+      <div class="bp-brand${photoSrc ? " has-photo" : ""}">
+        ${photoSrc ? `<div class="bp-patient-photo"><img src="${photoSrc}" alt="Patient photo"/></div>` : ""}
         <img src="${logoSrc}" class="bp-logo" alt="Kura"/>
         <div class="bp-brand-text">
           <div class="bp-brand-name">K&nbsp;U&nbsp;R&nbsp;A&nbsp;&nbsp;&nbsp;H&nbsp;E&nbsp;A&nbsp;L&nbsp;T&nbsp;H</div>
@@ -434,6 +442,12 @@ html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, syste
 /* ---------- Bill page ---------- */
 .bp-header { padding-bottom: 8px; border-bottom: 1.5px solid #0c1a3f; margin-bottom: 12px; position: relative; }
 .bp-brand { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: flex-start; }
+.bp-brand.has-photo { grid-template-columns: auto auto 1fr auto; gap: 10px; }
+.bp-patient-photo {
+  width: 50px; height: 62px; border: 1px solid #cfd4df; border-radius: 3px;
+  overflow: hidden; background: #f3f4f7; align-self: flex-start;
+}
+.bp-patient-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bp-logo { width: 70px; height: 70px; object-fit: contain; }
 .bp-brand-text { padding-top: 4px; }
 .bp-brand-name { font-size: 9pt; font-weight: 700; letter-spacing: 0.18em; color: #10069f; }

@@ -4304,6 +4304,19 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   flex-shrink: 0;
   letter-spacing: 0.02em;
 }
+.patient-header-avatar-photo {
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 0 0 2px var(--surface), var(--shadow-xs);
+  color: transparent;
+}
+.patient-header-avatar-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
 .patient-header-avatar-empty {
   background: var(--ink-100, #e6e8ef);
   color: var(--ink-400);
@@ -5215,6 +5228,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* === Step 2 — fields === */
+.step-shell-review .step-head {
+  align-items: center;
+}
+.step-shell-review .step-head-right {
+  align-items: center;
+  gap: 8px;
+}
 .btn-unlock {
   border-color: var(--warn-200, #fde68a) !important;
   color: var(--warn-600) !important;
@@ -5225,6 +5245,257 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .btn-unlock:hover {
   background: #fef3c7 !important;
+}
+
+.patient-photo-capture {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  max-width: min(360px, 48vw);
+}
+.patient-photo-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.patient-photo-empty,
+.patient-photo-capture.is-captured {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+.patient-photo-empty {
+  padding: 3px 9px 3px 3px;
+  color: var(--ink-800);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.patient-photo-capture.is-captured {
+  padding: 3px;
+}
+.patient-photo-empty:hover,
+.patient-photo-capture.is-captured:hover {
+  border-color: var(--brand-200);
+  background: color-mix(in srgb, var(--brand-50) 44%, var(--surface));
+  box-shadow: 0 6px 16px -12px rgba(var(--brand-rgb), 0.45), var(--shadow-xs);
+  transform: translateY(-1px);
+}
+.patient-photo-empty:active,
+.patient-photo-capture.is-captured:active {
+  transform: scale(0.985);
+}
+.patient-photo-empty:focus-visible,
+.patient-photo-thumb-button:focus-visible,
+.patient-photo-action:focus-visible,
+.patient-photo-delete:focus-visible {
+  outline: 2px solid var(--brand-300);
+  outline-offset: 2px;
+}
+.patient-photo-thumb {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+}
+.patient-photo-thumb-button {
+  padding: 0;
+  border: 0;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.patient-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transform: scale(1.015);
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.patient-photo-thumb-button:hover img {
+  transform: scale(1.06);
+}
+.patient-photo-placeholder {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-50) 58%, var(--surface)), var(--surface-2));
+  color: var(--ink-600);
+  border: 1px solid var(--border);
+  font-size: 9.5px;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+}
+.patient-photo-meta,
+.patient-photo-empty-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+.patient-photo-meta {
+  padding-right: 2px;
+}
+.patient-photo-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.patient-photo-sub {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-500);
+  white-space: nowrap;
+}
+.patient-photo-empty-icon {
+  color: var(--ink-400);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms ease;
+}
+.patient-photo-empty:hover .patient-photo-empty-icon {
+  color: var(--brand-600);
+  transform: translateX(1px);
+}
+.patient-photo-action,
+.patient-photo-delete {
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+.patient-photo-action {
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-700);
+}
+.patient-photo-action:hover {
+  background: var(--surface);
+  border-color: var(--brand-200);
+  color: var(--brand-700);
+}
+.patient-photo-delete {
+  width: 26px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-400);
+}
+.patient-photo-delete:hover {
+  background: var(--danger-50);
+  border-color: var(--danger-100);
+  color: var(--danger-600);
+}
+.patient-photo-action:active,
+.patient-photo-delete:active {
+  transform: scale(0.94);
+}
+.patient-photo-loader {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid var(--brand-100);
+  border-top-color: var(--brand-500);
+  animation: patient-photo-spin 720ms linear infinite;
+}
+.patient-photo-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 18%, rgba(255,255,255,0.58) 48%, transparent 78%);
+  transform: translateX(-135%);
+  opacity: 0;
+  pointer-events: none;
+}
+.patient-photo-capture.just-captured .patient-photo-sheen {
+  animation: patient-photo-sheen 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.patient-photo-capture.just-captured {
+  animation: patient-photo-pop 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes patient-photo-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes patient-photo-sheen {
+  0% { opacity: 0; transform: translateX(-135%); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(135%); }
+}
+@keyframes patient-photo-pop {
+  0% { box-shadow: 0 0 0 0 rgba(var(--brand-rgb), 0.24), var(--shadow-xs); }
+  55% { box-shadow: 0 0 0 5px rgba(var(--brand-rgb), 0.11), var(--shadow-xs); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--brand-rgb), 0), var(--shadow-xs); }
+}
+@media (max-width: 700px) {
+  .step-shell-review .step-head {
+    align-items: flex-start;
+  }
+  .step-shell-review .step-head-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .patient-photo-capture {
+    max-width: 100%;
+  }
+}
+@media (max-width: 420px) {
+  .patient-photo-action {
+    width: 26px;
+    padding: 0;
+    font-size: 0;
+    gap: 0;
+  }
+  .patient-photo-action svg {
+    width: 12px;
+    height: 12px;
+  }
+  .patient-photo-empty {
+    max-width: 100%;
+  }
+  .patient-photo-empty-text {
+    flex: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .patient-photo-empty,
+  .patient-photo-capture.is-captured,
+  .patient-photo-thumb img,
+  .patient-photo-action,
+  .patient-photo-delete,
+  .patient-photo-empty-icon {
+    transition: none;
+  }
+  .patient-photo-loader,
+  .patient-photo-capture.just-captured,
+  .patient-photo-capture.just-captured .patient-photo-sheen {
+    animation: none;
+  }
 }
 
 .contact-grid {
@@ -5291,9 +5562,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-weight: 600;
 }
 .contact-verified-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--ink-500);
   margin-left: 8px;
+}
+.contact-verified-meta svg {
+  color: var(--ink-400);
+  flex-shrink: 0;
 }
 
 /* Spec v12 §Step 2 — Patient KHQR capture for refunds */
@@ -5646,12 +5924,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .elig-card {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface-2);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
 }
 .elig-card .elig-body {
   flex: 1;
@@ -5673,11 +5952,96 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border-color: var(--brand-200, #bfdbfe);
 }
 .elig-eligible {
-  background: var(--success-50);
-  border-color: var(--success-200, #a7f3d0);
+  background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-color: #bbf7d0;
   color: var(--success-700, #047857);
 }
 .elig-eligible .elig-body strong { color: var(--success-700, #047857); }
+.elig-eligible .elig-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+}
+.elig-eligible .elig-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.2;
+}
+.elig-eligible .elig-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #047857;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.12);
+}
+.elig-eligible .elig-sep {
+  display: none;
+}
+.elig-eligible .elig-provider {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+  letter-spacing: -0.01em;
+}
+.elig-eligible .elig-meta {
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 16px;
+}
+.elig-eligible .elig-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.elig-eligible .elig-meta dt {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-500);
+  letter-spacing: 0.02em;
+}
+.elig-eligible .elig-meta dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+}
+.elig-eligible .elig-meta dd.mono {
+  font-family: 'SF Mono', 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+.elig-eligible .elig-meta dd strong {
+  display: inline;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #047857;
+}
+.elig-eligible .elig-meta-sub {
+  font-size: 10.5px;
+  color: var(--ink-500);
+  font-weight: 400;
+  margin-left: 4px;
+}
+.elig-eligible .elig-cta {
+  align-self: center;
+  flex-shrink: 0;
+}
 .elig-ineligible {
   background: var(--danger-50, #fef2f2);
   border-color: var(--danger-200, #fecaca);

@@ -218,6 +218,8 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
   const currentDef = STEP_DEFS.find(s => s.id === currentStep) || STEP_DEFS[0];
   const initials = (patient.initials || (patient.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2) || "?").toUpperCase();
   const avatarBg = AVATAR_COLORS[patient.avatarColor] || "#268cff";
+  const photoSrc = patient.photoDataUrl || patient.photo?.dataUrl || "";
+  const hasPhoto = typeof photoSrc === "string" && photoSrc.startsWith("data:image/");
   const phoneDisplay = patient.phoneNumber
     ? (patient.countryCode || "+855") + " " + patient.phoneNumber
     : (patient.mobile || "—");
@@ -286,7 +288,11 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
   return (
     <div className={"patient-header" + (stepSwitcherOpen ? " is-step-sheet-open" : "")}>
       <div className="patient-header-id">
-        {patient.name ? (
+        {hasPhoto ? (
+          <div className="patient-header-avatar patient-header-avatar-photo">
+            <img src={photoSrc} alt="" />
+          </div>
+        ) : patient.name ? (
           <div className="patient-header-avatar" style={{ background: avatarBg }}>{initials}</div>
         ) : (
           <div className="patient-header-avatar patient-header-avatar-empty"><I.User size={14} /></div>

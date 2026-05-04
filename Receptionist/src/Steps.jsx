@@ -1179,6 +1179,143 @@ function PatientKhqrCapture({ patient, onUpdate, onPushToast, t }) {
   );
 }
 
+function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
+  const t = useLang();
+  const inputRef = useRef(null);
+  const flashTimerRef = useRef(null);
+  const [reading, setReading] = useState(false);
+  const [justCaptured, setJustCaptured] = useState(false);
+  const photoSrc = patient.photoDataUrl || patient.photo?.dataUrl || "";
+  const hasPhoto = typeof photoSrc === "string" && photoSrc.startsWith("data:image/");
+  const initials = (patient.initials || (patient.name || "P").split(" ").map(part => part[0]).join("").slice(0, 2) || "P").toUpperCase();
+
+  const capturedAt = (() => {
+    const raw = patient.photoCapturedAt || patient.photo?.capturedAt;
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  })();
+
+  useEffect(() => () => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+  }, []);
+
+  const openPicker = () => {
+    if (reading) return;
+    inputRef.current?.click();
+  };
+
+  const markCaptured = () => {
+    setJustCaptured(true);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setJustCaptured(false), 900);
+  };
+
+  const handleFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      onPushToast?.(t("step2.photo.unsupported"), "error");
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      onPushToast?.(t("step2.photo.tooLarge"), "error");
+      return;
+    }
+    const reader = new FileReader();
+    setReading(true);
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      if (!dataUrl.startsWith("data:image/")) {
+        onPushToast?.(t("step2.photo.unsupported"), "error");
+        return;
+      }
+      onUpdate({
+        ...patient,
+        photoDataUrl: dataUrl,
+        photoCapturedAt: new Date().toISOString(),
+        photoName: file.name,
+      });
+      markCaptured();
+      onPushToast?.(t(hasPhoto ? "step2.photo.replacedToast" : "step2.photo.capturedToast"), "success");
+    };
+    reader.onerror = () => {
+      onPushToast?.(t("step2.photo.readError"), "error");
+    };
+    reader.onloadend = () => setReading(false);
+    reader.readAsDataURL(file);
+  };
+
+  const deletePhoto = () => {
+    const next = {
+      ...patient,
+      photoDataUrl: "",
+      photoCapturedAt: null,
+      photoName: "",
+    };
+    delete next.photo;
+    onUpdate(next);
+    onPushToast?.(t("step2.photo.deletedToast"), "success");
+  };
+
+  return (
+    <div className={"patient-photo-capture" + (hasPhoto ? " is-captured" : "") + (reading ? " is-reading" : "") + (justCaptured ? " just-captured" : "")}>
+      <input
+        ref={inputRef}
+        className="patient-photo-input"
+        type="file"
+        accept="image/*"
+        capture="user"
+        onChange={handleFile}
+        aria-label={t("step2.photo.capture")}
+      />
+      {hasPhoto ? (
+        <>
+          <button
+            type="button"
+            className="patient-photo-thumb patient-photo-thumb-button"
+            onClick={openPicker}
+            title={t("step2.photo.retake")}
+            aria-label={t("step2.photo.retake")}
+          >
+            <img src={photoSrc} alt="" />
+            <span className="patient-photo-sheen" aria-hidden="true" />
+          </button>
+          <div className="patient-photo-meta" aria-live="polite">
+            <span className="patient-photo-title">{t("step2.photo.captured")}</span>
+            <span className="patient-photo-sub">{capturedAt || t("step2.photo.ready")}</span>
+          </div>
+          <button type="button" className="patient-photo-action" onClick={openPicker} disabled={reading}>
+            <I.Camera size={11} /> {reading ? t("step2.photo.reading") : t("step2.photo.retake")}
+          </button>
+          <button
+            type="button"
+            className="patient-photo-delete"
+            onClick={deletePhoto}
+            aria-label={t("step2.photo.delete")}
+            title={t("step2.photo.delete")}
+          >
+            <I.Trash size={11} />
+          </button>
+        </>
+      ) : (
+        <button type="button" className="patient-photo-empty" onClick={openPicker} disabled={reading}>
+          <span className="patient-photo-thumb patient-photo-placeholder" aria-hidden="true">
+            {reading ? <span className="patient-photo-loader" /> : <span>{initials}</span>}
+          </span>
+          <span className="patient-photo-empty-text">
+            <span className="patient-photo-title">{reading ? t("step2.photo.reading") : t("step2.photo.capture")}</span>
+            <span className="patient-photo-sub">{t("step2.photo.billHint")}</span>
+          </span>
+          <I.Camera size={12} className="patient-photo-empty-icon" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 const COLLISION_FIELDS = new Set(["name", "dob", "sexAtBirth", "gender", "idNumber", "phoneNumber", "countryCode"]);
 
 function queueOrdinal(patient = {}) {
@@ -1470,11 +1607,14 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       subtitle={t("step2.sub")}
       className="step-shell-review"
       right={
-        lockedFields.length > 0 && (
-          <button type="button" className="btn btn-ghost btn-unlock" onClick={() => setUnlockConfirmOpen(true)}>
-            <I.Unlock size={11} /> {t("step2.unlockFields")}
-          </button>
-        )
+        <>
+          {lockedFields.length > 0 && (
+            <button type="button" className="btn btn-ghost btn-unlock" onClick={() => setUnlockConfirmOpen(true)}>
+              <I.Unlock size={11} /> {t("step2.unlockFields")}
+            </button>
+          )}
+          <PatientPhotoCapture patient={patient} onUpdate={onUpdate} onPushToast={onPushToast} />
+        </>
       }
     >
       {/* Spec v12 §Step 1 collision detection — multiple signals/candidates surface inline before creation. */}
@@ -1615,7 +1755,7 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
                 <span className="contact-card-handle">{patient.telegramHandle || "—"}</span>
                 <span className="contact-card-badge"><I.Check size={9} strokeWidth={3} /> {t("step2.verified")}</span>
                 {patient.phoneNumber && (
-                  <span className="contact-verified-meta">📱 {(patient.countryCode || "+855")} {patient.phoneNumber} · via Telegram</span>
+                  <span className="contact-verified-meta"><I.Smartphone size={10} /> {(patient.countryCode || "+855")} {patient.phoneNumber} · via Telegram</span>
                 )}
                 <button type="button" className="link-btn contact-verified-action" onClick={handleTgReset}>
                   {t("step2.changeHandle")}
@@ -2055,13 +2195,24 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
                   )}
                   {eligibility.state === "eligible" && (
                     <>
-                      <I.CheckCircle size={18} />
+                      <span className="elig-icon" aria-hidden="true">
+                        <I.Check size={12} strokeWidth={3} />
+                      </span>
                       <div className="elig-body">
-                        <strong>Eligible — {pendingPolicy?.provider}</strong>
-                        <p>Policy #{pendingPolicy?.policyNumber} · {eligibility.details.tier} · Active until {eligibility.details.activeUntil}</p>
-                        <p>Coverage: {eligibility.details.coveragePct}% of eligible services · Co-pay ${eligibility.details.copay} per visit</p>
+                        <div className="elig-head">
+                          <span className="elig-status">Eligible</span>
+                          <span className="elig-sep">·</span>
+                          <span className="elig-provider">{pendingPolicy?.provider}</span>
+                        </div>
+                        <dl className="elig-meta">
+                          <div><dt>Policy</dt><dd className="mono">#{pendingPolicy?.policyNumber}</dd></div>
+                          <div><dt>Tier</dt><dd>{eligibility.details.tier}</dd></div>
+                          <div><dt>Active until</dt><dd className="mono">{eligibility.details.activeUntil}</dd></div>
+                          <div><dt>Coverage</dt><dd><strong>{eligibility.details.coveragePct}%</strong> <span className="elig-meta-sub">of eligible services</span></dd></div>
+                          <div><dt>Co-pay</dt><dd className="mono">${eligibility.details.copay}</dd><span className="elig-meta-sub">per visit</span></div>
+                        </dl>
                       </div>
-                      <button type="button" className="btn btn-primary btn-sm" onClick={acceptEligibility}>Save policy</button>
+                      <button type="button" className="btn btn-primary btn-sm elig-cta" onClick={acceptEligibility}>Save policy</button>
                     </>
                   )}
                   {eligibility.state === "ineligible" && (
