@@ -7448,6 +7448,70 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   padding: 0 14px 6px;
 }
 
+.order-cart .cart-bundle-group {
+  background: color-mix(in srgb, var(--brand-50) 34%, var(--surface));
+}
+
+.order-cart .cart-bundle-head {
+  --group-color: var(--brand-600);
+  padding-top: 9px;
+  padding-bottom: 7px;
+  border-left: 3px solid var(--brand-200);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-50) 70%, transparent), transparent 68%);
+}
+
+.order-cart .cart-bundle-head:hover {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-100) 72%, transparent), transparent 68%);
+}
+
+.order-cart .cart-bundle-title {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.order-cart .cart-bundle-title-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 720;
+  color: var(--ink-900);
+  letter-spacing: -0.006em;
+  line-height: 1.15;
+}
+
+.order-cart .cart-bundle-title-main svg {
+  color: var(--brand-500);
+  flex-shrink: 0;
+}
+
+.order-cart .cart-bundle-title-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-cart .cart-bundle-purpose {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-500);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.order-cart .cart-bundle-body {
+  padding-left: 15px;
+  padding-right: 14px;
+  background: var(--surface);
+  border-left: 3px solid var(--brand-100);
+}
+
 /* === Cart row === */
 .order-cart .cart-line {
   padding: 0;
@@ -7504,6 +7568,37 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.25;
+}
+.order-cart .cart-line-breakdown {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  color: var(--ink-500);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+.order-cart .cart-line-breakdown span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.order-cart .cart-line-breakdown span:not(:last-child)::after {
+  content: "";
+  width: 3px;
+  height: 3px;
+  margin: 0 5px;
+  border-radius: 50%;
+  background: var(--ink-300);
+  opacity: 0.75;
+  flex: 0 0 auto;
+}
+.order-cart .cart-line-breakdown-more {
+  color: var(--ink-600);
+  font-weight: 650;
 }
 .order-cart .cart-line-badge {
   display: inline-grid;

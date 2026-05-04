@@ -183,6 +183,57 @@ function preAnalyticReqs(item) {
   return reqs;
 }
 
+function getItemBreakdown(item) {
+  if (Array.isArray(item?.components) && item.components.length > 0) return item.components;
+  const catalogItem = ORDER_CATALOG.find(c => c.id === item?.id);
+  return Array.isArray(catalogItem?.components) ? catalogItem.components : [];
+}
+
+function stripBundleAttrs(item) {
+  const { bundleId, bundleName, bundlePurpose, ...rest } = item || {};
+  return rest;
+}
+
+function cartBundleGroups(cart) {
+  const bundles = cart.bundles || [];
+  const bundleMeta = new Map(bundles.map(bundle => [bundle.id, bundle]));
+  const itemsByBundle = new Map();
+
+  (cart.items || []).forEach(item => {
+    if (!item.bundleId) return;
+    const groupItems = itemsByBundle.get(item.bundleId) || [];
+    groupItems.push(item);
+    itemsByBundle.set(item.bundleId, groupItems);
+  });
+
+  const orderedBundleIds = [
+    ...bundles.map(bundle => bundle.id),
+    ...Array.from(itemsByBundle.keys()).filter(id => !bundleMeta.has(id)),
+  ];
+
+  return orderedBundleIds
+    .map(id => {
+      const fallbackItem = itemsByBundle.get(id)?.[0] || {};
+      const meta = bundleMeta.get(id) || {
+        id,
+        name: fallbackItem.bundleName || "Bundle",
+        purpose: fallbackItem.bundlePurpose,
+      };
+      const rank = new Map((meta.itemIds || []).map((itemId, idx) => [itemId, idx]));
+      const items = [...(itemsByBundle.get(id) || [])].sort((a, b) => {
+        const ar = rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER;
+        const br = rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER;
+        return ar - br;
+      });
+      return {
+        ...meta,
+        items,
+        subtotal: items.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0),
+      };
+    })
+    .filter(group => group.items.length > 0);
+}
+
 // === Cart shape ===
 export function deriveCart(patient) {
   if (patient.cart && Array.isArray(patient.cart.items)) {
@@ -204,6 +255,7 @@ export function deriveCart(patient) {
       id: lt.id, kind: "lab", name: lt.name, price: lt.price, qty: 1,
       payer: patient.payer || "direct", status: lt.status || "pending",
       fasting: cat?.fasting, alcohol: cat?.alcohol, drugs: cat?.drugs, vaccine: cat?.vaccine,
+      components: lt.components || cat?.components,
     });
   });
   return {
@@ -771,7 +823,7 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 //   Layout: [icon] name [status icons] · price · [×]
 //   Payer tag is tucked into a hover tooltip (title attr on the row).
 //   Validation / policy info collapses to small badge icons that expand inline on click.
-function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, coverage, hideValidationLabel }) {
+function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, coverage, hideValidationLabel, showBreakdown = false }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
   const requiresValidation = item.kind === "imaging";
@@ -789,9 +841,14 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
   const gross = (item.price || 0) * (item.qty || 1);
   const insurancePays = coverage?.kind === "covered" ? gross * ((coverage.percent || 0) / 100) : 0;
   const patientPays = Math.max(0, gross - insurancePays);
+  const breakdown = showBreakdown ? getItemBreakdown(item) : [];
+  const visibleBreakdown = breakdown.slice(0, 5);
 
   return (
-    <div className={"cart-line cart-line-compact" + (isLast ? " is-last" : "")} data-payer={item.payer}>
+    <div
+      className={"cart-line cart-line-compact" + (isLast ? " is-last" : "") + (breakdown.length > 0 ? " has-breakdown" : "")}
+      data-payer={item.payer}
+    >
       <div
         className="cart-line-row"
         title={rowTitle}
@@ -844,6 +901,16 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
               </span>
             )}
           </div>
+          {breakdown.length > 0 && (
+            <div className="cart-line-breakdown" title={breakdown.join(", ")}>
+              {visibleBreakdown.map(part => (
+                <span key={part}>{part}</span>
+              ))}
+              {breakdown.length > visibleBreakdown.length && (
+                <span className="cart-line-breakdown-more">+{breakdown.length - visibleBreakdown.length}</span>
+              )}
+            </div>
+          )}
           {insurancePays > 0 && (
             <span className="cart-line-responsibility">
               Patient {fmtCcy(patientPays, ccy)} · {coverage.insurer} {fmtCcy(insurancePays, ccy)}
@@ -928,6 +995,68 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
               → {t("cart.policy.cashOnly")}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CartBundleGroup({
+  group,
+  collapsed,
+  onToggle,
+  ccy,
+  t,
+  onRemoveItem,
+  onSendValidation,
+  policyDecisions,
+  insurance,
+  onVerbalConsent,
+}) {
+  const bodyId = `cart-bundle-body-${group.id}`;
+  const title = group.name || "Bundle";
+
+  return (
+    <div className={"cart-group cart-bundle-group" + (collapsed ? " is-collapsed" : "")}>
+      <button
+        type="button"
+        className="cart-group-head cart-bundle-head"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        aria-controls={bodyId}
+        title={collapsed ? t("cart.group.expand") : t("cart.group.collapse")}
+      >
+        <I.ChevronDown
+          size={11}
+          strokeWidth={2.25}
+          className={"cart-group-chev" + (collapsed ? " is-collapsed" : "")}
+        />
+        <span className="cart-bundle-title">
+          <span className="cart-bundle-title-main">
+            <I.Package size={12} strokeWidth={1.8} />
+            <span>{title}</span>
+          </span>
+          {group.purpose && <span className="cart-bundle-purpose">{group.purpose}</span>}
+        </span>
+        <span className="cart-group-count">{group.items.length}</span>
+        <span className="cart-group-sub">{fmtCcy(group.subtotal, ccy)}</span>
+      </button>
+      {!collapsed && (
+        <div id={bodyId} className="cart-group-body cart-bundle-body">
+          {group.items.map((item, idx) => (
+            <CartLine
+              key={item.id}
+              item={{ ...item, onVerbalConsent: () => onVerbalConsent(item.id) }}
+              isLast={idx === group.items.length - 1}
+              ccy={ccy}
+              onRemove={() => onRemoveItem(item.id)}
+              onSendValidation={() => onSendValidation(item.id)}
+              policyDecision={policyDecisions[item.id]}
+              coverage={getCoverage(item.id, insurance)}
+              t={t}
+              showBreakdown
+            />
+          ))}
         </div>
       )}
     </div>
@@ -1258,11 +1387,19 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const [verbalForItemId, setVerbalForItemId] = useState(null);
   // Round 12 #1 — collapse state per kind. Resets on reload (no persistence by design).
   const [collapsedKinds, setCollapsedKinds] = useState(() => new Set());
+  const [collapsedBundles, setCollapsedBundles] = useState(() => new Set());
   const [billExpanded, setBillExpanded] = useState(false);
   const toggleKindCollapsed = (kind) => {
     setCollapsedKinds(prev => {
       const next = new Set(prev);
       if (next.has(kind)) next.delete(kind); else next.add(kind);
+      return next;
+    });
+  };
+  const toggleBundleCollapsed = (bundleId) => {
+    setCollapsedBundles(prev => {
+      const next = new Set(prev);
+      if (next.has(bundleId)) next.delete(bundleId); else next.add(bundleId);
       return next;
     });
   };
@@ -1272,8 +1409,17 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
   const itemCount = cart.items.length;
   const isPaid = cart.payment.status === "confirmed";
   const isCheckedIn = !!patient.checkedInAt || patient.status?.label === "Checked in";
+  const bundleGroups = useMemo(() => cartBundleGroups(cart), [cart.items, cart.bundles]);
+  const bundledItemIds = useMemo(() => {
+    const ids = new Set();
+    bundleGroups.forEach(group => group.items.forEach(item => ids.add(item.id)));
+    return ids;
+  }, [bundleGroups]);
   const grouped = {};
-  cart.items.forEach(i => { (grouped[i.kind] = grouped[i.kind] || []).push(i); });
+  cart.items.forEach(i => {
+    if (bundledItemIds.has(i.id)) return;
+    (grouped[i.kind] = grouped[i.kind] || []).push(i);
+  });
   const guardPaidCartEdit = (description, buildNext) => {
     if (isPaid && requestPaidEdit) {
       requestPaidEdit(description, (mode) => setCart(buildNext(mode)));
@@ -1300,9 +1446,12 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
 
   const removeItem = (id) => {
     const item = cart.items.find(i => i.id === id);
+    const nextItems = cart.items.filter(i => i.id !== id);
+    const nextBundleIds = new Set(nextItems.map(i => i.bundleId).filter(Boolean));
     guardPaidCartEdit(`Remove ${item?.name || "this order"} from a paid visit?`, (mode) => ({
       ...cart,
-      items: cart.items.filter(i => i.id !== id),
+      items: nextItems,
+      bundles: (cart.bundles || []).filter(bundle => nextBundleIds.has(bundle.id)),
       payment: paymentAfterPaidEdit(cart.payment, mode),
     }));
   };
@@ -1314,7 +1463,8 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     const previousCart = cart;
     const result = guardPaidCartEdit(`Clear ${removableCount} order${removableCount === 1 ? "" : "s"} from a paid visit?`, (mode) => ({
       ...cart,
-      items: cart.items.filter(i => i.auto && i.kind === "visit"),
+      items: cart.items.filter(i => i.auto && i.kind === "visit").map(stripBundleAttrs),
+      bundles: [],
       payment: paymentAfterPaidEdit(cart.payment, mode),
     }));
     if (result?.deferred) return;
@@ -1594,54 +1744,73 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                   </button>
                 )}
               </div>
-            ) : KIND_ORDER.map(kind => {
-              const items = grouped[kind];
-              if (!items || items.length === 0) return null;
-              const meta = KIND_META[kind];
-              const groupSub = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
-              const isCollapsed = collapsedKinds.has(kind);
-              return (
-                <div key={kind} className={"cart-group" + (isCollapsed ? " is-collapsed" : "")}>
-                  <button
-                    type="button"
-                    className="cart-group-head"
-                    onClick={() => toggleKindCollapsed(kind)}
-                    aria-expanded={!isCollapsed}
-                    aria-controls={`cart-group-body-${kind}`}
-                    title={isCollapsed ? t("cart.group.expand") : t("cart.group.collapse")}
-                    style={{ "--group-color": meta.color }}
-                  >
-                    <I.ChevronDown
-                      size={11}
-                      strokeWidth={2.25}
-                      className={"cart-group-chev" + (isCollapsed ? " is-collapsed" : "")}
-                    />
-                    <span className="cart-group-label">
-                      {t(meta.labelKey)}
-                    </span>
-                    <span className="cart-group-count">{items.length}</span>
-                    <span className="cart-group-sub">{fmtCcy(groupSub, cart.ccy || "USD")}</span>
-                  </button>
-                  {!isCollapsed && (
-                    <div id={`cart-group-body-${kind}`} className="cart-group-body">
-                      {items.map((item, idx) => (
-                        <CartLine
-                          key={item.id}
-                          item={{ ...item, onVerbalConsent: () => setVerbalForItemId(item.id) }}
-                          isLast={idx === items.length - 1}
-                          ccy={cart.ccy || "USD"}
-                          onRemove={() => removeItem(item.id)}
-                          onSendValidation={() => sendValidation(item.id)}
-                          policyDecision={policyDecisions[item.id]}
-                          coverage={getCoverage(item.id, patient.insurance || [])}
-                          t={t}
+            ) : (
+              <>
+                {bundleGroups.map(group => (
+                  <CartBundleGroup
+                    key={group.id}
+                    group={group}
+                    collapsed={collapsedBundles.has(group.id)}
+                    onToggle={() => toggleBundleCollapsed(group.id)}
+                    ccy={cart.ccy || "USD"}
+                    t={t}
+                    onRemoveItem={removeItem}
+                    onSendValidation={sendValidation}
+                    policyDecisions={policyDecisions}
+                    insurance={patient.insurance || []}
+                    onVerbalConsent={setVerbalForItemId}
+                  />
+                ))}
+                {KIND_ORDER.map(kind => {
+                  const items = grouped[kind];
+                  if (!items || items.length === 0) return null;
+                  const meta = KIND_META[kind];
+                  const groupSub = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+                  const isCollapsed = collapsedKinds.has(kind);
+                  return (
+                    <div key={kind} className={"cart-group" + (isCollapsed ? " is-collapsed" : "")}>
+                      <button
+                        type="button"
+                        className="cart-group-head"
+                        onClick={() => toggleKindCollapsed(kind)}
+                        aria-expanded={!isCollapsed}
+                        aria-controls={`cart-group-body-${kind}`}
+                        title={isCollapsed ? t("cart.group.expand") : t("cart.group.collapse")}
+                        style={{ "--group-color": meta.color }}
+                      >
+                        <I.ChevronDown
+                          size={11}
+                          strokeWidth={2.25}
+                          className={"cart-group-chev" + (isCollapsed ? " is-collapsed" : "")}
                         />
-                      ))}
+                        <span className="cart-group-label">
+                          {t(meta.labelKey)}
+                        </span>
+                        <span className="cart-group-count">{items.length}</span>
+                        <span className="cart-group-sub">{fmtCcy(groupSub, cart.ccy || "USD")}</span>
+                      </button>
+                      {!isCollapsed && (
+                        <div id={`cart-group-body-${kind}`} className="cart-group-body">
+                          {items.map((item, idx) => (
+                            <CartLine
+                              key={item.id}
+                              item={{ ...item, onVerbalConsent: () => setVerbalForItemId(item.id) }}
+                              isLast={idx === items.length - 1}
+                              ccy={cart.ccy || "USD"}
+                              onRemove={() => removeItem(item.id)}
+                              onSendValidation={() => sendValidation(item.id)}
+                              policyDecision={policyDecisions[item.id]}
+                              coverage={getCoverage(item.id, patient.insurance || [])}
+                              t={t}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </>
+            )}
           </div>
 
           {/* v9 §3 — Hide promo / totals / split / payment / TAT entirely when

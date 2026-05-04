@@ -202,17 +202,29 @@ function AppShell() {
     const cart = active.cart || { items: [], promos: {}, splits: null, ccy: "USD", payment: { method: null, status: "idle", tendered: "" } };
     const inCartIds = new Set((cart.items || []).map(i => i.id));
     const fresh = items.filter(i => !inCartIds.has(i.testId || i.id));
+    const bundle = meta.bundle || null;
+    const bundleItemIds = new Set(bundle?.itemIds || []);
+    const bundleAttrs = bundle ? {
+      bundleId: bundle.id,
+      bundleName: bundle.name,
+      bundlePurpose: bundle.purpose,
+    } : null;
     if (fresh.length === 0) {
       pushToast("Already in cart", "error");
       return;
     }
     const apply = (mode) => {
+      const existingItems = (cart.items || []).map(item =>
+        bundleAttrs && bundleItemIds.has(item.id) ? { ...item, ...bundleAttrs } : item
+      );
       const additions = fresh.map(item => {
         const id = item.testId || item.id;
         const c = ORDER_CATALOG.find(c => c.id === id) || {};
         return {
           id, kind: item.kind || c.kind || "lab", name: item.name || c.name,
           price: item.price ?? c.price, qty: 1, payer: active.payer || "direct", status: "pending",
+          components: item.components || c.components,
+          ...(bundleAttrs || {}),
           supplemental: mode === "supplemental" ? true : undefined,
         };
       });
@@ -220,10 +232,16 @@ function AppShell() {
       const consumedBookingCodes = meta.bookingCode
         ? Array.from(new Set([...(active.consumedBookingCodes || []), meta.bookingCode]))
         : active.consumedBookingCodes;
+      const bundles = bundle
+        ? [
+            ...(cart.bundles || []).filter(b => b.id !== bundle.id),
+            bundle,
+          ]
+        : cart.bundles;
       updatePatient({
         ...active,
         ...(meta.bookingCode ? { consumedBookingCodes } : {}),
-        cart: { ...cart, items: [...(cart.items || []), ...additions], payment: nextPayment },
+        cart: { ...cart, items: [...existingItems, ...additions], bundles, payment: nextPayment },
       });
       return additions.map(item => item.id);
     };

@@ -1048,7 +1048,7 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
     const items = bundle.items
       .filter(it => !inCart.has(it.id))
       .filter(it => !it.unavailable)
-      .map(it => ({ testId: it.id, name: it.name, price: it.price, kind: it.kind }));
+      .map(it => ({ testId: it.id, name: it.name, price: it.price, kind: it.kind, components: it.components }));
     if (items.length === 0) {
       onPushToast?.("All bundle tests already in cart", "error");
       return;
@@ -1058,7 +1058,14 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
     items.forEach((it, i) => {
       window.setTimeout(() => flyToCart(sourceEl, { name: it.name, kind: it.kind }), i * 80);
     });
-    const result = onAdd?.(items);
+    const result = onAdd?.(items, {
+      bundle: {
+        id: bundle.id,
+        name: bundle.name,
+        purpose: bundle.purpose,
+        itemIds: bundle.items.map(it => it.id),
+      },
+    });
     pushAddedToast(`${bundle.name} added · ${items.length} test${items.length > 1 ? "s" : ""}`, result);
   };
 

@@ -2123,6 +2123,13 @@ export function Step4Orders({ patient, onUpdate, onNext, onPrev, onPushToast, ga
   // We normalize to cart-item shape and merge with current cart, deduping in-cart ids.
   const addBulk = (items, meta = {}) => {
     const fresh = items.filter(i => !inCartIds.has(i.testId || i.id));
+    const bundle = meta.bundle || null;
+    const bundleItemIds = new Set(bundle?.itemIds || []);
+    const bundleAttrs = bundle ? {
+      bundleId: bundle.id,
+      bundleName: bundle.name,
+      bundlePurpose: bundle.purpose,
+    } : null;
     if (fresh.length === 0) {
       onPushToast?.("Already in cart", "error");
       return;
@@ -2133,18 +2140,30 @@ export function Step4Orders({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       return {
         id, kind: item.kind || c.kind || "lab", name: item.name || c.name,
         price: item.price ?? c.price, qty: 1, payer: patient.payer || "direct", status: "pending",
+        components: item.components || c.components,
+        ...(bundleAttrs || {}),
       };
     });
     const apply = (mode) => {
+      const existingItems = (cart.items || []).map(item =>
+        bundleAttrs && bundleItemIds.has(item.id) ? { ...item, ...bundleAttrs } : item
+      );
       const consumedBookingCodes = meta.bookingCode
         ? Array.from(new Set([...(patient.consumedBookingCodes || []), meta.bookingCode]))
         : patient.consumedBookingCodes;
+      const bundles = bundle
+        ? [
+            ...(cart.bundles || []).filter(b => b.id !== bundle.id),
+            bundle,
+          ]
+        : cart.bundles;
       onUpdate({
         ...patient,
         ...(meta.bookingCode ? { consumedBookingCodes } : {}),
         cart: {
           ...cart,
-          items: [...cart.items, ...additions],
+          items: [...existingItems, ...additions],
+          bundles,
           payment: paymentAfterPaidEdit(cart.payment, mode),
         },
       });

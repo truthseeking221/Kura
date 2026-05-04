@@ -15,6 +15,33 @@ import QRCode from "qrcode";
 import kuraLogoUrl from "./assets/kura-logo.svg";
 import { getCoverage } from "./coverage";
 
+function groupItemsByBundle(items, bundles = []) {
+  const meta = new Map((bundles || []).map(b => [b.id, b]));
+  const grouped = new Map();
+  const standalone = [];
+  items.forEach(it => {
+    if (it.bundleId) {
+      const arr = grouped.get(it.bundleId) || [];
+      arr.push(it);
+      grouped.set(it.bundleId, arr);
+    } else {
+      standalone.push(it);
+    }
+  });
+  const bundleGroups = [];
+  for (const [bid, arr] of grouped.entries()) {
+    const m = meta.get(bid) || { id: bid, name: arr[0]?.bundleName || "Bundle", purpose: arr[0]?.bundlePurpose };
+    bundleGroups.push({
+      id: bid,
+      name: m.name,
+      purpose: m.purpose,
+      items: arr,
+      subtotal: arr.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0),
+    });
+  }
+  return { bundleGroups, standalone };
+}
+
 function itemSplit(item, insurance) {
   const gross = (item.price || 0) * (item.qty || 1);
   if ((item.payer || "direct") === "corporate") {
@@ -111,7 +138,7 @@ function barcodeSvg(value, opts = {}) {
 // Generate QR code as data URL (PNG) — async
 async function qrDataUrl(value, opts = {}) {
   try {
-    return await QRCode.toDataURL(value || "https://kura.health", {
+    return await QRCode.toDataURL(value || "https://kura.med", {
       margin: 0,
       width: 220,
       color: { dark: "#0c1a3f", light: "#ffffff" },
@@ -183,20 +210,32 @@ function patientFields(patient) {
 }
 
 // ---------- Bill page (lab + paid items) ----------
-function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }) {
+function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }) {
   const fields = patientFields(patient);
   const due = totals.total;
   const dueVnd = Math.round(due * 23000); // mock VND for words display only
-  const rows = items.map(i => {
+  const { bundleGroups, standalone } = groupItemsByBundle(items, bundles);
+  const renderItemRow = (i, child) => {
     const amt = (i.price || 0) * (i.qty || 1);
     return `
-      <tr>
-        <td class="col-code">${testCode(i.id)}</td>
-        <td class="col-desc">${escape(i.name || "")}</td>
-        <td class="col-date">${escape(billDateStr)}</td>
+      <tr class="${child ? "bp-row-child" : ""}">
+        <td class="col-desc">${child ? `<span class="bp-child-marker">└</span> ` : ""}${escape(i.name || "")}</td>
         <td class="col-amt">${fmtCcy(amt, ccy)}</td>
       </tr>`;
-  }).join("");
+  };
+  const bundleRows = bundleGroups.map(g => `
+      <tr class="bp-row-bundle">
+        <td class="col-desc">
+          <span class="bp-bundle-name">${escape(g.name)}</span>
+          ${g.purpose ? `<span class="bp-bundle-purpose">${escape(g.purpose)}</span>` : ""}
+          <span class="bp-bundle-count">${g.items.length} item${g.items.length === 1 ? "" : "s"}</span>
+        </td>
+        <td class="col-amt">${fmtCcy(g.subtotal, ccy)}</td>
+      </tr>
+      ${g.items.map(i => renderItemRow(i, true)).join("")}
+    `).join("");
+  const standaloneRows = standalone.map(i => renderItemRow(i, false)).join("");
+  const rows = bundleRows + standaloneRows;
 
   return `
   <section class="page bill-page">
@@ -206,8 +245,8 @@ function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barco
         <div class="bp-brand-text">
           <div class="bp-brand-name">K&nbsp;U&nbsp;R&nbsp;A&nbsp;&nbsp;&nbsp;H&nbsp;E&nbsp;A&nbsp;L&nbsp;T&nbsp;H</div>
           <div class="bp-brand-sub">#42 Street 240, Sangkat Chaktomuk, Khan Daun Penh, Phnom Penh</div>
-          <div class="bp-brand-sub">Hotline 1800 23 90 90 · info@kura.health</div>
-          <div class="bp-brand-sub">View your result at www.kura.health</div>
+          <div class="bp-brand-sub">Hotline 1800 23 90 90 · info@kura.med</div>
+          <div class="bp-brand-sub">View your result at www.kura.med</div>
         </div>
         <div class="bp-barcode">${barcodeMarkup}<div class="bp-barcode-num">${billNo}</div></div>
       </div>
@@ -218,20 +257,18 @@ function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barco
       <div class="bp-info-row"><span class="bp-info-key">Name</span><span class="bp-info-val">: ${escape(fields.name)}</span><span class="bp-info-key">Patient No.</span><span class="bp-info-val">: ${fields.patientNo}</span><span class="bp-info-key">Bill Date</span><span class="bp-info-val">: ${escape(billDateStr)}</span></div>
       <div class="bp-info-row"><span class="bp-info-key">DOB</span><span class="bp-info-val">: ${fields.dob} ${fields.age ? `<span class="bp-age">${fields.age}</span>` : ""}</span><span class="bp-info-key">Client Name</span><span class="bp-info-val">: ${escape(fields.client)}</span><span class="bp-info-key">URN No</span><span class="bp-info-val">: ${escape(fields.urn)}</span></div>
       <div class="bp-info-row"><span class="bp-info-key">Gender</span><span class="bp-info-val">: ${escape(fields.gender)}</span><span class="bp-info-key">Email</span><span class="bp-info-val">: ${escape(fields.email)}</span><span class="bp-info-key">Location</span><span class="bp-info-val">: ${escape(fields.location)}</span></div>
-      <div class="bp-info-row"><span class="bp-info-key">Contact No</span><span class="bp-info-val">: ${escape(fields.contact)}</span><span class="bp-info-key">Bill No.</span><span class="bp-info-val">: ${billNo}</span><span class="bp-info-key">Queue No</span><span class="bp-info-val">: ${escape(fields.queueNumber)}</span></div>
+      <div class="bp-info-row"><span class="bp-info-key">Contact No</span><span class="bp-info-val">: ${escape(fields.contact)}</span><span class="bp-info-key">Bill No.</span><span class="bp-info-val">: ${billNo}</span><span class="bp-info-key"></span><span class="bp-info-val"></span></div>
       <div class="bp-info-row"><span class="bp-info-key">Address</span><span class="bp-info-val">: ${escape(fields.address)}</span><span class="bp-info-key">City</span><span class="bp-info-val">: ${escape(fields.city)}</span><span class="bp-info-key"></span><span class="bp-info-val"></span></div>
     </section>
 
     <table class="bp-orders">
       <thead>
         <tr>
-          <th class="col-code">Test Code</th>
           <th class="col-desc">Description</th>
-          <th class="col-date">Report Date</th>
           <th class="col-amt">Amount</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="4" class="bp-empty">No orders</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="2" class="bp-empty">No orders</td></tr>`}</tbody>
     </table>
 
     ${splitInfo && splitInfo.hasInsurance ? `
@@ -251,7 +288,27 @@ function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barco
           </tr>
         </thead>
         <tbody>
-          ${splitInfo.rows.map(r => `
+          ${splitInfo.bundleGroups.map(g => `
+            <tr class="bp-row-bundle">
+              <td class="col-desc">
+                <span class="bp-bundle-name">${escape(g.name)}</span>
+                ${g.purpose ? `<span class="bp-bundle-purpose">${escape(g.purpose)}</span>` : ""}
+              </td>
+              <td class="col-cov"></td>
+              <td class="col-ins">${fmtCcy(g.insurance, ccy)}</td>
+              <td class="col-pat">${fmtCcy(g.patient, ccy)}</td>
+              <td class="col-amt">${fmtCcy(g.gross, ccy)}</td>
+            </tr>
+            ${g.items.map(r => `
+              <tr class="bp-row-child">
+                <td class="col-desc"><span class="bp-child-marker">└</span> ${escape(r.name)}</td>
+                <td class="col-cov">${escape(r.label)}</td>
+                <td class="col-ins">${fmtCcy(r.insurance, ccy)}</td>
+                <td class="col-pat">${fmtCcy(r.patient, ccy)}</td>
+                <td class="col-amt">${fmtCcy(r.gross, ccy)}</td>
+              </tr>`).join("")}
+          `).join("")}
+          ${splitInfo.standaloneRows.map(r => `
             <tr>
               <td class="col-desc">${escape(r.name)}</td>
               <td class="col-cov">${escape(r.label)}</td>
@@ -366,10 +423,11 @@ const styles = `
 html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; color: #0c1a3f; }
 .sheet { padding: 24px 0; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .page {
-  width: 210mm; min-height: 297mm; background: #fff; padding: 12mm 10mm;
+  width: 210mm; min-height: 297mm; background: #fff; padding: 10mm 10mm;
   position: relative; box-shadow: 0 8px 28px rgba(0,0,0,.08);
-  font-size: 10pt; line-height: 1.42; color: #0c1a3f;
-  page-break-after: always; break-after: page;
+  font-size: 9.5pt; line-height: 1.38; color: #0c1a3f;
+  page-break-after: avoid; break-after: avoid;
+  display: flex; flex-direction: column;
 }
 .mono { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; }
 
@@ -392,13 +450,19 @@ html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, syste
 .bp-age { color: #6b7280; margin-left: 6px; font-weight: 400; }
 
 .bp-orders { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9.5pt; font-family: 'Courier New', 'Roboto Mono', monospace; }
-.bp-orders thead th { background: #f3f4f7; border-top: 1px solid #1c2748; border-bottom: 1px solid #1c2748; padding: 6px 4px; text-align: left; font-weight: 700; font-family: 'Courier New', 'Roboto Mono', monospace; }
-.bp-orders tbody td { padding: 5px 4px; border-bottom: 1px solid #ebecf0; font-family: 'Courier New', 'Roboto Mono', monospace; }
-.bp-orders .col-code { width: 90px; }
+.bp-orders thead th { background: #f3f4f7; border-top: 1px solid #1c2748; border-bottom: 1px solid #1c2748; padding: 6px 8px; text-align: left; font-weight: 700; font-family: 'Courier New', 'Roboto Mono', monospace; }
+.bp-orders thead th.col-amt { text-align: right; }
+.bp-orders tbody td { padding: 5px 8px; border-bottom: 1px solid #ebecf0; font-family: 'Courier New', 'Roboto Mono', monospace; }
 .bp-orders .col-desc { width: auto; }
-.bp-orders .col-date { width: 130px; font-size: 9pt; color: #4a5169; }
-.bp-orders .col-amt { width: 90px; text-align: right; font-weight: 700; }
+.bp-orders .col-amt { width: 110px; text-align: right; font-weight: 700; }
 .bp-orders .bp-empty { text-align: center; padding: 16px; color: #6b7280; font-style: italic; }
+.bp-orders .bp-row-bundle td { background: #f3f4f7; border-bottom: 1px solid #d6d8df; padding-top: 7px; padding-bottom: 7px; font-weight: 700; }
+.bp-orders .bp-row-bundle .bp-bundle-name { display: inline-block; font-weight: 700; color: #0c1a3f; letter-spacing: 0.02em; }
+.bp-orders .bp-row-bundle .bp-bundle-purpose { display: inline-block; margin-left: 8px; font-weight: 400; color: #4a5169; font-size: 8.5pt; font-style: italic; }
+.bp-orders .bp-row-bundle .bp-bundle-count { display: inline-block; margin-left: 8px; font-weight: 500; color: #6b7280; font-size: 8.5pt; }
+.bp-orders .bp-row-child td { padding-top: 4px; padding-bottom: 4px; color: #1c2748; }
+.bp-orders .bp-row-child .col-desc { padding-left: 18px; color: #1c2748; font-weight: 500; }
+.bp-orders .bp-child-marker { color: #6b7280; margin-right: 4px; }
 
 .bp-split { margin-top: 14px; border: 1px solid #d6d8df; border-radius: 4px; padding: 10px 12px; background: #fafbfc; }
 .bp-split-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #ebecf0; }
@@ -415,6 +479,12 @@ html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, syste
 .bp-split-table thead th.col-ins, .bp-split-table thead th.col-pat, .bp-split-table thead th.col-amt { text-align: right; }
 .bp-split-table tfoot td { padding-top: 7px; font-weight: 700; border-top: 1.5px solid #1c2748; border-bottom: 0; color: #0c1a3f; }
 .bp-split-table tfoot .col-desc { color: #4a5169; }
+.bp-split-table .bp-row-bundle td { background: #eef0f4; border-bottom: 1px solid #d6d8df; font-weight: 700; padding-top: 6px; padding-bottom: 6px; }
+.bp-split-table .bp-row-bundle .bp-bundle-name { font-weight: 700; color: #0c1a3f; letter-spacing: 0.02em; }
+.bp-split-table .bp-row-bundle .bp-bundle-purpose { display: inline-block; margin-left: 8px; font-weight: 400; color: #4a5169; font-size: 8.5pt; font-style: italic; }
+.bp-split-table .bp-row-child td { padding-top: 4px; padding-bottom: 4px; color: #1c2748; }
+.bp-split-table .bp-row-child .col-desc { padding-left: 18px; font-weight: 500; }
+.bp-split-table .bp-child-marker { color: #6b7280; margin-right: 4px; }
 
 .bp-pay { display: grid; grid-template-columns: 1fr 200px; gap: 28px; margin-top: 16px; padding-top: 6px; border-top: 1.5px solid #0c1a3f; align-items: start; }
 .bp-pay-modes-title { font-weight: 700; font-size: 9pt; margin-bottom: 4px; }
@@ -480,7 +550,7 @@ html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, syste
   html, body { background: #fff; }
   .toolbar { display: none !important; }
   .sheet { padding: 0; gap: 0; }
-  .page { box-shadow: none; margin: 0; }
+  .page { box-shadow: none; margin: 0; page-break-after: avoid; break-after: avoid; page-break-inside: avoid; break-inside: avoid; }
 }
 `;
 
@@ -509,9 +579,8 @@ export async function printPatientReceipt(patient) {
   const billNo = (payment.receiptId || "K-" + Math.floor(10_000_000 + Math.random() * 90_000_000)).replace(/^R-/, "K");
   const billDateStr = fmtDateTime(payment.confirmedAt || new Date());
 
-  // Items split by type — lab/visit/telecon → Bill; imaging/vitals → Service.
-  const billItems = items.filter(i => i.kind !== "imaging" && i.kind !== "vitals");
-  const serviceItems = items.filter(i => i.kind === "imaging" || i.kind === "vitals");
+  // Single-page output: all items rendered on bill page.
+  const billItems = items;
 
   // Payment modes line ("Card · USD · 28.00 (R-71563)")
   const methodLabel = ({ cash: "Cash", khqr: "KHQR (Bakong)", split: "Cash + KHQR", card: "Credit/Debit Card" }[payment.method]) || "—";
@@ -531,37 +600,48 @@ export async function printPatientReceipt(patient) {
     .catch(() => kuraLogoUrl);
 
   const insurance = patient.insurance || [];
+  const cartBundles = cart.bundles || [];
+  const labelFor = (i, s) => {
+    if (s.coverage?.kind === "covered") return `${s.coverage.percent}%`;
+    if ((i.payer || "direct") === "insurance") return "80%";
+    if ((i.payer || "direct") === "corporate") return "Corporate";
+    if (s.coverage?.kind === "preauth") return "Pre-auth";
+    if (s.coverage?.kind === "not-covered") return "Not covered";
+    if (s.coverage?.kind === "unconfirmed") return "Unconfirmed";
+    return "—";
+  };
   const buildSplitInfo = (rowItems) => {
-    const splits = rowItems.map(i => {
+    const { bundleGroups, standalone } = groupItemsByBundle(rowItems, cartBundles);
+    const buildItem = (i) => {
       const s = itemSplit(i, insurance);
-      let label = "—";
-      if (s.coverage?.kind === "covered") label = `${s.coverage.percent}%`;
-      else if ((i.payer || "direct") === "insurance") label = "80%";
-      else if ((i.payer || "direct") === "corporate") label = "Corporate";
-      else if (s.coverage?.kind === "preauth") label = "Pre-auth";
-      else if (s.coverage?.kind === "not-covered") label = "Not covered";
-      else if (s.coverage?.kind === "unconfirmed") label = "Unconfirmed";
-      return { name: i.name || "", insurance: s.insurance, patient: s.patient, gross: s.gross, label };
+      return { name: i.name || "", insurance: s.insurance, patient: s.patient, gross: s.gross, label: labelFor(i, s) };
+    };
+    const groups = bundleGroups.map(g => {
+      const childRows = g.items.map(buildItem);
+      return {
+        kind: "bundle",
+        id: g.id,
+        name: g.name,
+        purpose: g.purpose,
+        items: childRows,
+        insurance: childRows.reduce((sum, r) => sum + r.insurance, 0),
+        patient: childRows.reduce((sum, r) => sum + r.patient, 0),
+        gross: childRows.reduce((sum, r) => sum + r.gross, 0),
+      };
     });
-    const totalInsurance = splits.reduce((sum, r) => sum + r.insurance, 0);
-    const totalPatient = splits.reduce((sum, r) => sum + r.patient, 0);
-    const totalGross = splits.reduce((sum, r) => sum + r.gross, 0);
+    const standaloneRows = standalone.map(buildItem);
+    const totalInsurance = groups.reduce((s, g) => s + g.insurance, 0) + standaloneRows.reduce((s, r) => s + r.insurance, 0);
+    const totalPatient = groups.reduce((s, g) => s + g.patient, 0) + standaloneRows.reduce((s, r) => s + r.patient, 0);
+    const totalGross = groups.reduce((s, g) => s + g.gross, 0) + standaloneRows.reduce((s, r) => s + r.gross, 0);
     const insurer = insurance.find(p => p.eligibility?.state === "eligible")?.provider || insurance[0]?.provider || null;
     return {
-      hasInsurance: totalInsurance > 0,
-      insurer, rows: splits, totalInsurance, totalPatient, totalGross,
+      hasInsurance: insurance.length > 0 || totalInsurance > 0,
+      insurer, bundleGroups: groups, standaloneRows, totalInsurance, totalPatient, totalGross,
     };
   };
 
-  const pages = [];
-  if (billItems.length > 0 || items.length === 0 || serviceItems.length === 0) {
-    const billRowItems = billItems.length ? billItems : items;
-    const splitInfo = buildSplitInfo(billRowItems);
-    pages.push(billPageHtml({ patient, items: billRowItems, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }));
-  }
-  if (serviceItems.length > 0) {
-    pages.push(servicePageHtml({ patient, items: serviceItems, barcodeMarkup, billNo, logoSrc }));
-  }
+  const splitInfo = buildSplitInfo(billItems);
+  const pages = [billPageHtml({ patient, items: billItems, bundles: cartBundles, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo })];
 
   const html = `<!doctype html>
 <html lang="en">
