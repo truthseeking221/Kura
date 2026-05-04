@@ -12,6 +12,7 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
   const t = useLang();
   const sidebarRef = useRef(null);
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
+  const effectiveCollapsed = collapsed && !isMobile;
   const items = [
     { id: "reception", key: "nav.reception", icon: "Home" },
     { id: "queue",     key: "nav.queue",     icon: "Users" },
@@ -44,7 +45,8 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
   return (
     <aside
       ref={sidebarRef}
-      className={"sidebar" + (collapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}
+      className={"sidebar" + (effectiveCollapsed ? " collapsed" : "") + (mobileOpen ? " mobile-open" : "")}
+      aria-label="Navigation"
       aria-hidden={hiddenOnMobile ? "true" : undefined}
       inert={hiddenOnMobile ? "" : undefined}
     >
@@ -52,8 +54,13 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
         <div className="brand-mark">
           <img className="brand-logo" src={kuraLogo} alt="Kura" />
         </div>
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className="brand-text">Kura <span className="sub">Reception</span></div>
+        )}
+        {isMobile && (
+          <button type="button" className="sidebar-mobile-close" onClick={onMobileClose} aria-label="Close navigation">
+            <I.X size={18} />
+          </button>
         )}
       </div>
       <nav className="nav">
@@ -66,20 +73,20 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
               key={it.id}
               className={"nav-item" + (isActive ? " active" : "")}
               onClick={() => handleNav(it.id)}
-              title={collapsed ? t(it.key) : ""}
+              title={effectiveCollapsed ? t(it.key) : ""}
               aria-current={isActive ? "page" : undefined}
             >
               <Ico size={18} />
-              {!collapsed && <span>{t(it.key)}</span>}
+              {!effectiveCollapsed && <span>{t(it.key)}</span>}
             </button>
           );
         })}
       </nav>
 
       {/* Language switcher */}
-      <div className="sidebar-lang" title={collapsed ? "Language" : ""}>
+      <div className="sidebar-lang" title={effectiveCollapsed ? "Language" : ""}>
         <I.Globe size={15} style={{ flexShrink: 0, color: "var(--ink-500)" }} />
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <select
             value={lang}
             onChange={e => onLangChange(e.target.value)}
@@ -108,13 +115,13 @@ export function Sidebar({ collapsed, onToggle, active, onNavigate, lang, onLangC
           title="Test blank state"
         >
           <span className="sidebar-dev-badge">DEV</span>
-          {!collapsed && <span>Test blank state</span>}
+          {!effectiveCollapsed && <span>Test blank state</span>}
         </button>
       )}
 
       <button className="collapse-btn" onClick={onToggle}>
-        <I.ChevronsLeft size={14} style={{ transform: collapsed ? "rotate(180deg)" : "" }} />
-        {!collapsed && <span>{t("sidebar.collapse")}</span>}
+        <I.ChevronsLeft size={14} style={{ transform: effectiveCollapsed ? "rotate(180deg)" : "" }} />
+        {!effectiveCollapsed && <span>{t("sidebar.collapse")}</span>}
       </button>
     </aside>
   );

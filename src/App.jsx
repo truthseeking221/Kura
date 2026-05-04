@@ -22,6 +22,7 @@ import {
 import { LangProvider } from "./i18n";
 import { WizardProgress, PatientHeader, useWizardGate, canNavigateToStep } from "./Wizard";
 import { Step1Identity, Step2Review, Step3Insurance, Step4Orders, Step5Teleconsult, Step6Payment } from "./Steps";
+import { VisitContextBlock } from "./VisitContextBlock";
 
 export default function App() {
   return (
@@ -953,6 +954,9 @@ function AppShell() {
                 payerReady={payerReadyForPayment}
                 blankState={isBlankState}
               />
+              {currentStep === 4 && (
+                <VisitContextBlock patient={active} className="visit-context-rail" />
+              )}
             </div>
           </div>
         </div>

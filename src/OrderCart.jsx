@@ -7,6 +7,7 @@ import { QRGlyph, mockInsurerDecide, playDrawerDing, DisabledTooltip, TatCompact
 import { useLang } from "./i18n";
 import { ORDER_CATALOG } from "./orderCatalog";
 import { getCoverage } from "./coverage";
+import { printPatientReceipt } from "./PrintReceipt";
 
 const KHR_RATE = 4100;
 const fmtCcy = (usd, ccy) => ccy === "KHR" ? "៛" + Math.round(usd * KHR_RATE).toLocaleString() : "$" + usd.toFixed(2);
@@ -221,7 +222,39 @@ export function persistCart(patient, onUpdate, next) {
   onUpdate({ ...patient, cart: next, labTests });
 }
 
-export function cartTotals(cart) {
+function cartItemResponsibility(item, insurance = []) {
+  const gross = (item.price || 0) * (item.qty || 1);
+  if ((item.payer || "direct") === "corporate") {
+    return { patient: 0, insurance: 0, corporate: gross, gross, coverage: null };
+  }
+
+  const coverage = getCoverage(item.id, insurance);
+  if (coverage?.kind === "covered") {
+    const insurancePays = gross * ((coverage.percent || 0) / 100);
+    return {
+      patient: Math.max(0, gross - insurancePays),
+      insurance: insurancePays,
+      corporate: 0,
+      gross,
+      coverage,
+    };
+  }
+
+  if ((item.payer || "direct") === "insurance") {
+    const insurancePays = gross * 0.8;
+    return {
+      patient: Math.max(0, gross - insurancePays),
+      insurance: insurancePays,
+      corporate: 0,
+      gross,
+      coverage,
+    };
+  }
+
+  return { patient: gross, insurance: 0, corporate: 0, gross, coverage };
+}
+
+export function cartTotals(cart, insurance = []) {
   const subtotal = cart.items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
   const promos = cart.promos || {};
   const breakdown = [];
@@ -243,16 +276,13 @@ export function cartTotals(cart) {
     if (amt > 0) { breakdown.push({ code, label: p.label, amount: amt }); remaining -= amt; }
   }
   const discount = breakdown.reduce((s, b) => s + b.amount, 0);
-  const sumOf = (arr) => arr.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
-  const insItems   = cart.items.filter(i => i.payer === "insurance");
-  const corpItems  = cart.items.filter(i => i.payer === "corporate");
-  const directItems = cart.items.filter(i => (i.payer || "direct") === "direct");
-  const insTotalRaw = sumOf(insItems);
-  const insCoverage = insTotalRaw * 0.8;
-  const insPatient  = insTotalRaw - insCoverage;
-  const corpTotal   = sumOf(corpItems);
-  const directTotal = sumOf(directItems);
-  const patientDue  = directTotal + insPatient - discount;
+  const responsibility = cart.items.map(item => cartItemResponsibility(item, insurance));
+  const insCoverage = responsibility.reduce((s, r) => s + r.insurance, 0);
+  const insTotalRaw = responsibility.reduce((s, r) => s + (r.insurance > 0 ? r.gross : 0), 0);
+  const insPatient = responsibility.reduce((s, r) => s + (r.insurance > 0 ? r.patient : 0), 0);
+  const corpTotal = responsibility.reduce((s, r) => s + r.corporate, 0);
+  const directTotal = responsibility.reduce((s, r) => s + (r.insurance === 0 && r.corporate === 0 ? r.patient : 0), 0);
+  const patientDue  = responsibility.reduce((s, r) => s + r.patient, 0) - discount;
   const total       = subtotal - discount;
   return {
     subtotal, discount, total, breakdown,
@@ -274,7 +304,7 @@ export function cartTotals(cart) {
 export function useCartPayment(patient, onUpdate, onPushToast) {
   const tFn = useLang();
   const cart = useMemo(() => deriveCart(patient), [patient]);
-  const totals = cartTotals(cart);
+  const totals = cartTotals(cart, patient.insurance || []);
   const [tendered, setTendered] = useState(cart.payment.tendered || "");
   const setCart = (next) => persistCart(patient, onUpdate, next);
   const due = paymentDueAmount(cart, totals);
@@ -752,6 +782,9 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
     validationState === "signed" ? "success" :
     validationState === "sent"   ? "info" :
                                    "warn";
+  const gross = (item.price || 0) * (item.qty || 1);
+  const insurancePays = coverage?.kind === "covered" ? gross * ((coverage.percent || 0) / 100) : 0;
+  const patientPays = Math.max(0, gross - insurancePays);
 
   return (
     <div className={"cart-line cart-line-compact" + (isLast ? " is-last" : "")} data-payer={item.payer}>
@@ -763,46 +796,53 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
           <KindGlyph kind={item.kind} size={14} strokeWidth={1.75} />
         </div>
         <div className="cart-line-name">
-          <span className="cart-line-name-text">{item.name}</span>
-          {requiresValidation && (
-            <button
-              type="button"
-              className={"cart-line-badge cart-line-badge-" + validationBadgeTone}
-              onClick={(e) => { e.stopPropagation(); setOpenExpand(o => o === "validation" ? null : "validation"); }}
-              title={
-                validationState === "signed" ? t("validate.signed") :
-                validationState === "sent"   ? t("validate.sent")   :
-                                               t("validate.requiresPatient")
-              }
-              aria-label={t("validate.requiresPatient")}
-              aria-expanded={openExpand === "validation" || (requiresValidation && validationState !== "signed" && validationState !== "verbal")}
-            >
-              {validationState === "signed"
-                ? <I.ShieldCheck size={10} strokeWidth={2.5} />
-                : <I.AlertTriangle size={10} />}
-            </button>
-          )}
-          {showPolicyNote && (
-            <button
-              type="button"
-              className={"cart-line-badge cart-line-badge-" + (policyDecision.status === "outOfPolicy" ? "danger" : "warn")}
-              onClick={(e) => { e.stopPropagation(); setOpenExpand(o => o === "policy" ? null : "policy"); }}
-              title={policyDecision.reason}
-              aria-label={t("cart.policy.note")}
-            >
-              <I.AlertCircle size={10} />
-            </button>
-          )}
-          {coverage && (
-            <span className={"cart-line-coverage atp-cov atp-cov-" + (
-              coverage.kind === "covered" ? "yes" :
-              coverage.kind === "not-covered" ? "no" :
-              coverage.kind === "preauth" ? "preauth" : "unsure"
-            )}>
-              {coverage.kind === "covered" && <><I.Check size={9} strokeWidth={3} /> {coverage.insurer} {coverage.percent}%</>}
-              {coverage.kind === "not-covered" && <><I.X size={9} /> Not covered</>}
-              {coverage.kind === "unconfirmed" && <>? Unconfirmed</>}
-              {coverage.kind === "preauth" && <><I.Lock size={9} /> Pre-auth</>}
+          <div className="cart-line-titlebar">
+            <span className="cart-line-name-text">{item.name}</span>
+            {requiresValidation && (
+              <button
+                type="button"
+                className={"cart-line-badge cart-line-badge-" + validationBadgeTone}
+                onClick={(e) => { e.stopPropagation(); setOpenExpand(o => o === "validation" ? null : "validation"); }}
+                title={
+                  validationState === "signed" ? t("validate.signed") :
+                  validationState === "sent"   ? t("validate.sent")   :
+                                                 t("validate.requiresPatient")
+                }
+                aria-label={t("validate.requiresPatient")}
+                aria-expanded={openExpand === "validation" || (requiresValidation && validationState !== "signed" && validationState !== "verbal")}
+              >
+                {validationState === "signed"
+                  ? <I.ShieldCheck size={10} strokeWidth={2.5} />
+                  : <I.AlertTriangle size={10} />}
+              </button>
+            )}
+            {showPolicyNote && (
+              <button
+                type="button"
+                className={"cart-line-badge cart-line-badge-" + (policyDecision.status === "outOfPolicy" ? "danger" : "warn")}
+                onClick={(e) => { e.stopPropagation(); setOpenExpand(o => o === "policy" ? null : "policy"); }}
+                title={policyDecision.reason}
+                aria-label={t("cart.policy.note")}
+              >
+                <I.AlertCircle size={10} />
+              </button>
+            )}
+            {coverage && (
+              <span className={"cart-line-coverage atp-cov atp-cov-" + (
+                coverage.kind === "covered" ? "yes" :
+                coverage.kind === "not-covered" ? "no" :
+                coverage.kind === "preauth" ? "preauth" : "unsure"
+              )}>
+                {coverage.kind === "covered" && <><I.Check size={9} strokeWidth={3} /> {coverage.insurer} {coverage.percent}%</>}
+                {coverage.kind === "not-covered" && <><I.X size={9} /> Not covered</>}
+                {coverage.kind === "unconfirmed" && <>? Unconfirmed</>}
+                {coverage.kind === "preauth" && <><I.Lock size={9} /> Pre-auth</>}
+              </span>
+            )}
+          </div>
+          {insurancePays > 0 && (
+            <span className="cart-line-responsibility">
+              Patient {fmtCcy(patientPays, ccy)} · {coverage.insurer} {fmtCcy(insurancePays, ccy)}
             </span>
           )}
         </div>
@@ -886,7 +926,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
 }
 
 // === Payment Area ===
-export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t, paymentReady = true, paymentReasons = [] }) {
+export function PaymentArea({ patient, cart, totals, tendered, setTendered, onMethod, onCcyToggle, onConfirmCash, onConfirmKhqr, change, cashOk, tenderedNum, itemCount, t, paymentReady = true, paymentReasons = [], onPushToast }) {
   const ccy = cart.ccy || "USD";
   const status = cart.payment.status;
   const method = cart.payment.method;
@@ -962,14 +1002,42 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
             <dd className="mono">#{cart.payment.receiptId}</dd>
           </div>
         </dl>
-        <div className="pay-confirmed-actions">
-          <button type="button" className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>
-            <I.Printer size={12} /> {t("cart.pay.print")}
+        <div className="pay-confirmed-send-label">{t("cart.pay.sendReceipt") || "Send receipt"}</div>
+        <div className="pay-confirmed-actions pay-confirmed-actions-grid">
+          <button
+            type="button"
+            className="pay-receipt-btn"
+            onClick={() => {
+              if (!patient) return;
+              printPatientReceipt(patient);
+              onPushToast?.(t("cart.pay.printToast") || "Opening receipt for print…", "info");
+            }}
+          >
+            <I.Printer size={14} /> <span>{t("cart.pay.print") || "Print"}</span>
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>
-            <I.Send size={12} /> {t("cart.pay.sendPhone")}
+          <button
+            type="button"
+            className="pay-receipt-btn"
+            onClick={() => onPushToast?.(t("cart.pay.smsToast") || `Receipt SMS queued${patient?.phoneNumber ? " · " + patient.phoneNumber : ""}`, "success")}
+          >
+            <I.MessageSquare size={14} /> <span>SMS</span>
+          </button>
+          <button
+            type="button"
+            className="pay-receipt-btn"
+            onClick={() => onPushToast?.(t("cart.pay.emailToast") || `Receipt emailed${patient?.email ? " · " + patient.email : ""}`, "success")}
+          >
+            <I.Mail size={14} /> <span>Email</span>
+          </button>
+          <button
+            type="button"
+            className="pay-receipt-btn"
+            onClick={() => onPushToast?.(t("cart.pay.telegramToast") || `Receipt sent on Telegram${patient?.telegramHandle ? " · @" + patient.telegramHandle : ""}`, "success")}
+          >
+            <I.Send size={14} /> <span>Telegram</span>
           </button>
         </div>
+        <div className="pay-confirmed-foot">{t("cart.pay.receiptFoot") || "Receipt available at counter. Sends to phone & channels on file."}</div>
       </div>
     );
   }
@@ -1168,7 +1236,7 @@ export function PaymentArea({ cart, totals, tendered, setTendered, onMethod, onC
 export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1, requestPaidEdit, onOpenAdd, onOpenPay, payerReady = true, blankState = false }) {
   const t = useLang();
   const cart = useMemo(() => deriveCart(patient), [patient]);
-  const totals = cartTotals(cart);
+  const totals = cartTotals(cart, patient.insurance || []);
   const [splitOpen, setSplitOpen] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [promoError, setPromoError] = useState("");
@@ -1504,53 +1572,6 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
             )}
           </div>
 
-          {/* Spec v12 §Step 4 — Patient context strip
-             Surfaces chief complaint + medical history / medication chips at
-             the top of the cart so the nurse always has clinical context for
-             the order they're building. Only renders when there is real
-             context to show. */}
-          {(patient.visitDetails?.chiefComplaint || patient.visitDetails?.medicalHistory || patient.visitDetails?.medications) && (
-            <div className="cart-context">
-              {patient.visitDetails?.chiefComplaint && (
-                <div className="cart-context-row">
-                  <span
-                    className="cart-context-icon-tip"
-                    data-tip="Chief complaint"
-                    role="img"
-                    aria-label="Chief complaint"
-                    tabIndex={0}
-                  >
-                    <I.Stethoscope size={11} />
-                  </span>
-                  <span className="cart-context-text" title={patient.visitDetails.chiefComplaint}>
-                    "{patient.visitDetails.chiefComplaint}"
-                  </span>
-                </div>
-              )}
-              {(patient.visitDetails?.medicalHistory || patient.visitDetails?.medications) && (
-                <div className="cart-context-row">
-                  <span
-                    className="cart-context-icon-tip"
-                    data-tip="History and medications"
-                    role="img"
-                    aria-label="History and medications"
-                    tabIndex={0}
-                  >
-                    <I.Tablet size={11} />
-                  </span>
-                  <div className="cart-context-chips">
-                    {(patient.visitDetails.medicalHistory || "").split(/[,;]+/).map(s => s.trim()).filter(Boolean).slice(0, 4).map((c, i) => (
-                      <span key={"h" + i} className="cart-context-chip">{c}</span>
-                    ))}
-                    {(patient.visitDetails.medications || "").split(/[,;]+/).map(s => s.trim()).filter(Boolean).slice(0, 3).map((c, i) => (
-                      <span key={"m" + i} className="cart-context-chip cart-context-chip-rx">{c}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Items */}
           <div className="cart-items-scroll">
             {itemCount === 0 ? (
@@ -1626,7 +1647,12 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
               onClick={() => setBillExpanded(o => !o)}
               className="cart-total-toggle"
             >
-              <span className="cart-total-label">{t("cart.patientPays")}</span>
+              <span className="cart-total-label">
+                <span>{t("cart.patientPays")}</span>
+                {totals.insCoverage > 0 && (
+                  <small>Insurance pays {fmtCcy(totals.insCoverage, cart.ccy)}</small>
+                )}
+              </span>
               <span className="cart-total-amount">
                 {fmtCcy(totals.patientDue, cart.ccy)}
               </span>

@@ -17,7 +17,7 @@ import { ORDER_CATALOG, paymentAfterPaidEdit, useCartPayment, PaymentArea, payme
 import { DisabledTooltip, VisitReasonPills, VISIT_REASONS, AuthorBadge, SLOT_OPTIONS, computeTatPlan, fmtTatHours } from "./shared";
 import { coveragePaymentShare } from "./coverage";
 import { LAB_CATALOG, LAB_CATEGORIES, INSURANCE_PROVIDERS } from "./data";
-import { AddTestsPanel } from "./AddTestsPanel";
+import { AddTestsPanel, BookingCodeSection } from "./AddTestsPanel";
 import { DateInput, GhostPlaceholder, formatByPattern, digitsOnly } from "./DateInput";
 import { findPatientCollisionCandidates } from "./patientMatching";
 import scanQrIcon from "./assets/icons/identity-scan-qr.svg";
@@ -99,6 +99,10 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
   const [nfcAvailable] = useState(false);
   const [recapturing, setRecapturing] = useState(false);
   const [recaptureConfirmOpen, setRecaptureConfirmOpen] = useState(false);
+  const bookingInCart = useMemo(
+    () => new Set((patient.cart?.items || []).map(i => i.id)),
+    [patient.cart?.items]
+  );
 
   // Revisit detection — if minimum identity is captured, the step's job becomes
   // "confirm + continue", not "capture from scratch". Step 2 already follows this
@@ -206,6 +210,49 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
     setSearchQ("");
   };
 
+  const handleApplyBookingCode = (items, code) => {
+    const currentCart = patient.cart || {
+      items: [],
+      promos: {},
+      splits: null,
+      ccy: "USD",
+      payment: { method: null, status: "idle", tendered: "" },
+      pregnancyConsent: null,
+    };
+    const existingIds = new Set((currentCart.items || []).map(i => i.id));
+    const fresh = items.filter(i => !existingIds.has(i.testId || i.id));
+    if (fresh.length === 0) {
+      onPushToast?.("All booking orders are already in cart", "error");
+      return;
+    }
+    const additions = fresh.map(item => {
+      const id = item.testId || item.id;
+      const c = ORDER_CATALOG.find(c => c.id === id) || {};
+      return {
+        id,
+        kind: item.kind || c.kind || "lab",
+        name: item.name || c.name,
+        price: item.price ?? c.price,
+        qty: 1,
+        payer: patient.payer || "direct",
+        status: "pending",
+        source: "booking",
+        bookingCode: code,
+      };
+    });
+    const consumedBookingCodes = Array.from(new Set([...(patient.consumedBookingCodes || []), code]));
+    onUpdate({
+      ...patient,
+      consumedBookingCodes,
+      cart: {
+        ...currentCart,
+        items: [...(currentCart.items || []), ...additions],
+        payment: paymentAfterPaidEdit(currentCart.payment, "normal"),
+      },
+    });
+    onPushToast?.(`Booking code ${code} applied · ${additions.length} order${additions.length === 1 ? "" : "s"} staged`, "success");
+  };
+
   const handleLoadDrawerPatient = () => {
     if (!drawerPatient) return;
     handleSelectExisting(drawerPatient);
@@ -298,6 +345,19 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
               Edit details on Step 2 — locked fields require an unlock first.
             </span>
           </div>
+        </section>
+
+        <section className="card-soft step1-booking-card">
+          <BookingCodeSection
+            patient={patient}
+            inCart={bookingInCart}
+            onAddBundle={handleApplyBookingCode}
+            onPushToast={onPushToast}
+            ccy={patient.cart?.ccy || "USD"}
+            className="step1-booking"
+            introTitle="Booking / referral code"
+            introText="Use this early when the patient brings a prescription, QR, or teleconsult summary. Orders are staged now and reviewed in Step 4."
+          />
         </section>
 
         {recaptureConfirmOpen && (
@@ -400,6 +460,19 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
             <I.Inbox size={14} /> {t("step1.search.noMatch")}
           </div>
         )}
+      </section>
+
+      <section className="card-soft step1-booking-card">
+        <BookingCodeSection
+          patient={patient}
+          inCart={bookingInCart}
+          onAddBundle={handleApplyBookingCode}
+          onPushToast={onPushToast}
+          ccy={patient.cart?.ccy || "USD"}
+          className="step1-booking"
+          introTitle="Booking / referral code"
+          introText="Start here when the patient already has a booking, prescription, or teleconsult code. The order is staged before insurance and payment."
+        />
       </section>
 
       {scanCollisions.length > 0 && (
@@ -853,6 +926,7 @@ function ChannelChooser({
   handleTgCancel,
 }) {
   const [channel, setChannel] = useState(null); // null | "telegram" | "sms"
+  const otpRefs = useRef([]);
   const selectChannel = (next) => {
     if (next !== "telegram") handleTgCancel?.();
     setChannel(next);
@@ -871,6 +945,14 @@ function ChannelChooser({
   useEffect(() => {
     if (channel === "telegram" && tgPanel === "idle") handleTgQr();
   }, [channel, tgPanel, handleTgQr]);
+  useEffect(() => {
+    if (channel !== "sms" || otpStep !== "sent") return;
+    const id = requestAnimationFrame(() => {
+      const firstEmpty = otpRefs.current.find((input, idx) => input && !otpCode[idx]);
+      (firstEmpty || otpRefs.current[0])?.focus?.();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [channel, otpStep, otpCode]);
 
   return (
     <div className="contact-chooser">
@@ -946,6 +1028,7 @@ function ChannelChooser({
                   {[0,1,2,3,4,5].map(i => (
                     <input
                       key={i}
+                      ref={el => { otpRefs.current[i] = el; }}
                       className={"otp-box" + (otpCode[i] ? " has-val" : "")}
                       maxLength={1}
                       inputMode="numeric"
@@ -958,8 +1041,12 @@ function ChannelChooser({
                         const joined = next.join("").slice(0, 6);
                         setOtpCode(joined);
                         if (v && i < 5) {
-                          const inputs = e.target.parentElement.querySelectorAll(".otp-box");
-                          inputs[i + 1]?.focus();
+                          otpRefs.current[i + 1]?.focus();
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Backspace" && !otpCode[i] && i > 0) {
+                          otpRefs.current[i - 1]?.focus();
                         }
                       }}
                       autoFocus={i === 0 && otpStep === "sent"}
@@ -1820,7 +1907,8 @@ export function Step3Insurance({ patient, onUpdate, onNext, onPrev, onPushToast,
             <div className="step3-direct-sub">{t("step3.directPay")}</div>
           </div>
           <button type="button" className="step3-direct-undo" onClick={handleUndoDirect}>
-            {t("step3.direct.undo")}
+            <I.Plus size={11} strokeWidth={2.5} />
+            <span>{t("step3.direct.undo")}</span>
           </button>
         </section>
       ) : policies.length === 0 && !adding ? (
@@ -2062,6 +2150,35 @@ export function Step4Orders({ patient, onUpdate, onNext, onPrev, onPushToast, ga
     }
   };
 
+  const removeFromCart = (itemId) => {
+    const item = cart.items.find(i => i.id === itemId);
+    if (!item) return;
+    const apply = (mode) => {
+      onUpdate({
+        ...patient,
+        cart: {
+          ...cart,
+          items: cart.items.filter(i => i.id !== itemId),
+          payment: paymentAfterPaidEdit(cart.payment, mode),
+        },
+      });
+    };
+    if (cart.payment?.status === "confirmed" && requestPaidEdit) {
+      requestPaidEdit(`Remove ${item.name} from a paid visit?`, apply);
+      return { deferred: true };
+    }
+    apply("normal");
+    return {
+      undo: () => onUpdate({
+        ...patient,
+        cart: {
+          ...cart,
+          items: [...cart.items, item],
+        },
+      }),
+    };
+  };
+
   return (
     <StepShell title={t("step4.title")} subtitle={t("step4.sub")} className="step-shell-orders">
 
@@ -2070,6 +2187,7 @@ export function Step4Orders({ patient, onUpdate, onNext, onPrev, onPushToast, ga
       <AddTestsPanel
         patient={patient}
         onAdd={addBulk}
+        onRemove={removeFromCart}
         onPushToast={onPushToast}
         ccy={cart.ccy || "USD"}
         onCcyToggle={(next) => {
@@ -2716,6 +2834,8 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
 
       {cart.items.length > 0 && !splitMode && !isNoCharge && (
         <PaymentArea
+          patient={patient}
+          onPushToast={onPushToast}
           cart={cart}
           totals={totals}
           tendered={pay.tendered}

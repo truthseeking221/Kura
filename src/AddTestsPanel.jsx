@@ -6,19 +6,18 @@
 //   Lenses (view tabs, left → right):
 //     1. Smart       — AI + previous merged, ranked by relevance (default)
 //     2. Previous    — patient's historical orders only
-//     3. Visit, Lab, Imaging, ECG, Vitals, Telecon — pure catalogue browse
+//     3. Diagnostic panels — DIAG-style clinical categories over the catalogue
 //
-//   Every row is the same: [✓] name · [badges…] · price · [Add]
+//   Every row is the same: name · [badges…] · price · [Add/Remove]
 //   Badges compose by source — AI confidence, last-tested date, sensitive, popular.
 //   "Why?" is a per-row icon; clicking expands a one-line rationale inline.
-//   Multi-select works in every view; bulk action bar slides up when picks > 0.
+//   Actions are explicit per row; keyboard Enter mirrors the visible button.
 //
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { I } from "./icons";
-import { useLang } from "./i18n";
 import { ORDER_CATALOG } from "./OrderCart";
 import { useAIRecommendations, TEST_INFO, WhyCard } from "./AIPanel";
-import { Kbd, MOD_LABEL, isTypingTarget } from "./shared";
+import { Kbd } from "./shared";
 import { getCoverage } from "./coverage";
 
 const KHR_RATE = 4100;
@@ -176,24 +175,61 @@ function flyToCart(sourceEl, { name, kind }) {
 
 // === View definitions ===
 //   Spec v12 §Step 4: tabs replaced by a LEFT SIDE PANEL grouped into two
-//   sections — Smart sources (top) and Catalogue specialties (bottom).
+//   sections — Smart sources (top) and diagnostic panel categories (bottom).
 //   Telecon is removed from the catalogue (it's now Step 5).
 //   Visit is removed (visit fee auto-adds to the cart).
-//   Booking code is new — a doctor-prescribed pre-populated test set.
+//   Booking code moved upstream to Step 1 — it is an intake artifact, not a catalogue category.
 //
 const VIEWS = [
   // Smart sources
   { id: "smart",    label: "Smart",         icon: "Sparkles",   group: "smart" },
   { id: "bundles",  label: "Bundles",       icon: "Package",    group: "smart" },
   { id: "previous", label: "Previous",      icon: "RefreshCw",  group: "smart" },
-  { id: "booking",  label: "Booking code",  icon: "Ticket",     group: "smart" },
-  // Catalogue specialties
-  { id: "lab",      label: "Lab",           icon: "FlaskConical", group: "catalogue", specialty: "lab" },
-  { id: "imaging",  label: "Imaging",       icon: "Scan",         group: "catalogue", specialty: "imaging" },
-  { id: "ecg",      label: "ECG / Cardio",  icon: "Activity",     group: "catalogue", specialty: "ecg" },
-  { id: "vitals",   label: "Vitals",        icon: "Heart",        group: "catalogue", specialty: "vitals" },
 ];
-const SEARCHABLE_ORDER_KINDS = new Set(VIEWS.filter(v => v.group === "catalogue").map(v => v.id));
+const SEARCHABLE_ORDER_KINDS = new Set(["lab", "imaging", "ecg", "vitals"]);
+
+const PANEL_CATEGORIES = [
+  { id: "general-health", label: "General Health", icon: "Stethoscope", testIds: ["cbc", "glucose", "lipid", "urinalysis", "vit-bp", "vit-bmi", "vit-temp"] },
+  { id: "stds", label: "STDs", icon: "Shield", terms: ["hiv", "syphilis", "gonorrhoeae", "chlamydia", "trichomonas", "hepatitis b", "hepatitis c", "hbsag"] },
+  { id: "cancer", label: "Cancer", icon: "Target", terms: ["cancer", "tumor", "tumour", "brca", "egfr", "braf", "kras", "tp53", "mutation", "cea"] },
+  { id: "hpv", label: "HPV", icon: "ShieldCheck", terms: ["human papillomavirus", "hpv"] },
+  { id: "cardiology", label: "Cardiology", icon: "Activity", testIds: ["ecg-12", "ecg-stress", "ecg-holter", "echo", "lipid"], terms: ["troponin", "bnp", "ck-mb", "cholesterol"] },
+  { id: "liver", label: "Liver", icon: "FlaskConical", testIds: ["lft", "hbsag"], terms: ["alt", "ast", "bilirubin", "alkaline phosphatase", "gamma gt", "hepatitis"] },
+  { id: "kidney", label: "Kidney", icon: "Flask", testIds: ["kft", "urinalysis"], terms: ["creatinine", "urea", "cystatin", "microalbumin", "albumin/creatinine", "uric acid"] },
+  { id: "thyroid", label: "Thyroid", icon: "Activity", testIds: ["tsh", "us-thyroid"], terms: ["thyroid", "free t3", "free t4", "thyroglobulin", "tpo"] },
+  { id: "diabetes", label: "Diabetes", icon: "Tablet", testIds: ["hba1c", "glucose", "urinalysis", "kft", "lipid"], terms: ["insulin", "c-peptide", "fructosamine"] },
+  { id: "lipid", label: "Lipid", icon: "Activity", testIds: ["lipid"], terms: ["cholesterol", "triglycerides", "apolipoprotein", "lipoprotein"] },
+  { id: "hepatitis", label: "Hepatitis", icon: "Shield", testIds: ["hbsag", "lft"], terms: ["hepatitis", "hbsag"] },
+  { id: "reproductive-health", label: "Reproductive Health", icon: "Heart", testIds: ["preg"], terms: ["estradiol", "fsh", "lh", "progesterone", "prolactin", "testosterone", "sex hormone"] },
+  { id: "ovarian-reserve", label: "Ovarian Reserve", icon: "Heart", terms: ["anti-mullerian", "amh", "fsh", "estradiol", "inhibin"] },
+  { id: "pre-marital", label: "Pre-marital", icon: "Users", testIds: ["cbc", "hbsag"], terms: ["hiv", "syphilis", "hepatitis", "blood type", "rubella"] },
+  { id: "osteoporosis", label: "Osteoporosis", icon: "Activity", terms: ["calcium", "vitamin d", "parathyroid", "phosphate"] },
+  { id: "arthritis", label: "Arthritis", icon: "Activity", terms: ["rheumatoid", "anti-ccp", "esr", "c-reactive", "ana", "hla-b27"] },
+  { id: "allergy", label: "Allergy", icon: "ShieldCheck", terms: ["allergy", "specific ige", "latex", "peanut", "shrimp", "mold", "pollen"] },
+  { id: "vitamin", label: "Vitamin", icon: "Tablet", testIds: ["vit-d", "vit-b12"], terms: ["vitamin", "folate"] },
+  { id: "food-intolerance", label: "Food Intolerance", icon: "FlaskConical", terms: ["cow milk", "egg", "peanut", "wheat", "soybean", "shrimp", "codfish", "sesame"] },
+  { id: "nipt", label: "NIPT", icon: "Shield", terms: ["nipt", "trisomy", "fetal", "chromosome"] },
+  { id: "gestational-diabetes", label: "Gestational Diabetes", icon: "Tablet", testIds: ["glucose", "hba1c"], terms: ["glucose", "insulin"] },
+  { id: "preeclampsia", label: "Preeclampsia", icon: "AlertCircle", testIds: ["urinalysis", "kft", "lft"], terms: ["placental growth factor", "protein/creatinine", "platelet"] },
+  { id: "pregnancy", label: "Pregnancy", icon: "Heart", testIds: ["preg", "us-preg"], terms: ["beta-hcg", "estriol", "progesterone"] },
+  { id: "pregnancy-torch", label: "Pregnancy TORCH", icon: "ShieldCheck", terms: ["toxoplasma", "rubella", "cytomegalovirus", "herpes", "igm antibody", "igg antibody"] },
+  { id: "parasite", label: "Parasite", icon: "Scan", terms: ["malaria", "giardia", "strongyloides", "parasite", "stool"] },
+  { id: "fever", label: "Fever", icon: "AlertCircle", testIds: ["cbc", "covid"], terms: ["blood culture", "dengue", "influenza", "malaria", "c-reactive", "procalcitonin"] },
+  { id: "utis", label: "UTIs", icon: "Flask", testIds: ["urinalysis"], terms: ["urine culture", "urine"] },
+  { id: "fitness", label: "Fitness", icon: "Activity", testIds: ["cbc", "glucose", "lipid", "lft", "kft", "vit-bp", "vit-bmi"], terms: ["ck", "creatine kinase", "magnesium"] },
+  { id: "drug", label: "Drug", icon: "Tablet", terms: ["drug", "toxicology", "serum level", "urine screen", "therapeutic"] },
+  { id: "dna", label: "DNA", icon: "Network", terms: ["mutation analysis", "gene", "brca", "dna", "cftr", "hla"] },
+];
+
+const PANEL_VIEWS = PANEL_CATEGORIES.map(panel => ({
+  id: `panel-${panel.id}`,
+  label: panel.label,
+  icon: panel.icon,
+  group: "panels",
+  panelId: panel.id,
+}));
+
+VIEWS.push(...PANEL_VIEWS);
 
 // === Specialty colour tokens — Spec v12 §8 visual clarity rules ===
 //   Each specialty has a consistent colour for the small uppercase pill.
@@ -227,21 +263,6 @@ function getSpecialtyMeta(row) {
     return LAB_CATEGORY_META[row.category] || SPECIALTY_META.lab;
   }
   return SPECIALTY_META[row.kind];
-}
-
-const FILTER_SPECIALTIES = [
-  { id: "Biochemistry", label: "Biochemistry" },
-  { id: "Haematology", label: "Haematology" },
-  { id: "Immunology", label: "Serology / Immunology" },
-  { id: "Microbiology", label: "Microbiology" },
-  { id: "Urinalysis", label: "Urinalysis" },
-  { id: "imaging", label: "Imaging" },
-  { id: "ecg", label: "Cardio / ECG" },
-  { id: "vitals", label: "Vitals" },
-];
-
-function rowSpecialtyKey(row) {
-  return row.category || row.kind;
 }
 
 function rowMatchesSearch(row, query) {
@@ -289,6 +310,62 @@ const BUNDLES = [
     testIds: ["visit-gp", "cbc", "urinalysis", "xray-chest", "vit-bp", "vit-bmi"],
     why: "Standard fitness-to-work / fitness-to-attend documentation set.",
   },
+  {
+    id: "antenatal-first",
+    name: "Antenatal — first visit",
+    purpose: "Confirmed pregnancy intake",
+    testIds: ["visit-spec", "cbc", "urinalysis", "preg", "glucose", "us-preg", "vit-bp"],
+    why: "WHO first-trimester baseline — confirms viability, screens anaemia, glucose, and hypertensive risk.",
+  },
+  {
+    id: "anaemia-workup",
+    name: "Anaemia workup",
+    purpose: "Fatigue, pallor, low Hb",
+    testIds: ["visit-gp", "cbc", "ferritin", "vit-b12", "esr"],
+    why: "Distinguishes iron-deficiency from B12/folate or chronic-disease anaemia before treatment.",
+  },
+  {
+    id: "thyroid-screen",
+    name: "Thyroid screen",
+    purpose: "Suspected hypo/hyperthyroid",
+    testIds: ["visit-spec", "tsh", "us-thyroid"],
+    why: "TSH plus targeted ultrasound covers function and gross structure in one visit.",
+  },
+  {
+    id: "liver-workup",
+    name: "Liver workup",
+    purpose: "Elevated LFT or alcohol use",
+    testIds: ["visit-gp", "cbc", "lft", "hbsag", "us-abd"],
+    why: "Function tests, viral hepatitis screen, and abdominal imaging — standard hepatology starter set.",
+  },
+  {
+    id: "hypertension-followup",
+    name: "Hypertension follow-up",
+    purpose: "Known HTN, quarterly review",
+    testIds: ["visit-gp", "vit-bp", "lipid", "kft", "electro", "ecg-12"],
+    why: "End-organ surveillance — kidney, electrolytes, lipid trend, plus ECG for LVH watch.",
+  },
+  {
+    id: "senior-wellness",
+    name: "Senior wellness (60+)",
+    purpose: "Geriatric annual review",
+    testIds: ["visit-gp", "cbc", "glucose", "lipid", "kft", "urinalysis", "ecg-12", "vit-bp", "vit-vision", "vit-audio"],
+    why: "Adds cardiac baseline plus vision/hearing screens to the standard annual — flags fall and frailty risk early.",
+  },
+  {
+    id: "presurgical",
+    name: "Pre-surgical clearance",
+    purpose: "Elective surgery clearance",
+    testIds: ["visit-gp", "cbc", "ptinr", "lft", "kft", "electro", "ecg-12", "xray-chest"],
+    why: "Anaesthesia-team minimum — coagulation, organ function, baseline cardio-pulmonary imaging.",
+  },
+  {
+    id: "ortho-knee",
+    name: "Knee pain workup",
+    purpose: "Persistent knee pain or injury",
+    testIds: ["visit-spec", "xray-knee", "mri-knee", "esr"],
+    why: "Plain film first, MRI for soft tissue, ESR rules out inflammatory cause.",
+  },
 ];
 
 function buildBundleRows({ inCart }) {
@@ -308,6 +385,26 @@ function buildBundleRows({ inCart }) {
       allInCart: remaining.length === 0,
     };
   });
+}
+
+function panelMatchesItem(item, panel) {
+  if (!panel) return false;
+  if (panel.testIds?.includes(item.id)) return true;
+  const haystack = [
+    item.id,
+    item.name,
+    item.kind,
+    item.category,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return (panel.terms || []).some(term => haystack.includes(String(term).toLowerCase()));
+}
+
+function getPanelItems(panelId) {
+  const panel = PANEL_CATEGORIES.find(p => p.id === panelId);
+  if (!panel) return [];
+  return ORDER_CATALOG.filter(item =>
+    SEARCHABLE_ORDER_KINDS.has(item.kind) && panelMatchesItem(item, panel)
+  );
 }
 
 // === Row builder — produces uniform shape regardless of source ===
@@ -385,6 +482,9 @@ function useRows({ view, search, patient, buckets, priors, inCart }) {
         if (!cat) continue;
         rows.push(decorate(cat));
       }
+    } else if (view.startsWith("panel-")) {
+      const panelId = view.replace(/^panel-/, "");
+      rows = getPanelItems(panelId).map(c => decorate(c));
     } else {
       // catalogue by kind
       const items = ORDER_CATALOG.filter(c => c.kind === view);
@@ -414,39 +514,41 @@ function BundleRow({ bundle, ccy, inCart, onAddBundle }) {
   const { name, purpose, why, items, price, allInCart, addedCount, remainingCount } = bundle;
   return (
     <div className={"atp-bundle" + (allInCart ? " is-incart" : "")}>
-      <div className="atp-bundle-head">
-        <div className="atp-bundle-name-block">
-          <div className="atp-bundle-name">
-            <I.Package size={12} className="atp-bundle-icon" />
-            <span>{name}</span>
-            <span className="atp-bundle-count">{items.length} tests</span>
+      <div className="atp-bundle-main">
+        <div className="atp-bundle-head">
+          <div className="atp-bundle-name-block">
+            <div className="atp-bundle-name">
+              <I.Package size={12} className="atp-bundle-icon" />
+              <span>{name}</span>
+              <span className="atp-bundle-count">{items.length} tests</span>
+            </div>
+            <div className="atp-bundle-purpose">{purpose}</div>
           </div>
-          <div className="atp-bundle-purpose">{purpose}</div>
+          <span className="atp-bundle-price">{fmtPrice(price, ccy)}</span>
+          {allInCart ? (
+            <span className="atp-bundle-added"><I.Check size={11} strokeWidth={3} /> All added</span>
+          ) : (
+            <button type="button" className="atp-bundle-add" onClick={() => onAddBundle(bundle)}>
+              <I.Plus size={11} /> {addedCount > 0 ? `Add ${remainingCount} more` : "Add bundle"}
+            </button>
+          )}
         </div>
-        <span className="atp-bundle-price">{fmtPrice(price, ccy)}</span>
-        {allInCart ? (
-          <span className="atp-bundle-added"><I.Check size={11} strokeWidth={3} /> All added</span>
-        ) : (
-          <button type="button" className="atp-bundle-add" onClick={() => onAddBundle(bundle)}>
-            <I.Plus size={11} /> {addedCount > 0 ? `Add ${remainingCount} more` : "Add bundle"}
-          </button>
-        )}
-      </div>
-      <div className="atp-bundle-tests">
-        {items.map(it => (
-          <span
-            key={it.id}
-            className={"atp-bundle-pill" + (inCart.has(it.id) ? " is-in-cart" : "")}
-            title={inCart.has(it.id) ? `${it.name} — already in cart` : it.name}
-          >
-            {inCart.has(it.id) && <I.Check size={8} strokeWidth={3} />}
-            {it.name}
-          </span>
-        ))}
-      </div>
-      <div className="atp-bundle-why">
-        <I.Sparkles size={10} />
-        <span>{why}</span>
+        <div className="atp-bundle-tests">
+          {items.map(it => (
+            <span
+              key={it.id}
+              className={"atp-bundle-pill" + (inCart.has(it.id) ? " is-in-cart" : "")}
+              title={inCart.has(it.id) ? `${it.name} — already in cart` : it.name}
+            >
+              {inCart.has(it.id) && <I.Check size={8} strokeWidth={3} />}
+              {it.name}
+            </span>
+          ))}
+        </div>
+        <div className="atp-bundle-why">
+          <I.Sparkles size={10} />
+          <span>{why}</span>
+        </div>
       </div>
     </div>
   );
@@ -477,41 +579,21 @@ function CoverageLabel({ coverage }) {
 }
 
 // === TestRow — the universal row ===
-//   Spec v12 §9: per-row [+ Add] button removed. Rows select via checkbox /
-//   row tap; bulk add fires from the sticky bottom bar.
-function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onNotifyUnavailable, whyOpen, onToggleWhy, t, ccy, coverage, specialtyMeta }) {
+//   The row keeps clinical metadata dense, but the order mutation is explicit:
+//   a visible Add/Remove button instead of a checkbox or hidden staging state.
+function TestRow({ row, highlighted, onAddOne, onRemoveOne, onNotifyUnavailable, whyOpen, onToggleWhy, ccy, coverage, specialtyMeta }) {
   const { id, name, price, inCart, badges, unavailable } = row;
   const hasReason = !!badges.reason || !!badges.details;
-  const rowInteractive = rowClickEnabled && !inCart && !unavailable;
-  const handleRowPick = () => {
-    if (rowInteractive) onTogglePick(id);
-  };
+  const handleRowClick = !unavailable
+    ? () => { if (inCart) onRemoveOne?.(row); else onAddOne?.(row); }
+    : undefined;
+
   return (
     <div
       data-row-id={id}
-      className={"atp-row" + (picked ? " is-picked" : "") + (inCart ? " is-incart" : "") + (highlighted ? " is-highlighted" : "") + (unavailable ? " is-unavailable" : "") + (!rowClickEnabled ? " is-row-click-disabled" : "")}
-      role={rowInteractive ? "button" : undefined}
-      tabIndex={rowInteractive ? 0 : undefined}
-      onClick={rowInteractive ? handleRowPick : undefined}
-      onKeyDown={rowInteractive ? ((e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          e.stopPropagation();
-          handleRowPick();
-        }
-      }) : undefined}
+      className={"atp-row" + (inCart ? " is-incart" : "") + (highlighted ? " is-highlighted" : "") + (unavailable ? " is-unavailable" : "") + (!unavailable ? " is-clickable" : "")}
+      onClick={handleRowClick}
     >
-      <button
-        type="button"
-        className="atp-check"
-        onClick={(e) => { e.stopPropagation(); !inCart && !unavailable && onTogglePick(id); }}
-        disabled={inCart || unavailable}
-        aria-checked={picked}
-        role="checkbox"
-        aria-label={picked ? "Deselect" : "Select"}
-      >
-      </button>
-
       <div className="atp-row-name">
         <span className="atp-name">{name}</span>
         <div className="atp-badges">
@@ -535,13 +617,28 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onNo
 
       <span className="atp-price">{fmtPrice(price, ccy)}</span>
 
-      {inCart && (
-        <span className="atp-incart"><I.Check size={10} strokeWidth={3} /> {t("atp.added")}</span>
-      )}
-
       {unavailable && !inCart && (
         <button type="button" className="atp-notify-btn" onClick={(e) => { e.stopPropagation(); onNotifyUnavailable?.(row); }}>
           Notify me
+        </button>
+      )}
+
+      {!unavailable && (
+        <button
+          type="button"
+          className={"atp-row-action" + (inCart ? " atp-row-remove" : " atp-row-add")}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (inCart) onRemoveOne?.(row);
+            else onAddOne?.(row);
+          }}
+          aria-label={inCart ? `Remove ${name}` : `Add ${name}`}
+        >
+          {inCart ? (
+            <>- Remove</>
+          ) : (
+            <><I.Plus size={11} /> Add</>
+          )}
         </button>
       )}
 
@@ -566,14 +663,14 @@ function TestRow({ row, picked, highlighted, rowClickEnabled, onTogglePick, onNo
   );
 }
 
-// === Booking code section — Spec v12 §Step 4: 📋 Booking code ===
+// === Booking code section — shared intake control ===
 //   A doctor from a previous teleconsult can prescribe a booking code that
 //   pre-populates a specific set of tests. Nurse scans or enters; on valid
 //   code, pre-selected tests render with [Add all to cart].
 //
 //   Mock codes are defined here so this can ship before the API exists.
 //   `consumed` defaults to false; once added to cart we mark it consumed.
-const MOCK_BOOKING_CODES = {
+export const MOCK_BOOKING_CODES = {
   "BC-2026042-DIA3": {
     code: "BC-2026042-DIA3",
     doctor: "Dr. Sopheap Chan",
@@ -588,9 +685,9 @@ const MOCK_BOOKING_CODES = {
   },
 };
 
-const BOOKING_CODE_PATTERN = /^BC-[A-Z0-9]{7}-[A-Z0-9]{4}$/;
+export const BOOKING_CODE_PATTERN = /^BC-[A-Z0-9]{7}-[A-Z0-9]{4}$/;
 
-function formatBookingCode(raw) {
+export function formatBookingCode(raw) {
   const chars = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   const body = chars.startsWith("BC") ? chars.slice(2) : chars;
   const first = body.slice(0, 7);
@@ -599,7 +696,16 @@ function formatBookingCode(raw) {
   return `BC-${first}${second ? `-${second}` : ""}`;
 }
 
-function BookingCodeSection({ patient, inCart, onAddBundle, onPushToast, ccy }) {
+export function BookingCodeSection({
+  patient,
+  inCart,
+  onAddBundle,
+  onPushToast,
+  ccy,
+  className = "",
+  introTitle = "Booking code",
+  introText = "Scan or enter the code on the patient's prescription or teleconsult summary.",
+}) {
   const [input, setInput] = useState("");
   const [result, setResult] = useState(null); // { ok, code?, items?, message? }
   const [picks, setPicks] = useState(new Set());
@@ -649,12 +755,12 @@ function BookingCodeSection({ patient, inCart, onAddBundle, onPushToast, ccy }) 
   };
 
   return (
-    <div className="atp-booking">
+    <div className={"atp-booking" + (className ? " " + className : "")}>
       <div className="atp-booking-intro">
         <I.Ticket size={14} />
         <div>
-          <strong>Booking code</strong>
-          <p>Scan or enter the code on the patient's prescription or teleconsult summary.</p>
+          <strong>{introTitle}</strong>
+          <p>{introText}</p>
         </div>
       </div>
 
@@ -732,15 +838,14 @@ function BookingCodeSection({ patient, inCart, onAddBundle, onPushToast, ccy }) 
 function CatalogueFilterBar({
   priceRange, setPriceRange,
   coverageFilter, setCoverageFilter,
-  specialtyFilters, setSpecialtyFilters,
   hasInsurance, maxPrice, ccy = "USD"
 }) {
   const fmt = (usd) => ccy === "KHR"
     ? "៛" + Math.round((usd || 0) * KHR_RATE).toLocaleString()
     : "$" + Math.round(usd || 0);
   const setRange = (lo, hi) => setPriceRange([lo, hi]);
-  const reset = () => { setPriceRange([0, maxPrice]); setCoverageFilter("all"); setSpecialtyFilters([]); };
-  const isFiltered = specialtyFilters.length > 0 || priceRange[0] !== 0 || priceRange[1] !== maxPrice || coverageFilter !== "all";
+  const reset = () => { setPriceRange([0, maxPrice]); setCoverageFilter("all"); };
+  const isFiltered = priceRange[0] !== 0 || priceRange[1] !== maxPrice || coverageFilter !== "all";
   const pricePresets = [
     { id: "all",      label: "Any",          range: [0, maxPrice] },
     { id: "free",     label: "Free",         range: [0, 0] },
@@ -754,27 +859,9 @@ function CatalogueFilterBar({
     { id: "covered", label: "Covered" },
     { id: "not-covered", label: "Not covered" },
   ];
-  const toggleSpecialty = (id) => {
-    setSpecialtyFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
   return (
     <div className="atp-filterbar" role="region" aria-label="Catalogue filters">
       <I.Filter size={11} className="atp-filterbar-ico" aria-hidden="true" />
-      <span className="atp-filterbar-label">Specialty</span>
-      <div className="atp-filterbar-chips" role="group" aria-label="Specialty filter">
-        {FILTER_SPECIALTIES.map(opt => (
-          <button
-            key={opt.id}
-            type="button"
-            className={"atp-filter-chip" + (specialtyFilters.includes(opt.id) ? " is-active" : "")}
-            onClick={() => toggleSpecialty(opt.id)}
-            aria-pressed={specialtyFilters.includes(opt.id)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-      <span className="atp-filterbar-sep" aria-hidden="true" />
       <span className="atp-filterbar-label">Price</span>
       <div className="atp-filterbar-chips" role="group" aria-label="Price filter">
         {pricePresets.map(preset => (
@@ -813,11 +900,6 @@ function CatalogueFilterBar({
       )}
       {isFiltered && (
         <div className="atp-active-filters" aria-label="Active filters">
-          {specialtyFilters.map(id => (
-            <button key={id} type="button" onClick={() => toggleSpecialty(id)}>
-              {FILTER_SPECIALTIES.find(s => s.id === id)?.label || id} <I.X size={9} />
-            </button>
-          ))}
           {(priceRange[0] !== 0 || priceRange[1] !== maxPrice) && (
             <button type="button" onClick={() => setRange(0, maxPrice)}>{fmt(priceRange[0])}–{fmt(priceRange[1])} <I.X size={9} /></button>
           )}
@@ -831,8 +913,7 @@ function CatalogueFilterBar({
 }
 
 // === Main panel ===
-export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyToggle }) {
-  const t = useLang();
+export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "USD", onCcyToggle }) {
   const buckets = useAIRecommendations(patient);
   const priors = patient.priorResults || [];
   const inCart = useMemo(() => new Set((patient.cart?.items || []).map(i => i.id)), [patient.cart]);
@@ -849,14 +930,11 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     return true;
   }), [hasSmartSignal, priors.length]);
 
-  const defaultView = hasSmartSignal ? "smart" : "lab";
+  const defaultView = hasSmartSignal ? "smart" : "panel-general-health";
   const [view, setView] = useState(defaultView);
   const [search, setSearch] = useState("");
-  const [picks, setPicks] = useState(new Set());
   const [whyOpenId, setWhyOpenId] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
-  const rowClickEnabled = true;
-  const [searchFocused, setSearchFocused] = useState(false);
   // Mobile category picker — collapsed pill trigger + popover grid.
   // Replaces the horizontal scroll bar so nurses don't have to hunt for
   // a category that's offscreen.
@@ -866,27 +944,24 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const maxPrice = useMemo(() => Math.ceil(Math.max(...ORDER_CATALOG.map(c => c.price || 0))), []);
   const [priceRange, setPriceRange] = useState([0, maxPrice]);
   const [coverageFilter, setCoverageFilter] = useState("all");
-  const [specialtyFilters, setSpecialtyFilters] = useState([]);
   const searchRef = useRef(null);
   const rowsRef = useRef(null);
 
   const activeViewDef = VIEWS.find(v => v.id === view) || VIEWS[0];
-  const isCatalogueView = activeViewDef.group === "catalogue";
-  const isBookingView = view === "booking";
-  const hasGlobalSearch = !!search.trim() && !isBookingView;
+  const isCatalogueView = activeViewDef.group === "catalogue" || activeViewDef.group === "panels";
+  const hasGlobalSearch = !!search.trim();
   const showBundleView = view === "bundles" && !hasGlobalSearch;
 
-  // If active view becomes hidden (e.g. after data update) reset to Lab.
+  // If active view becomes hidden (e.g. after data update) reset to the first diagnostic panel.
   useEffect(() => {
-    if (!visibleViews.find(v => v.id === view)) setView("lab");
-  }, [visibleViews, view]);
+    if (!visibleViews.find(v => v.id === view)) setView(defaultView);
+  }, [visibleViews, view, defaultView]);
 
   const rawRows = useRows({ view, search, patient, buckets, priors, inCart });
   // Apply catalogue filters (price range + coverage) only for catalogue views.
   const rows = useMemo(() => {
     if (!isCatalogueView) return rawRows;
     return rawRows.filter(r => {
-      if (specialtyFilters.length > 0 && !specialtyFilters.includes(rowSpecialtyKey(r))) return false;
       const p = r.price || 0;
       if (p < priceRange[0] || p > priceRange[1]) return false;
       if (coverageFilter === "all") return true;
@@ -895,7 +970,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       if (coverageFilter === "not-covered") return cov?.kind === "not-covered" || cov?.kind === "unconfirmed";
       return true;
     });
-  }, [rawRows, isCatalogueView, specialtyFilters, priceRange, coverageFilter, insurance]);
+  }, [rawRows, isCatalogueView, priceRange, coverageFilter, insurance]);
   const bundleRows = useMemo(() => {
     const all = buildBundleRows({ inCart });
     if (!search.trim()) return all;
@@ -922,21 +997,12 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     ["visit","lab","imaging","ecg","vitals","telecon"].forEach(k => {
       out[k] = ORDER_CATALOG.filter(c => c.kind === k).length;
     });
+    PANEL_CATEGORIES.forEach(panel => {
+      out[`panel-${panel.id}`] = getPanelItems(panel.id).length;
+    });
     return out;
   }, [buckets, priors]);
 
-  const togglePick = useCallback((id) => {
-    const row = rawRows.find(r => r.id === id);
-    if (row?.unavailable) {
-      onPushToast?.(`${row.name} is unavailable · back ~${row.availableBack || "soon"}`, "error");
-      return;
-    }
-    setPicks(prev => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
-      return n;
-    });
-  }, [rawRows, onPushToast]);
   const toggleWhy = useCallback((id) => {
     setWhyOpenId(prev => prev === id ? null : id);
   }, []);
@@ -955,24 +1021,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     const result = onAdd?.([{ testId: row.id, name: row.name, price: row.price, kind: row.kind }]);
     pushAddedToast(`${row.name} added`, result);
   };
-  const addPicks = () => {
-    if (picks.size === 0) return;
-    const items = rows.filter(r => picks.has(r.id) && !r.inCart)
-      .filter(r => !r.unavailable)
-      .map(r => ({ testId: r.id, name: r.name, price: r.price, kind: r.kind }));
-    if (items.length === 0) {
-      onPushToast?.("Selected tests are unavailable", "error");
-      setPicks(new Set());
-      return;
-    }
-    items.forEach((it, i) => {
-      const el = rowsRef.current?.querySelector(`[data-row-id="${it.testId}"]`);
-      if (i === 0) flyToCart(el, { name: it.name, kind: it.kind });
-      else window.setTimeout(() => flyToCart(el, { name: it.name, kind: it.kind }), i * 75);
-    });
-    const result = onAdd?.(items);
-    pushAddedToast(`${items.length} test${items.length > 1 ? "s" : ""} added`, result);
-    setPicks(new Set());
+  const removeOne = (row) => {
+    const result = onRemove?.(row.id, row);
+    if (result?.deferred) return;
+    onPushToast?.(`${row.name} removed`, "success", result?.undo ? { actionLabel: "Undo", onAction: result.undo } : undefined);
   };
   const orderSameAsLast = (e) => {
     if (priors.length === 0) return;
@@ -1034,7 +1086,6 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       const tag = (target?.tagName || "").toLowerCase();
       const inSearch = target === searchRef.current;
       const isTyping = (tag === "input" || tag === "textarea" || target?.isContentEditable) && !inSearch;
-      const isEditingText = isTypingTarget(target);
       // Ignore key combos that include Cmd/Ctrl (besides our own shortcuts) when typing in non-search inputs
       if (isTyping) return;
 
@@ -1049,23 +1100,14 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       if (e.key === "Escape") {
         if (whyOpenId) { e.preventDefault(); setWhyOpenId(null); return; }
         if (search) { e.preventDefault(); setSearch(""); return; }
-        if (picks.size > 0) { e.preventDefault(); setPicks(new Set()); return; }
         if (inSearch) { e.preventDefault(); searchRef.current?.blur(); return; }
         return;
       }
 
-      // Cmd/Ctrl+A — select all visible (not in cart)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-        if (isEditingText) return;
-        e.preventDefault();
-        setPicks(new Set(rows.filter(r => !r.inCart && !r.unavailable).map(r => r.id)));
-        return;
-      }
-
-      // Number keys 1-9 — switch visible tabs (not when typing in search)
+      // Number keys 1-9 — switch Smart sources only (not when typing in search)
       if (!inSearch && /^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const idx = parseInt(e.key, 10) - 1;
-        const tgt = visibleViews[idx];
+        const tgt = smartViews[idx];
         if (tgt) {
           e.preventDefault();
           setView(tgt.id);
@@ -1095,7 +1137,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
       if (e.key === " " && !inSearch && highlightId) {
         e.preventDefault();
         const r = rows.find(x => x.id === highlightId);
-        if (r && !r.inCart) togglePick(highlightId);
+        if (r && !r.unavailable) {
+          if (r.inCart) removeOne(r);
+          else addOne(r);
+        }
         return;
       }
 
@@ -1106,7 +1151,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
           if (highlightId) {
             e.preventDefault();
             const r = rows.find(x => x.id === highlightId);
-            if (r && !r.inCart) togglePick(highlightId);
+            if (r && !r.unavailable) {
+              if (r.inCart) removeOne(r);
+              else addOne(r);
+            }
             const idx = rows.findIndex(x => x.id === highlightId);
             const next = idx === -1 ? 0 : (idx + 1) % rows.length;
             setHighlightId(rows[next]?.id || null);
@@ -1114,15 +1162,13 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
           return;
         }
         // Plain Enter
-        if (picks.size > 0) {
-          e.preventDefault();
-          addPicks();
-          return;
-        }
         if (highlightId) {
           e.preventDefault();
           const r = rows.find(x => x.id === highlightId);
-          if (r && !r.inCart) addOne(r);
+          if (r && !r.unavailable) {
+            if (r.inCart) removeOne(r);
+            else addOne(r);
+          }
           return;
         }
       }
@@ -1131,16 +1177,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
     return () => window.removeEventListener("keydown", handler);
   });
 
-  // Spec v12 §9: sticky bottom bar shows running total of selected items.
-  const picksTotal = useMemo(() => {
-    if (picks.size === 0) return 0;
-    return rawRows.filter(r => picks.has(r.id) && !r.inCart && !r.unavailable).reduce((s, r) => s + (r.price || 0), 0);
-  }, [picks, rawRows]);
-
   // Group visible views for the left panel — Smart sources at top, Catalogue
   // specialties below a divider. Mirrors spec §Step 4 layout.
   const smartViews = visibleViews.filter(v => v.group === "smart");
-  const catalogueViews = visibleViews.filter(v => v.group === "catalogue");
+  const catalogueViews = visibleViews.filter(v => v.group === "panels");
 
   // Close mobile picker on Escape or outside click.
   useEffect(() => {
@@ -1171,16 +1211,6 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
   const ActiveIco = (activeView && I[activeView.icon]) || I.Sparkles;
   const activeCount = activeView ? (counts[activeView.id] || 0) : 0;
 
-  // Booking-code add helper — record the consumed code on the patient so the
-  // same code can't be redeemed twice.
-  const addFromBookingCode = (items, code) => {
-    const result = onAdd?.(items, { bookingCode: code });
-    if (result?.deferred) return;
-    onPushToast?.(`Booking code ${code} applied · ${items.length} test${items.length === 1 ? "" : "s"} added`,
-      "success",
-      result?.undo ? { actionLabel: "Undo", onAction: result.undo } : undefined);
-  };
-
   return (
     <section className="card-soft atp atp-v3">
       {/* Mobile-only category picker — replaces the horizontal scroll bar.
@@ -1201,7 +1231,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
         >
           <span className="atp-mobile-trigger-ico"><ActiveIco size={14} /></span>
           <span className="atp-mobile-trigger-label">{activeView?.label || "Smart"}</span>
-          {activeCount > 0 && activeView?.id !== "booking" && (
+          {activeCount > 0 && (
             <span className="atp-mobile-trigger-count">{fmtCount(activeCount)}</span>
           )}
           <I.ChevronDown
@@ -1230,7 +1260,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
                       >
                         <Ico size={14} />
                         <span className="atp-mobile-cell-label">{v.label}</span>
-                        {count > 0 && v.id !== "booking" && (
+                        {count > 0 && (
                           <span className="atp-mobile-cell-count">{fmtCount(count)}</span>
                         )}
                       </button>
@@ -1241,7 +1271,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
             )}
             {catalogueViews.length > 0 && (
               <>
-                <div className="atp-mobile-grouplabel">Catalogue</div>
+                <div className="atp-mobile-grouplabel">Panels</div>
                 <div className="atp-mobile-cells">
                   {catalogueViews.map(v => {
                     const Ico = I[v.icon] || I.FlaskConical;
@@ -1289,7 +1319,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
                   >
                     <Ico size={13} />
                     <span className="atp-side-label">{v.label}</span>
-                    {count > 0 && v.id !== "booking" && <span className="atp-side-count">{fmtCount(count)}</span>}
+                    {count > 0 && <span className="atp-side-count">{fmtCount(count)}</span>}
                     {keyHint && <kbd className="atp-side-key">{keyHint}</kbd>}
                   </button>
                 );
@@ -1300,12 +1330,10 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
             <>
               {smartViews.length > 0 && <div className="atp-side-divider" aria-hidden="true" />}
               <div className="atp-side-group">
-                <div className="atp-side-grouplabel">Catalogue</div>
+                <div className="atp-side-grouplabel">Panels</div>
                 {catalogueViews.map((v, i) => {
                   const Ico = I[v.icon] || I.FlaskConical;
                   const count = counts[v.id] || 0;
-                  const idx = smartViews.length + i;
-                  const keyHint = idx < 9 ? String(idx + 1) : null;
                   const meta = SPECIALTY_META[v.specialty];
                   return (
                     <button
@@ -1313,13 +1341,12 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
                       type="button"
                       className={"atp-side-item" + (view === v.id ? " is-active" : "")}
                       onClick={() => selectView(v.id)}
-                      title={keyHint ? `${v.label} · press ${keyHint}` : v.label}
+                      title={v.label}
                       style={meta ? { "--side-accent": meta.color } : undefined}
                     >
                       <Ico size={13} />
                       <span className="atp-side-label">{v.label}</span>
                       <span className="atp-side-count">{fmtCount(count)}</span>
-                      {keyHint && <kbd className="atp-side-key">{keyHint}</kbd>}
                     </button>
                   );
                 })}
@@ -1336,14 +1363,11 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
               <input
                 ref={searchRef}
                 type="text"
-                placeholder={isBookingView ? "Search not available — enter the code below" : "Search test, service, package"}
+                placeholder="Search test, service, package"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                disabled={isBookingView}
               />
-              {!search && !isBookingView && (
+              {!search && (
                 <span className="atp-search-hint" aria-hidden="true"><Kbd>/</Kbd></span>
               )}
               {search && (
@@ -1381,41 +1405,23 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
               setPriceRange={setPriceRange}
               coverageFilter={coverageFilter}
               setCoverageFilter={setCoverageFilter}
-              specialtyFilters={specialtyFilters}
-              setSpecialtyFilters={setSpecialtyFilters}
               hasInsurance={hasInsurance}
               maxPrice={maxPrice}
               ccy={ccy}
             />
           )}
 
-          {/* Keyboard hint strip — hidden on booking view (no list nav) */}
-          {!isBookingView && (
-            <div className="atp-hints" aria-hidden="true">
-              <span><Kbd>/</Kbd> search</span>
-              <span><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-              <span><Kbd>Space</Kbd> select</span>
-              <span><Kbd>Enter</Kbd> add</span>
-              <span><Kbd>⇧</Kbd>+<Kbd>Enter</Kbd> add &amp; next</span>
-              <span><Kbd>{MOD_LABEL}</Kbd>+<Kbd>A</Kbd> {searchFocused ? "select text" : "all rows"}</span>
-              <span><Kbd>Esc</Kbd> clear</span>
-            </div>
-          )}
-
-          {/* Booking code section — its own surface, replaces the row list */}
-          {isBookingView && (
-            <BookingCodeSection
-              patient={patient}
-              inCart={inCart}
-              onAddBundle={(items, code) => addFromBookingCode(items, code)}
-              onPushToast={onPushToast}
-              ccy={ccy}
-            />
-          )}
+          <div className="atp-hints" aria-hidden="true">
+            <span><Kbd>/</Kbd> search</span>
+            <span><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
+            <span><Kbd>Space</Kbd> add/remove</span>
+            <span><Kbd>Enter</Kbd> add/remove</span>
+            <span><Kbd>⇧</Kbd>+<Kbd>Enter</Kbd> add/remove &amp; next</span>
+            <span><Kbd>Esc</Kbd> clear</span>
+          </div>
 
           {/* Rows — bundles render as cards; everything else uses TestRow */}
-          {!isBookingView && (
-            <div className={"atp-rows" + (showBundleView ? " is-bundles" : "")} ref={rowsRef}>
+          <div className={"atp-rows" + (showBundleView ? " is-bundles" : "")} ref={rowsRef}>
               {showBundleView ? (
                 bundleRows.length === 0 ? (
                   <div className="atp-empty">
@@ -1462,14 +1468,12 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
                       <TestRow
                         key={row.id}
                         row={row}
-                        picked={picks.has(row.id)}
                         highlighted={highlightId === row.id}
-                        rowClickEnabled={rowClickEnabled}
-                        onTogglePick={togglePick}
+                        onAddOne={addOne}
+                        onRemoveOne={removeOne}
                         onNotifyUnavailable={notifyUnavailable}
                         whyOpen={whyOpenId === row.id}
                         onToggleWhy={toggleWhy}
-                        t={t}
                         ccy={ccy}
                         coverage={getCoverage(row.id, insurance)}
                         specialtyMeta={getSpecialtyMeta(row)}
@@ -1478,24 +1482,7 @@ export function AddTestsPanel({ patient, onAdd, onPushToast, ccy = "USD", onCcyT
                   )}
                 </>
               )}
-            </div>
-          )}
-
-          {/* Spec v12 §9: sticky bottom bar shows count + running total + bulk add */}
-          {picks.size > 0 && (
-            <footer className="atp-foot atp-foot-v3">
-              <span className="atp-foot-count">
-                <strong>{picks.size}</strong> selected
-                <span className="atp-foot-total"> · {fmtPrice(picksTotal, ccy)}</span>
-              </span>
-              <button type="button" className="atp-foot-clear" onClick={() => setPicks(new Set())}>
-                Clear
-              </button>
-              <button type="button" className="btn btn-primary btn-sm atp-foot-add" onClick={addPicks}>
-                <I.Plus size={11} /> Add {picks.size} to cart
-              </button>
-            </footer>
-          )}
+          </div>
         </div>
       </div>
     </section>
