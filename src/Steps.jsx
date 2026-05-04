@@ -50,8 +50,29 @@ function StepShell({ title, subtitle, right, children, className = "" }) {
 
 function StepFooter({ onPrev, onNext, nextLabel, nextDisabled, blockers, secondary, showBlockerChip = true, className = "" }) {
   const t = useLang();
+  const ref = useRef(null);
+  const [atBottom, setAtBottom] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (getComputedStyle(el).position !== "sticky") return;
+    const check = () => {
+      const reached = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      setAtBottom(reached);
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, []);
   return (
-    <div className={"step-footer" + (className ? " " + className : "")}>
+    <div
+      ref={ref}
+      className={"step-footer" + (className ? " " + className : "") + (atBottom ? " is-at-bottom" : "")}
+    >
       <div className="step-footer-left">
         {onPrev && (
           <button type="button" className="btn btn-ghost" onClick={onPrev}>
@@ -2405,7 +2426,7 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
 
   return (
     <StepShell title={t("step5.title") || "Book a teleconsultation"} subtitle={t("step5.sub") || "Schedule a call with a doctor to review results."} className="step-shell-tele">
-      <section className="card-soft tele-step-card">
+      <section className="card-soft tele-step-card next-action-target" data-next-action="teleconsult" tabIndex={-1}>
         <div className="tele-step-context">
           <div className="tele-step-context-row">
             <I.Clock size={12} />

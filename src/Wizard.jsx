@@ -255,7 +255,13 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
   const guideToNextActionTarget = (selector, delay = 0) => {
     if (!selector || typeof document === "undefined") return;
     window.setTimeout(() => {
-      const target = document.querySelector(selector);
+      const candidates = Array.from(document.querySelectorAll(selector));
+      const target = candidates.find(el => {
+        if (!el || el.closest('[aria-hidden="true"], [inert]')) return false;
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      }) || candidates[0];
       if (!target) return;
       target.scrollIntoView({ behavior: "smooth", block: "center" });
       target.focus?.({ preventScroll: true });
@@ -291,17 +297,20 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
       </div>
       {nextAction && (() => {
         const NextIcon = I[nextAction.icon] || I.AlertCircle;
-        const canJump = nextAction.target && nextAction.target !== currentStep
-          && canNavigateToStep(nextAction.target, currentStep, gate);
-        const canGuideCurrent = nextAction.target === currentStep && !!nextAction.selector;
-        const isActionable = canJump || canGuideCurrent;
+        const targetStatus = nextAction.target ? gate.stepStatus?.[nextAction.target] : null;
+        const targetUnlocked = !!nextAction.target && !!targetStatus && targetStatus !== "locked";
+        const canJump = targetUnlocked && nextAction.target !== currentStep;
+        const canGuide = !!nextAction.selector && targetUnlocked;
+        const canConfirmCurrent = targetUnlocked && nextAction.target === currentStep;
+        const isActionable = canJump || canGuide || canConfirmCurrent;
         const handleNextAction = () => {
-          if (canJump) {
+          if (targetUnlocked) {
             onStepClick?.(nextAction.target);
-            guideToNextActionTarget(nextAction.selector, 80);
+            if (nextAction.selector) {
+              guideToNextActionTarget(nextAction.selector, nextAction.target === currentStep ? 0 : 80);
+            }
             return;
           }
-          if (canGuideCurrent) guideToNextActionTarget(nextAction.selector);
         };
         return (
           <button
@@ -310,7 +319,7 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
             onClick={handleNextAction}
             disabled={!isActionable}
             aria-label={canJump ? `Next: ${nextAction.label}. Jump to step ${nextAction.target}` : nextAction.label}
-            title={canJump ? `Jump to step ${nextAction.target}` : canGuideCurrent ? "Show required action" : undefined}
+            title={canJump ? `Jump to step ${nextAction.target}` : canGuide ? "Show required action" : undefined}
           >
             <NextIcon size={12} strokeWidth={2.25} />
             <span>{nextAction.label}</span>

@@ -432,7 +432,7 @@ function BillSplitModal({ open, cart, onClose, onSave }) {
     const p = i.payer || "direct";
     (groups[p] = groups[p] || []).push(i);
   });
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 820, maxHeight: "84vh", display: "flex", flexDirection: "column", padding: 0 }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -518,7 +518,8 @@ function BillSplitModal({ open, cart, onClose, onSave }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -650,7 +651,8 @@ function VerbalConsentModal({ open, item, isSensitive, onConfirm, onCancel }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -667,7 +669,7 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
     if (!canConfirm) return;
     onConfirm({ answer, overrideOk: needsOverride ? override : undefined, by: needsOverride ? signedBy.trim() : undefined, at: new Date().toISOString() });
   };
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 520, padding: 0 }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
@@ -774,6 +776,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
   const requiresValidation = item.kind === "imaging";
   const validationState = item.validationState || "idle"; // idle | sending | sent | signed
+  const validationUnresolved = requiresValidation && validationState !== "signed" && validationState !== "verbal";
   const lockedAutoItem = item.auto && item.kind === "visit";
   const showPolicyNote = item.payer === "insurance" && policyDecision && policyDecision.status !== "covered";
   const [openExpand, setOpenExpand] = useState(null); // null | "validation" | "policy"
@@ -810,7 +813,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
                                                  t("validate.requiresPatient")
                 }
                 aria-label={t("validate.requiresPatient")}
-                aria-expanded={openExpand === "validation" || (requiresValidation && validationState !== "signed" && validationState !== "verbal")}
+                aria-expanded={openExpand === "validation" || validationUnresolved}
               >
                 {validationState === "signed"
                   ? <I.ShieldCheck size={10} strokeWidth={2.5} />
@@ -860,8 +863,13 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
           <I.X size={10} strokeWidth={2.5} />
         </button>
       </div>
-      {(openExpand === "validation" || (requiresValidation && validationState !== "signed" && validationState !== "verbal")) && (
-        <div className="cart-line-expand cart-line-validation-panel">
+      {(openExpand === "validation" || validationUnresolved) && (
+        <div
+          className={"cart-line-expand cart-line-validation-panel" + (validationUnresolved ? " next-action-target" : "")}
+          data-next-action={validationUnresolved ? "imaging-consent" : undefined}
+          tabIndex={validationUnresolved ? -1 : undefined}
+          aria-label={validationUnresolved ? "Consent needed before imaging" : undefined}
+        >
           {validationState === "idle" ? (
             <>
               <div className="cart-line-validation-copy">

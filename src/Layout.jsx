@@ -158,6 +158,20 @@ function recentKey(item) {
   return item.type === "patient" ? `patient:${item.id}` : `query:${(item.query || "").toLowerCase()}`;
 }
 
+// Status filter chips — let the nurse triage by patient state without scanning labels.
+// Tone-grouped so the list stays short: needs attention, in flight, done.
+const STATUS_FILTERS = [
+  { id: "stuck",    label: "Needs attention", tones: ["warn", "danger"] },
+  { id: "active",   label: "In progress",     tones: ["info"] },
+  { id: "done",     label: "Done",            tones: ["success"] },
+];
+function patientMatchesStatusFilter(p, filterId) {
+  if (!filterId) return true;
+  const def = STATUS_FILTERS.find(f => f.id === filterId);
+  if (!def) return true;
+  return def.tones.includes(p.status?.tone);
+}
+
 function patientSearchMatch(p, rawQuery) {
   const query = rawQuery.trim().toLowerCase();
   if (!query) return null;
@@ -190,19 +204,33 @@ function SearchBar({ patients = [], onSearch, onNewWalkIn }) {
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(-1);
   const [recents, setRecents] = useState(readSearchRecents);
+  const [statusFilter, setStatusFilter] = useState(null);
   const inputRef = useRef(null);
   const wrapRef = useRef(null);
 
   const trimmedQuery = query.trim();
   const hasQuery = trimmedQuery.length > 0;
+
+  const statusCounts = useMemo(() => {
+    const counts = Object.create(null);
+    for (const f of STATUS_FILTERS) counts[f.id] = 0;
+    for (const p of patients) {
+      for (const f of STATUS_FILTERS) {
+        if (f.tones.includes(p.status?.tone)) counts[f.id]++;
+      }
+    }
+    return counts;
+  }, [patients]);
+
   const patientResults = useMemo(() => {
     if (!hasQuery) return [];
     return patients
       .map(patient => ({ patient, match: patientSearchMatch(patient, trimmedQuery) }))
       .filter(result => result.match)
+      .filter(result => patientMatchesStatusFilter(result.patient, statusFilter))
       .sort((a, b) => b.match.score - a.match.score || (a.patient.name || "").localeCompare(b.patient.name || ""))
-      .slice(0, 7);
-  }, [patients, trimmedQuery, hasQuery]);
+      .slice(0, 12);
+  }, [patients, trimmedQuery, hasQuery, statusFilter]);
 
   const recentItems = useMemo(() => (
     recents
@@ -211,13 +239,26 @@ function SearchBar({ patients = [], onSearch, onNewWalkIn }) {
       .slice(0, SEARCH_RECENTS_LIMIT)
   ), [patients, recents]);
 
-  const resultItems = useMemo(() => (
-    hasQuery
-      ? patientResults.map(({ patient, match }) => ({ type: "patient", patient, match }))
-      : recentItems.map(item => item.type === "patient"
-          ? { type: "recentPatient", patient: item }
-          : { type: "recentQuery", query: item.query })
-  ), [hasQuery, patientResults, recentItems]);
+  // When a status filter is on (no query), surface patients in that bucket
+  // instead of recent searches — the nurse is triaging, not recalling.
+  const statusFilteredPatients = useMemo(() => {
+    if (hasQuery || !statusFilter) return [];
+    return patients
+      .filter(p => patientMatchesStatusFilter(p, statusFilter))
+      .slice(0, 20);
+  }, [patients, hasQuery, statusFilter]);
+
+  const resultItems = useMemo(() => {
+    if (hasQuery) {
+      return patientResults.map(({ patient, match }) => ({ type: "patient", patient, match }));
+    }
+    if (statusFilter) {
+      return statusFilteredPatients.map(p => ({ type: "statusPatient", patient: p }));
+    }
+    return recentItems.map(item => item.type === "patient"
+      ? { type: "recentPatient", patient: item }
+      : { type: "recentQuery", query: item.query });
+  }, [hasQuery, patientResults, recentItems, statusFilter, statusFilteredPatients]);
   const actionItems = onNewWalkIn ? [{ type: "newWalkIn", query: trimmedQuery }] : [];
   const menuItems = [...resultItems, ...actionItems];
   const dropdownOpen = open && (menuItems.length > 0 || hasQuery);
@@ -273,7 +314,7 @@ function SearchBar({ patients = [], onSearch, onNewWalkIn }) {
 
   const commitItem = useCallback((item) => {
     if (!item) return;
-    if (item.type === "patient" || item.type === "recentPatient") commitPatient(item.patient);
+    if (item.type === "patient" || item.type === "recentPatient" || item.type === "statusPatient") commitPatient(item.patient);
     else if (item.type === "recentQuery") commitQuery(item.query);
     else if (item.type === "newWalkIn") commitNewWalkIn(item.query);
   }, [commitNewWalkIn, commitPatient, commitQuery]);
@@ -453,18 +494,57 @@ function SearchBar({ patients = [], onSearch, onNewWalkIn }) {
 
       {dropdownOpen && (
         <div id="topbar-search-dropdown" className="search-dropdown topbar-search-dropdown" role="listbox">
+          <div className="topbar-search-filters" role="tablist" aria-label="Filter by patient status">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!statusFilter}
+              className={"topbar-search-filter" + (!statusFilter ? " is-active" : "")}
+              onClick={() => { setStatusFilter(null); setCursor(-1); }}
+            >All</button>
+            {STATUS_FILTERS.map(f => {
+              const active = statusFilter === f.id;
+              const count = statusCounts[f.id] || 0;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  className={"topbar-search-filter topbar-search-filter-" + f.id + (active ? " is-active" : "")}
+                  onClick={() => { setStatusFilter(active ? null : f.id); setCursor(-1); }}
+                >
+                  <span className="topbar-search-filter-dot" aria-hidden="true" />
+                  <span>{f.label}</span>
+                  <span className="topbar-search-filter-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
           {hasQuery ? (
             <>
               {patientResults.length > 0 && (
                 <>
-                  <div className="search-dropdown-label">Patients</div>
+                  <div className="search-dropdown-label">Patients{statusFilter ? ` · ${STATUS_FILTERS.find(f => f.id === statusFilter)?.label}` : ""}</div>
                   {resultItems.map(item => renderPatientResult(item, item.match?.label || "Match"))}
                 </>
               )}
               {patientResults.length === 0 && (
                 <div className="topbar-search-empty">
                   <I.Search size={15} />
-                  <span>No patient found for <strong>{trimmedQuery}</strong></span>
+                  <span>No patient found for <strong>{trimmedQuery}</strong>{statusFilter ? ` in ${STATUS_FILTERS.find(f => f.id === statusFilter)?.label}` : ""}</span>
+                </div>
+              )}
+            </>
+          ) : statusFilter ? (
+            <>
+              <div className="search-dropdown-label">{STATUS_FILTERS.find(f => f.id === statusFilter)?.label} · {statusFilteredPatients.length}</div>
+              {statusFilteredPatients.length > 0 ? (
+                resultItems.map(item => renderPatientResult(item, item.patient.status?.label || "Status"))
+              ) : (
+                <div className="topbar-search-empty topbar-search-empty-compact">
+                  <I.Check size={14} />
+                  <span>None in this bucket</span>
                 </div>
               )}
             </>

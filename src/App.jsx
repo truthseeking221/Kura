@@ -436,18 +436,14 @@ function AppShell() {
     else if (id === "preferences") pushToast("Open preferences");
     else if (id === "help") pushToast("Open help & shortcuts");
   };
-  const handleSearch = (id) => {
+  const openPatientAtIdentity = (id) => {
     setActiveId(id);
-    // Cross-patient context switch: forget the saved wizard step so the
-    // patient lands on their first incomplete step (inferStep takes over).
-    // Receptionist's intent in searching = act on this patient now,
-    // not resume their previous bookmark.
-    setWizardStepMap(m => {
-      if (!(id in m)) return m;
-      const next = { ...m };
-      delete next[id];
-      return next;
-    });
+    // Search is an identity-first entry point: confirm the person before
+    // continuing orders, payer, or payment work for this visit.
+    setWizardStepMap(m => ({ ...m, [id]: 1 }));
+  };
+  const handleSearch = (id) => {
+    openPatientAtIdentity(id);
     const p = patients.find(x => x.id === id);
     if (p) pushToast(`Opened ${p.name} · ${p.queueNumber}`);
   };
@@ -457,7 +453,11 @@ function AppShell() {
   };
 
   const handleStepClick = (n) => {
-    if (canNavigateToStep(n, currentStep, gate)) setCurrentStep(n);
+    const targetStep = Number(n);
+    if (!Number.isInteger(targetStep) || targetStep < 1 || targetStep > 6) return;
+    const targetStatus = gate.stepStatus?.[targetStep];
+    const targetUnlocked = !!targetStatus && targetStatus !== "locked";
+    if (canNavigateToStep(targetStep, currentStep, gate) || targetUnlocked) setCurrentStep(targetStep);
   };
 
   const handleNext = () => {
@@ -535,10 +535,10 @@ function AppShell() {
   else dockState = "pay";
 
   // === Single "what next?" answer for the patient header ===
-  // The pill must be clickable and land the user on a step they can act on,
-  // so target = first non-done step (which is always navigable). The label
-  // names the most pressing blocker for that step. Deep blockers (e.g.
-  // "resolve consent" on step 4) only surface once their gating step is done.
+  // The pill must be clickable and land the user on a step they can act on.
+  // It jumps directly to any unlocked target, while the stepper can stay
+  // stricter and sequential. The label names the most pressing blocker for
+  // that step. Deep blockers only surface once their gating step is done.
   const nextAction = (() => {
     if (isCheckedIn) return { label: "Checked in", target: currentStep, tone: "success", icon: "CheckCircle" };
     // Step-specific blocker copy, evaluated in step order.
@@ -547,8 +547,8 @@ function AppShell() {
     if (!gate.step3Done) return { label: "Choose insurance", target: 3, tone: "warn", icon: "Shield", selector: '[data-next-action="insurance"]' };
     if (activeItemCount === 0) return { label: "Add orders", target: 4, tone: "warn", icon: "Plus" };
     if (!payerReadyForPayment) return { label: "Choose payer", target: 4, tone: "warn", icon: "Shield" };
-    if (pendingValidationCount > 0) return { label: "Resolve consent", target: 4, tone: "warn", icon: "AlertCircle" };
-    if (!gate.step5Done) return { label: "Book teleconsult", target: 5, tone: "warn", icon: "Video" };
+    if (pendingValidationCount > 0) return { label: "Resolve consent", target: 4, tone: "warn", icon: "AlertCircle", selector: '[data-next-action="imaging-consent"]' };
+    if (!gate.step5Done) return { label: "Book teleconsult", target: 5, tone: "warn", icon: "Video", selector: '[data-next-action="teleconsult"]' };
     if (paymentWaiting) return { label: "Waiting on payment", target: 6, tone: "info", icon: "Clock" };
     if (!cartPaymentResolved) return { label: "Take payment", target: 6, tone: "warn", icon: "CreditCard" };
     return { label: "Ready to check in", target: 6, tone: "success", icon: "CheckCircle" };
@@ -696,7 +696,7 @@ function AppShell() {
                 onNext={handleNext}
                 onPushToast={pushToast}
                 allPatients={patients.filter(p => p.id !== active.id && p.name)}
-                onSelectPatient={setActiveId}
+                onSelectPatient={openPatientAtIdentity}
                 gate={gate}
                 blankState={isBlankState}
               />
@@ -711,7 +711,7 @@ function AppShell() {
                 gate={gate}
                 onSendIntake={sendIntakeLink}
                 allPatients={patients.filter(p => p.id !== active.id && p.name)}
-                onSelectPatient={setActiveId}
+                onSelectPatient={openPatientAtIdentity}
               />
             )}
             {currentStep === 3 && (
