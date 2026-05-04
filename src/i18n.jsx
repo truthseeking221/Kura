@@ -785,7 +785,7 @@ const en = {
   "step.back": "Back",
   "step.next": "Continue",
 
-  "patient.unidentified": "New visit — unidentified",
+  "patient.unidentified": "New visit",
   "chip.identity": "Identity",
   "chip.review": "Review",
   "chip.insurance": "Insurance",
@@ -1773,7 +1773,7 @@ const km = {
   "step.back": "ត្រឡប់",
   "step.next": "បន្ត",
 
-  "patient.unidentified": "ការមកលេងថ្មី — មិនទាន់សម្គាល់",
+  "patient.unidentified": "ការមកលេងថ្មី",
   "chip.identity": "អត្តសញ្ញាណ",
   "chip.review": "ពិនិត្យ",
   "chip.insurance": "ធានារ៉ាប់រង",

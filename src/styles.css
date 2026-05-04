@@ -7562,51 +7562,50 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .visit-context-strip {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(11, 20, 36, 0.04);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 12px;
+  background: var(--surface-2);
 }
 .visit-context-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: var(--ink-800);
-  font-size: 12px;
-  font-weight: 700;
+  gap: 6px;
+  color: var(--ink-500);
+  font-size: 10.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   line-height: 1.35;
 }
 .visit-context-kicker svg {
-  color: var(--brand-600);
+  color: var(--ink-400);
   flex-shrink: 0;
 }
 .visit-context-list {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 .visit-context-item {
   display: grid;
-  grid-template-columns: 94px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   min-width: 0;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 .visit-context-item:last-child {
   border-bottom: none;
   padding-bottom: 0;
 }
 .visit-context-label {
-  color: var(--ink-500);
+  color: var(--ink-400);
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 600;
   line-height: 1.45;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -7614,10 +7613,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .visit-context-value {
   display: block;
   min-width: 0;
-  color: var(--ink-900);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.35;
+  color: var(--ink-800);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -7636,20 +7635,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   max-width: 100%;
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 10.5px;
+  font-weight: 500;
   line-height: 1.55;
-  background: var(--surface-2);
-  color: var(--ink-700);
-  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink-600);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .visit-context-chip-rx {
-  color: var(--brand-700);
-  background: var(--brand-50);
-  border-color: var(--brand-200, #bfdbfe);
+  color: color-mix(in srgb, var(--brand-700) 80%, var(--ink-600));
+  background: color-mix(in srgb, var(--brand-50) 60%, transparent);
+  border-color: color-mix(in srgb, var(--brand-200, #bfdbfe) 60%, transparent);
 }
 .visit-context-rail .visit-context-chip {
   max-width: 100%;

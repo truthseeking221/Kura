@@ -2,6 +2,7 @@
 // Single component: cart line items, promo (multi non-colliding), bill split,
 // payment (KHQR + Cash), pregnancy consent gate, primary CTA "Check in & confirm order"
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { I } from "./icons";
 import { QRGlyph, mockInsurerDecide, playDrawerDing, DisabledTooltip, TatCompact } from "./shared";
 import { useLang } from "./i18n";
@@ -553,7 +554,7 @@ function VerbalConsentModal({ open, item, isSensitive, onConfirm, onCancel }) {
       at: new Date().toISOString(),
     });
   };
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onCancel} role="presentation">
       <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 520, padding: 0 }} role="dialog" aria-modal="true">
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
