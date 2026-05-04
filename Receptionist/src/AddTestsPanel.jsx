@@ -189,36 +189,36 @@ const VIEWS = [
 const SEARCHABLE_ORDER_KINDS = new Set(["lab", "imaging", "ecg", "vitals"]);
 
 const PANEL_CATEGORIES = [
-  { id: "general-health", label: "General Health", icon: "Stethoscope", testIds: ["cbc", "glucose", "lipid", "urinalysis", "vit-bp", "vit-bmi", "vit-temp"] },
-  { id: "stds", label: "STDs", icon: "Shield", terms: ["hiv", "syphilis", "gonorrhoeae", "chlamydia", "trichomonas", "hepatitis b", "hepatitis c", "hbsag"] },
-  { id: "cancer", label: "Cancer", icon: "Target", terms: ["cancer", "tumor", "tumour", "brca", "egfr", "braf", "kras", "tp53", "mutation", "cea"] },
-  { id: "hpv", label: "HPV", icon: "ShieldCheck", terms: ["human papillomavirus", "hpv"] },
-  { id: "cardiology", label: "Cardiology", icon: "Activity", testIds: ["ecg-12", "ecg-stress", "ecg-holter", "echo", "lipid"], terms: ["troponin", "bnp", "ck-mb", "cholesterol"] },
-  { id: "liver", label: "Liver", icon: "FlaskConical", testIds: ["lft", "hbsag"], terms: ["alt", "ast", "bilirubin", "alkaline phosphatase", "gamma gt", "hepatitis"] },
-  { id: "kidney", label: "Kidney", icon: "Flask", testIds: ["kft", "urinalysis"], terms: ["creatinine", "urea", "cystatin", "microalbumin", "albumin/creatinine", "uric acid"] },
-  { id: "thyroid", label: "Thyroid", icon: "Activity", testIds: ["tsh", "us-thyroid"], terms: ["thyroid", "free t3", "free t4", "thyroglobulin", "tpo"] },
-  { id: "diabetes", label: "Diabetes", icon: "Tablet", testIds: ["hba1c", "glucose", "urinalysis", "kft", "lipid"], terms: ["insulin", "c-peptide", "fructosamine"] },
-  { id: "lipid", label: "Lipid", icon: "Activity", testIds: ["lipid"], terms: ["cholesterol", "triglycerides", "apolipoprotein", "lipoprotein"] },
-  { id: "hepatitis", label: "Hepatitis", icon: "Shield", testIds: ["hbsag", "lft"], terms: ["hepatitis", "hbsag"] },
-  { id: "reproductive-health", label: "Reproductive Health", icon: "Heart", testIds: ["preg"], terms: ["estradiol", "fsh", "lh", "progesterone", "prolactin", "testosterone", "sex hormone"] },
-  { id: "ovarian-reserve", label: "Ovarian Reserve", icon: "Heart", terms: ["anti-mullerian", "amh", "fsh", "estradiol", "inhibin"] },
-  { id: "pre-marital", label: "Pre-marital", icon: "Users", testIds: ["cbc", "hbsag"], terms: ["hiv", "syphilis", "hepatitis", "blood type", "rubella"] },
-  { id: "osteoporosis", label: "Osteoporosis", icon: "Activity", terms: ["calcium", "vitamin d", "parathyroid", "phosphate"] },
-  { id: "arthritis", label: "Arthritis", icon: "Activity", terms: ["rheumatoid", "anti-ccp", "esr", "c-reactive", "ana", "hla-b27"] },
-  { id: "allergy", label: "Allergy", icon: "ShieldCheck", terms: ["allergy", "specific ige", "latex", "peanut", "shrimp", "mold", "pollen"] },
-  { id: "vitamin", label: "Vitamin", icon: "Tablet", testIds: ["vit-d", "vit-b12"], terms: ["vitamin", "folate"] },
-  { id: "food-intolerance", label: "Food Intolerance", icon: "FlaskConical", terms: ["cow milk", "egg", "peanut", "wheat", "soybean", "shrimp", "codfish", "sesame"] },
-  { id: "nipt", label: "NIPT", icon: "Shield", terms: ["nipt", "trisomy", "fetal", "chromosome"] },
-  { id: "gestational-diabetes", label: "Gestational Diabetes", icon: "Tablet", testIds: ["glucose", "hba1c"], terms: ["glucose", "insulin"] },
-  { id: "preeclampsia", label: "Preeclampsia", icon: "AlertCircle", testIds: ["urinalysis", "kft", "lft"], terms: ["placental growth factor", "protein/creatinine", "platelet"] },
-  { id: "pregnancy", label: "Pregnancy", icon: "Heart", testIds: ["preg", "us-preg"], terms: ["beta-hcg", "estriol", "progesterone"] },
-  { id: "pregnancy-torch", label: "Pregnancy TORCH", icon: "ShieldCheck", terms: ["toxoplasma", "rubella", "cytomegalovirus", "herpes", "igm antibody", "igg antibody"] },
-  { id: "parasite", label: "Parasite", icon: "Scan", terms: ["malaria", "giardia", "strongyloides", "parasite", "stool"] },
-  { id: "fever", label: "Fever", icon: "AlertCircle", testIds: ["cbc", "covid"], terms: ["blood culture", "dengue", "influenza", "malaria", "c-reactive", "procalcitonin"] },
-  { id: "utis", label: "UTIs", icon: "Flask", testIds: ["urinalysis"], terms: ["urine culture", "urine"] },
-  { id: "fitness", label: "Fitness", icon: "Activity", testIds: ["cbc", "glucose", "lipid", "lft", "kft", "vit-bp", "vit-bmi"], terms: ["ck", "creatine kinase", "magnesium"] },
-  { id: "drug", label: "Drug", icon: "Tablet", terms: ["drug", "toxicology", "serum level", "urine screen", "therapeutic"] },
-  { id: "dna", label: "DNA", icon: "Network", terms: ["mutation analysis", "gene", "brca", "dna", "cftr", "hla"] },
+  { id: "general-health", label: "General Health", icon: "PanelGeneralHealth", testIds: ["cbc", "glucose", "lipid", "urinalysis", "vit-bp", "vit-bmi", "vit-temp"] },
+  { id: "stds", label: "STDs", icon: "PanelStds", terms: ["hiv", "syphilis", "gonorrhoeae", "chlamydia", "trichomonas", "hepatitis b", "hepatitis c", "hbsag"] },
+  { id: "cancer", label: "Cancer", icon: "PanelCancer", terms: ["cancer", "tumor", "tumour", "brca", "egfr", "braf", "kras", "tp53", "mutation", "cea"] },
+  { id: "hpv", label: "HPV", icon: "PanelHpv", terms: ["human papillomavirus", "hpv"] },
+  { id: "cardiology", label: "Cardiology", icon: "PanelCardiology", testIds: ["ecg-12", "ecg-stress", "ecg-holter", "echo", "lipid"], terms: ["troponin", "bnp", "ck-mb", "cholesterol"] },
+  { id: "liver", label: "Liver", icon: "PanelLiver", testIds: ["lft", "hbsag"], terms: ["alt", "ast", "bilirubin", "alkaline phosphatase", "gamma gt", "hepatitis"] },
+  { id: "kidney", label: "Kidney", icon: "PanelKidney", testIds: ["kft", "urinalysis"], terms: ["creatinine", "urea", "cystatin", "microalbumin", "albumin/creatinine", "uric acid"] },
+  { id: "thyroid", label: "Thyroid", icon: "PanelThyroid", testIds: ["tsh", "us-thyroid"], terms: ["thyroid", "free t3", "free t4", "thyroglobulin", "tpo"] },
+  { id: "diabetes", label: "Diabetes", icon: "PanelDiabetes", testIds: ["hba1c", "glucose", "urinalysis", "kft", "lipid"], terms: ["insulin", "c-peptide", "fructosamine"] },
+  { id: "lipid", label: "Lipid", icon: "PanelLipid", testIds: ["lipid"], terms: ["cholesterol", "triglycerides", "apolipoprotein", "lipoprotein"] },
+  { id: "hepatitis", label: "Hepatitis", icon: "PanelHepatitis", testIds: ["hbsag", "lft"], terms: ["hepatitis", "hbsag"] },
+  { id: "reproductive-health", label: "Reproductive Health", icon: "PanelReproductiveHealth", testIds: ["preg"], terms: ["estradiol", "fsh", "lh", "progesterone", "prolactin", "testosterone", "sex hormone"] },
+  { id: "ovarian-reserve", label: "Ovarian Reserve", icon: "PanelOvarianReserve", terms: ["anti-mullerian", "amh", "fsh", "estradiol", "inhibin"] },
+  { id: "pre-marital", label: "Pre-marital", icon: "PanelPreMarital", testIds: ["cbc", "hbsag"], terms: ["hiv", "syphilis", "hepatitis", "blood type", "rubella"] },
+  { id: "osteoporosis", label: "Osteoporosis", icon: "PanelOsteoporosis", terms: ["calcium", "vitamin d", "parathyroid", "phosphate"] },
+  { id: "arthritis", label: "Arthritis", icon: "PanelArthritis", terms: ["rheumatoid", "anti-ccp", "esr", "c-reactive", "ana", "hla-b27"] },
+  { id: "allergy", label: "Allergy", icon: "PanelAllergy", terms: ["allergy", "specific ige", "latex", "peanut", "shrimp", "mold", "pollen"] },
+  { id: "vitamin", label: "Vitamin", icon: "PanelVitamin", testIds: ["vit-d", "vit-b12"], terms: ["vitamin", "folate"] },
+  { id: "food-intolerance", label: "Food Intolerance", icon: "PanelFoodIntolerance", terms: ["cow milk", "egg", "peanut", "wheat", "soybean", "shrimp", "codfish", "sesame"] },
+  { id: "nipt", label: "NIPT", icon: "PanelNipt", terms: ["nipt", "trisomy", "fetal", "chromosome"] },
+  { id: "gestational-diabetes", label: "Gestational Diabetes", icon: "PanelGestationalDiabetes", testIds: ["glucose", "hba1c"], terms: ["glucose", "insulin"] },
+  { id: "preeclampsia", label: "Preeclampsia", icon: "PanelPreeclampsia", testIds: ["urinalysis", "kft", "lft"], terms: ["placental growth factor", "protein/creatinine", "platelet"] },
+  { id: "pregnancy", label: "Pregnancy", icon: "PanelPregnancy", testIds: ["preg", "us-preg"], terms: ["beta-hcg", "estriol", "progesterone"] },
+  { id: "pregnancy-torch", label: "Pregnancy TORCH", icon: "PanelPregnancyTorch", terms: ["toxoplasma", "rubella", "cytomegalovirus", "herpes", "igm antibody", "igg antibody"] },
+  { id: "parasite", label: "Parasite", icon: "PanelParasite", terms: ["malaria", "giardia", "strongyloides", "parasite", "stool"] },
+  { id: "fever", label: "Fever", icon: "PanelFever", testIds: ["cbc", "covid"], terms: ["blood culture", "dengue", "influenza", "malaria", "c-reactive", "procalcitonin"] },
+  { id: "utis", label: "UTIs", icon: "PanelUtis", testIds: ["urinalysis"], terms: ["urine culture", "urine"] },
+  { id: "fitness", label: "Fitness", icon: "PanelFitness", testIds: ["cbc", "glucose", "lipid", "lft", "kft", "vit-bp", "vit-bmi"], terms: ["ck", "creatine kinase", "magnesium"] },
+  { id: "drug", label: "Drug", icon: "PanelDrug", terms: ["drug", "toxicology", "serum level", "urine screen", "therapeutic"] },
+  { id: "dna", label: "DNA", icon: "PanelDna", terms: ["mutation analysis", "gene", "brca", "dna", "cftr", "hla"] },
 ];
 
 const PANEL_VIEWS = PANEL_CATEGORIES.map(panel => ({
@@ -1258,7 +1258,7 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
                         className={"atp-mobile-cell" + (view === v.id ? " is-active" : "") + (v.id === "smart" ? " is-smart" : "")}
                         onClick={() => selectView(v.id)}
                       >
-                        <Ico size={14} />
+                        <Ico size={15} />
                         <span className="atp-mobile-cell-label">{v.label}</span>
                         {count > 0 && (
                           <span className="atp-mobile-cell-count">{fmtCount(count)}</span>
@@ -1344,7 +1344,7 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
                       title={v.label}
                       style={meta ? { "--side-accent": meta.color } : undefined}
                     >
-                      <Ico size={13} />
+                      <Ico size={15} />
                       <span className="atp-side-label">{v.label}</span>
                       <span className="atp-side-count">{fmtCount(count)}</span>
                     </button>

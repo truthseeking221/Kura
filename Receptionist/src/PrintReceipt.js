@@ -13,6 +13,24 @@
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import kuraLogoUrl from "./assets/kura-logo.svg";
+import { getCoverage } from "./coverage";
+
+function itemSplit(item, insurance) {
+  const gross = (item.price || 0) * (item.qty || 1);
+  if ((item.payer || "direct") === "corporate") {
+    return { patient: 0, insurance: 0, corporate: gross, gross, coverage: null };
+  }
+  const coverage = getCoverage(item.id, insurance);
+  if (coverage?.kind === "covered") {
+    const insPays = gross * ((coverage.percent || 0) / 100);
+    return { patient: Math.max(0, gross - insPays), insurance: insPays, corporate: 0, gross, coverage };
+  }
+  if ((item.payer || "direct") === "insurance") {
+    const insPays = gross * 0.8;
+    return { patient: Math.max(0, gross - insPays), insurance: insPays, corporate: 0, gross, coverage };
+  }
+  return { patient: gross, insurance: 0, corporate: 0, gross, coverage };
+}
 
 const KHR_RATE = 4100;
 
@@ -165,7 +183,7 @@ function patientFields(patient) {
 }
 
 // ---------- Bill page (lab + paid items) ----------
-function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc }) {
+function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }) {
   const fields = patientFields(patient);
   const due = totals.total;
   const dueVnd = Math.round(due * 23000); // mock VND for words display only
@@ -175,8 +193,6 @@ function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barco
       <tr>
         <td class="col-code">${testCode(i.id)}</td>
         <td class="col-desc">${escape(i.name || "")}</td>
-        <td class="col-grp">${testGroupTag(i)}</td>
-        <td class="col-srv">${serviceGroup(i)}</td>
         <td class="col-date">${escape(billDateStr)}</td>
         <td class="col-amt">${fmtCcy(amt, ccy)}</td>
       </tr>`;
@@ -211,14 +227,49 @@ function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barco
         <tr>
           <th class="col-code">Test Code</th>
           <th class="col-desc">Description</th>
-          <th class="col-grp">Service Group</th>
-          <th class="col-srv">Type</th>
           <th class="col-date">Report Date</th>
           <th class="col-amt">Amount</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="6" class="bp-empty">No orders</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="4" class="bp-empty">No orders</td></tr>`}</tbody>
     </table>
+
+    ${splitInfo && splitInfo.hasInsurance ? `
+    <section class="bp-split">
+      <div class="bp-split-head">
+        <span class="bp-split-title">Insurance Coverage Breakdown</span>
+        ${splitInfo.insurer ? `<span class="bp-split-insurer">Insurer: ${escape(splitInfo.insurer)}</span>` : ""}
+      </div>
+      <table class="bp-split-table">
+        <thead>
+          <tr>
+            <th class="col-desc">Description</th>
+            <th class="col-cov">Coverage</th>
+            <th class="col-ins">Insurance Pays</th>
+            <th class="col-pat">Patient Pays</th>
+            <th class="col-amt">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${splitInfo.rows.map(r => `
+            <tr>
+              <td class="col-desc">${escape(r.name)}</td>
+              <td class="col-cov">${escape(r.label)}</td>
+              <td class="col-ins">${fmtCcy(r.insurance, ccy)}</td>
+              <td class="col-pat">${fmtCcy(r.patient, ccy)}</td>
+              <td class="col-amt">${fmtCcy(r.gross, ccy)}</td>
+            </tr>`).join("")}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="col-desc" colspan="2">Subtotals</td>
+            <td class="col-ins">${fmtCcy(splitInfo.totalInsurance, ccy)}</td>
+            <td class="col-pat">${fmtCcy(splitInfo.totalPatient, ccy)}</td>
+            <td class="col-amt">${fmtCcy(splitInfo.totalGross, ccy)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>` : ""}
 
     <section class="bp-pay">
       <div class="bp-pay-modes">
@@ -230,6 +281,9 @@ function billPageHtml({ patient, items, totals, payment, ccy, paymentLine, barco
         <div><dt>Received Amount:</dt><dd>${fmtCcy(payment?.status === "confirmed" ? due : 0, ccy)}</dd></div>
         <div><dt>Gross Amount</dt><dd>: ${fmtCcy(totals.subtotal, ccy)}</dd></div>
         <div><dt>Discount</dt><dd>: ${fmtCcy(totals.discount, ccy)}</dd></div>
+        ${splitInfo && splitInfo.hasInsurance ? `
+        <div><dt>Insurance Pays</dt><dd>: ${fmtCcy(splitInfo.totalInsurance, ccy)}</dd></div>
+        <div><dt>Patient Pays</dt><dd>: ${fmtCcy(splitInfo.totalPatient, ccy)}</dd></div>` : ""}
         <div><dt>Net Amount</dt><dd>: ${fmtCcy(totals.total, ccy)}</dd></div>
         <div class="bp-pay-grand"><dt>Grand Total</dt><dd>: ${fmtCcy(totals.total, ccy)}</dd></div>
       </dl>
@@ -309,7 +363,7 @@ function escape(s) {
 // ---------- styles ----------
 const styles = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: #e7eaee; font-family: 'Inter', -apple-system, system-ui, sans-serif; color: #0c1a3f; }
+html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; color: #0c1a3f; }
 .sheet { padding: 24px 0; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .page {
   width: 210mm; min-height: 297mm; background: #fff; padding: 12mm 10mm;
@@ -317,7 +371,7 @@ html, body { background: #e7eaee; font-family: 'Inter', -apple-system, system-ui
   font-size: 10pt; line-height: 1.42; color: #0c1a3f;
   page-break-after: always; break-after: page;
 }
-.mono { font-family: 'Courier New', monospace; }
+.mono { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; }
 
 /* ---------- Bill page ---------- */
 .bp-header { padding-bottom: 8px; border-bottom: 1.5px solid #0c1a3f; margin-bottom: 12px; position: relative; }
@@ -328,7 +382,7 @@ html, body { background: #e7eaee; font-family: 'Inter', -apple-system, system-ui
 .bp-brand-sub { font-size: 7pt; color: #4a5169; line-height: 1.5; margin-top: 2px; }
 .bp-barcode { text-align: right; padding-top: 4px; }
 .bp-barcode svg { width: 130px; height: 38px; }
-.bp-barcode-num { font-family: 'Courier New', monospace; font-size: 9pt; font-weight: 600; margin-top: 2px; letter-spacing: 0.04em; }
+.bp-barcode-num { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; font-size: 9pt; font-weight: 600; margin-top: 2px; letter-spacing: 0.04em; }
 .bp-title { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 12pt; font-weight: 700; letter-spacing: 0.12em; color: #0c1a3f; }
 
 .bp-info { padding: 4px 0 8px; }
@@ -337,16 +391,30 @@ html, body { background: #e7eaee; font-family: 'Inter', -apple-system, system-ui
 .bp-info-val { color: #0c1a3f; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bp-age { color: #6b7280; margin-left: 6px; font-weight: 400; }
 
-.bp-orders { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9.5pt; }
-.bp-orders thead th { background: #f3f4f7; border-top: 1px solid #1c2748; border-bottom: 1px solid #1c2748; padding: 6px 4px; text-align: left; font-weight: 700; }
-.bp-orders tbody td { padding: 5px 4px; border-bottom: 1px solid #ebecf0; }
-.bp-orders .col-code { width: 70px; font-family: 'Courier New', monospace; }
+.bp-orders { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9.5pt; font-family: 'Courier New', 'Roboto Mono', monospace; }
+.bp-orders thead th { background: #f3f4f7; border-top: 1px solid #1c2748; border-bottom: 1px solid #1c2748; padding: 6px 4px; text-align: left; font-weight: 700; font-family: 'Courier New', 'Roboto Mono', monospace; }
+.bp-orders tbody td { padding: 5px 4px; border-bottom: 1px solid #ebecf0; font-family: 'Courier New', 'Roboto Mono', monospace; }
+.bp-orders .col-code { width: 90px; }
 .bp-orders .col-desc { width: auto; }
-.bp-orders .col-grp { width: 70px; }
-.bp-orders .col-srv { width: 90px; color: #4a5169; }
-.bp-orders .col-date { width: 110px; font-family: 'Courier New', monospace; font-size: 9pt; color: #4a5169; }
-.bp-orders .col-amt { width: 70px; text-align: right; font-weight: 600; }
+.bp-orders .col-date { width: 130px; font-size: 9pt; color: #4a5169; }
+.bp-orders .col-amt { width: 90px; text-align: right; font-weight: 700; }
 .bp-orders .bp-empty { text-align: center; padding: 16px; color: #6b7280; font-style: italic; }
+
+.bp-split { margin-top: 14px; border: 1px solid #d6d8df; border-radius: 4px; padding: 10px 12px; background: #fafbfc; }
+.bp-split-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #ebecf0; }
+.bp-split-title { font-weight: 700; font-size: 9.5pt; color: #0c1a3f; letter-spacing: 0.04em; }
+.bp-split-insurer { font-size: 8.5pt; color: #4a5169; }
+.bp-split-table { width: 100%; border-collapse: collapse; font-size: 9pt; font-family: 'Courier New', 'Roboto Mono', monospace; }
+.bp-split-table th { text-align: left; padding: 4px 4px; font-weight: 700; color: #4a5169; border-bottom: 1px solid #d6d8df; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.04em; }
+.bp-split-table td { padding: 5px 4px; border-bottom: 1px solid #ebecf0; }
+.bp-split-table .col-desc { width: auto; }
+.bp-split-table .col-cov { width: 90px; color: #4a5169; }
+.bp-split-table .col-ins { width: 90px; text-align: right; color: #0866f5; font-weight: 600; }
+.bp-split-table .col-pat { width: 90px; text-align: right; font-weight: 600; }
+.bp-split-table .col-amt { width: 80px; text-align: right; font-weight: 700; }
+.bp-split-table thead th.col-ins, .bp-split-table thead th.col-pat, .bp-split-table thead th.col-amt { text-align: right; }
+.bp-split-table tfoot td { padding-top: 7px; font-weight: 700; border-top: 1.5px solid #1c2748; border-bottom: 0; color: #0c1a3f; }
+.bp-split-table tfoot .col-desc { color: #4a5169; }
 
 .bp-pay { display: grid; grid-template-columns: 1fr 200px; gap: 28px; margin-top: 16px; padding-top: 6px; border-top: 1.5px solid #0c1a3f; align-items: start; }
 .bp-pay-modes-title { font-weight: 700; font-size: 9pt; margin-bottom: 4px; }
@@ -374,7 +442,7 @@ html, body { background: #e7eaee; font-family: 'Inter', -apple-system, system-ui
 .sp-brand-name { font-size: 13pt; font-weight: 700; letter-spacing: 0.06em; color: #10069f; }
 .sp-brand-sub { font-size: 9.5pt; color: #4a5169; margin-top: 2px; }
 .sp-barcode svg { width: 110px; height: 36px; }
-.sp-barcode-num { font-family: 'Courier New', monospace; font-size: 8.5pt; font-weight: 600; text-align: right; margin-top: 2px; letter-spacing: 0.04em; }
+.sp-barcode-num { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; font-size: 8.5pt; font-weight: 600; text-align: right; margin-top: 2px; letter-spacing: 0.04em; }
 
 .sp-patient { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; padding: 14px 0 12px; border-bottom: 1px solid #ebecf0; align-items: start; }
 .sp-patient-name { font-size: 14pt; font-weight: 700; color: #0c1a3f; letter-spacing: 0.02em; }
@@ -462,9 +530,34 @@ export async function printPatientReceipt(patient) {
     .then(t => "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(t))))
     .catch(() => kuraLogoUrl);
 
+  const insurance = patient.insurance || [];
+  const buildSplitInfo = (rowItems) => {
+    const splits = rowItems.map(i => {
+      const s = itemSplit(i, insurance);
+      let label = "—";
+      if (s.coverage?.kind === "covered") label = `${s.coverage.percent}%`;
+      else if ((i.payer || "direct") === "insurance") label = "80%";
+      else if ((i.payer || "direct") === "corporate") label = "Corporate";
+      else if (s.coverage?.kind === "preauth") label = "Pre-auth";
+      else if (s.coverage?.kind === "not-covered") label = "Not covered";
+      else if (s.coverage?.kind === "unconfirmed") label = "Unconfirmed";
+      return { name: i.name || "", insurance: s.insurance, patient: s.patient, gross: s.gross, label };
+    });
+    const totalInsurance = splits.reduce((sum, r) => sum + r.insurance, 0);
+    const totalPatient = splits.reduce((sum, r) => sum + r.patient, 0);
+    const totalGross = splits.reduce((sum, r) => sum + r.gross, 0);
+    const insurer = insurance.find(p => p.eligibility?.state === "eligible")?.provider || insurance[0]?.provider || null;
+    return {
+      hasInsurance: totalInsurance > 0,
+      insurer, rows: splits, totalInsurance, totalPatient, totalGross,
+    };
+  };
+
   const pages = [];
   if (billItems.length > 0 || items.length === 0 || serviceItems.length === 0) {
-    pages.push(billPageHtml({ patient, items: billItems.length ? billItems : items, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc }));
+    const billRowItems = billItems.length ? billItems : items;
+    const splitInfo = buildSplitInfo(billRowItems);
+    pages.push(billPageHtml({ patient, items: billRowItems, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }));
   }
   if (serviceItems.length > 0) {
     pages.push(servicePageHtml({ patient, items: serviceItems, barcodeMarkup, billNo, logoSrc }));
@@ -477,7 +570,7 @@ export async function printPatientReceipt(patient) {
   <title>Kura Receipt · ${escape(patient.name || "Patient")} · ${billNo}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>${styles}</style>
 </head>
 <body>

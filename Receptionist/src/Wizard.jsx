@@ -263,10 +263,23 @@ export function PatientHeader({ patient, gate, currentStep = 1, onStepClick, nex
         return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
       }) || candidates[0];
       if (!target) return;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      const scrollParent = target.closest(".cart-items-scroll, .mobile-cart-sheet-body, .step-body");
+      if (scrollParent && scrollParent.scrollHeight > scrollParent.clientHeight) {
+        const parentRect = scrollParent.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const nextTop = scrollParent.scrollTop
+          + targetRect.top
+          - parentRect.top
+          - Math.max(0, (parentRect.height - targetRect.height) / 2);
+        scrollParent.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+      } else {
+        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
       target.focus?.({ preventScroll: true });
       target.classList.add("is-guided");
-      window.setTimeout(() => target.classList.remove("is-guided"), 1100);
+      window.setTimeout(() => {
+        target.classList.remove("is-guided");
+      }, 1100);
     }, delay);
   };
 

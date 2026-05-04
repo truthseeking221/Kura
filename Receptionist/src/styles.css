@@ -4624,21 +4624,27 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .wizard-workspace-step-4 .desktop-cart-rail-body {
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-bottom: var(--gap);
   scrollbar-gutter: stable;
 }
 .wizard-workspace-step-4 .desktop-cart-rail-body .order-cart-shell {
   position: static !important;
   top: auto !important;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   display: flex !important;
 }
 .wizard-workspace-step-4 .desktop-cart-rail-body .order-cart {
   max-height: none !important;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
+}
+.wizard-workspace-step-4 .desktop-cart-rail-body .cart-items-scroll {
+  flex: 0 0 auto;
+  min-height: clamp(180px, 28vh, 280px);
+  max-height: clamp(220px, 36vh, 360px);
 }
 .wizard-workspace-step-4 .desktop-cart-rail-body .visit-context-rail {
   flex: 0 0 auto;
@@ -9209,11 +9215,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   background: var(--surface);
   color: var(--ink-900);
 }
+.atp-v3 .atp-side-item > svg {
+  color: var(--ink-700);
+  flex-shrink: 0;
+}
 .atp-v3 .atp-side-item.is-active {
   background: var(--surface);
   color: var(--ink-900);
   border-color: var(--border);
   box-shadow: 0 1px 2px rgba(11, 20, 36, 0.05);
+}
+.atp-v3 .atp-side-item.is-active > svg {
+  color: var(--brand-600);
 }
 .atp-v3 .atp-side-item.is-smart svg { color: var(--brand-500); }
 .atp-v3 .atp-side-item.is-active.is-smart { color: var(--brand-700); }

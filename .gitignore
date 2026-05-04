@@ -4,4 +4,6 @@ dist/
 *.png
 !src/assets/bundles/
 !src/assets/bundles/*.png
+!Receptionist/src/assets/bundles/
+!Receptionist/src/assets/bundles/*.png
 .playwright-mcp/
