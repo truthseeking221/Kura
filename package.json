@@ -1,0 +1,10 @@
+{
+  "name": "kura",
+  "private": true,
+  "workspaces": [
+    "Receptionist"
+  ],
+  "scripts": {
+    "build": "npm --workspace kura-receptionist run build && rm -rf dist && cp -R Receptionist/dist dist"
+  }
+}
