@@ -53,8 +53,9 @@ export function Section5({ profile, ordered, answers, setAnswers }) {
         />
         <Reveal when={a.vaccine === "yes"}>
           <div>
-            <div className="pwa-sub-label">Which vaccine?</div>
+            <div className="pwa-sub-label">Which vaccines? <span className="hint">Select all that apply</span></div>
             <Pills
+              multi
               value={a.vaccineType}
               onChange={(v) => set("vaccineType", v)}
               options={[
@@ -64,6 +65,19 @@ export function Section5({ profile, ordered, answers, setAnswers }) {
                 { value: "other", label: "Other" },
               ]}
             />
+            <Reveal when={Array.isArray(a.vaccineType) && a.vaccineType.includes("other")}>
+              <div className="pwa-text-field">
+                <label htmlFor="vaccine-other">Tell us which</label>
+                <input
+                  id="vaccine-other"
+                  type="text"
+                  value={a.vaccineOther || ""}
+                  onChange={(e) => set("vaccineOther", e.target.value)}
+                  placeholder="e.g. Tetanus, Pneumococcal, …"
+                  maxLength={80}
+                />
+              </div>
+            </Reveal>
           </div>
         </Reveal>
       </Question>

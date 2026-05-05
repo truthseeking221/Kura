@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Logo, ChevronLeft, Check, ArrowRight, AlertTriangle, X } from "./icons";
+import { Logo, ChevronLeft, Check, ArrowRight, AlertTriangle, X, Stethoscope, Heart, Pill, Coffee, Sun, Droplet, Shield } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
 import { sectionApplies, isSectionComplete, requiredRemaining, remainingRequiredFields, SECTION_SKIP_REASON } from "./logic";
@@ -27,27 +27,35 @@ const ORDERED_TESTS = [
 
 const SECTION_DEFS = [
   { num: 1, name: "Today's visit",  sub: "Why you came in",                  Comp: Section1,
+    splashIcon: Stethoscope, splashTone: "brand",
     splashTitle: "Tell us what brings you in",
     splashBody: "A few quick questions about today's visit. This helps your doctor focus." },
   { num: 5, name: "Recent health",  sub: "Last 3 months",                    Comp: Section5,
+    splashIcon: Heart, splashTone: "rose",
     splashTitle: "Now, your recent health",
     splashBody: "Recent illness, surgery or travel can affect today's labs. Tell us what stands out." },
   { num: 6, name: "Lifestyle",      sub: "Smoking, alcohol, diet, sleep",    Comp: Section6,
+    splashIcon: Coffee, splashTone: "amber",
     splashTitle: "A bit about your lifestyle",
     splashBody: "Smoking, alcohol, sleep and diet help the doctor read borderline values correctly." },
   { num: 2, name: "Right now",      sub: "Pre-test prep",                    Comp: Section2,
+    splashIcon: Sun, splashTone: "amber",
     splashTitle: "How you arrived today",
     splashBody: "These questions may impact the quality of your lab test results — fasting, exercise, hydration." },
   { num: 3, name: "Medications",    sub: "Rx, OTC, supplements & herbals",   Comp: Section3,
+    splashIcon: Pill, splashTone: "violet",
     splashTitle: "Medications & supplements",
     splashBody: "Many medications change blood-test interpretation. We'll only ask if you actually take them." },
   { num: 4, name: "Women's health", sub: "Private, physician only",          Comp: Section4,
+    splashIcon: Heart, splashTone: "rose",
     splashTitle: "A few private questions",
     splashBody: "Only your physician sees these. They help us interpret hormone tests correctly." },
   { num: 7, name: "Sample comfort", sub: "Phlebotomy preferences & safety",  Comp: Section7,
+    splashIcon: Droplet, splashTone: "brand",
     splashTitle: "About your blood draw",
     splashBody: "Quick preferences so the phlebotomist can prepare — preferred arm, allergies, comfort." },
   { num: 8, name: "Consent",        sub: "Sensitive tests",                  Comp: Section8,
+    splashIcon: Shield, splashTone: "teal",
     splashTitle: "One last thing: consent",
     splashBody: "A couple of consent questions before any sensitive tests are run today." },
 ];
@@ -81,9 +89,15 @@ export default function App() {
 
   const scrollToFirstMissing = () => {
     if (!firstMissing || !mainRef.current) return;
+    navigator.vibrate?.(10);
     const num = firstMissing.num;
     const target = mainRef.current.querySelector(`[data-q-num="${num}"]`);
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.remove("pwa-q-flash");
+    void target.offsetWidth;
+    target.classList.add("pwa-q-flash");
+    setTimeout(() => target.classList.remove("pwa-q-flash"), 1700);
   };
 
   useEffect(() => {
@@ -291,24 +305,41 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
   if (!def) return null;
   const isFirst = position === 1;
   const remaining = Math.max(0, total - position);
+  const Icon = def.splashIcon;
+  const tone = def.splashTone || "brand";
   return (
-    <div className="pwa-splash" role="dialog" aria-modal="true" aria-label={`Starting ${def.name}`}>
+    <div className={`pwa-splash tone-${tone}`} role="dialog" aria-modal="true" aria-label={`Starting ${def.name}`}>
+      <div className="pwa-splash-bloom" aria-hidden="true">
+        <span className="bloom bloom-1" />
+        <span className="bloom bloom-2" />
+      </div>
       <div className="pwa-splash-inner">
         <div className="pwa-splash-meta">
           <span className="step">Step {position} of {total}</span>
           {!isFirst && completed > 0 && (
-            <span className="streak"><Check className="ico" /> {completed} done</span>
+            <span className="streak"><Check className="ico" /> {completed} done · keep going</span>
           )}
         </div>
+
+        {Icon && (
+          <div className="pwa-splash-icon" aria-hidden="true">
+            <span className="ring ring-outer" />
+            <span className="ring ring-inner" />
+            <Icon className="ico" />
+          </div>
+        )}
+
         <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
         <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+
         <div className="pwa-splash-progress" aria-hidden="true">
           {Array.from({ length: total }).map((_, i) => (
             <span key={i} className={`dot ${i < position - 1 ? "done" : i === position - 1 ? "current" : ""}`} />
           ))}
         </div>
+
         <button type="button" className="pwa-cta-block" onClick={onContinue}>
-          {isFirst ? "Let's go" : remaining === 0 ? "Last one — finish strong" : "Continue"}
+          {isFirst ? "Let's begin" : remaining === 0 ? "Last one — finish strong" : "Continue"}
           <ArrowRight className="ico" />
         </button>
       </div>
@@ -330,7 +361,13 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx,
           <strong>{currentIdx + 1}</strong> of {visibleNums.length}
         </div>
       </div>
-      <div className="pwa-progress-segments" role="tablist" aria-label="Form progress — tap a completed step to go back">
+      <div className="pwa-stepper" role="tablist" aria-label="Form progress — tap a completed step to go back">
+        <div className="pwa-stepper-track" aria-hidden="true">
+          <div
+            className="pwa-stepper-fill"
+            style={{ width: `${visibleNums.length > 1 ? (currentPos / (visibleNums.length - 1)) * 100 : 0}%` }}
+          />
+        </div>
         {visibleNums.map((n, i) => {
           const isDone = completedSet.has(n);
           const isCurr = n === currentSec;
@@ -342,10 +379,12 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx,
               role="tab"
               aria-selected={isCurr}
               disabled={!canJump || isCurr}
-              className={`pwa-progress-segment ${isDone ? "done" : ""} ${isCurr ? "current" : ""}`}
-              aria-label={`Section ${n} ${isDone ? "complete, tap to revisit" : isCurr ? "current" : "pending"}`}
+              className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""}`}
+              aria-label={`Step ${i + 1} ${isDone ? "complete, tap to revisit" : isCurr ? "current" : "pending"}`}
               onClick={() => { if (canJump && !isCurr) { navigator.vibrate?.(8); onJump?.(n); } }}
-            />
+            >
+              <span className="dot" aria-hidden>{isDone ? <Check className="ico" /> : i + 1}</span>
+            </button>
           );
         })}
       </div>
