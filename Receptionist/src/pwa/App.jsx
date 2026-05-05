@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Logo, ChevronLeft, Check, ArrowRight, Send } from "./icons";
-import { Banner } from "./components";
+import { Logo, ChevronLeft, Check, ArrowRight } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
 import { sectionApplies, isSectionComplete } from "./logic";
@@ -79,6 +78,11 @@ export default function App() {
   };
 
   const showHeaderBack = stage === "section";
+  const mainClass = [
+    "pwa-main",
+    stage === "cover" ? "pwa-main-cover" : "",
+    stage === "done" ? "pwa-main-done" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div className="pwa">
@@ -104,9 +108,9 @@ export default function App() {
           />
         )}
 
-        <main className="pwa-main" ref={mainRef}>
+        <main className={mainClass} ref={mainRef}>
           {stage === "cover" && (
-            <CoverScreen profile={PROFILE} visibleSecs={visibleSecs} onStart={startForm} />
+            <CoverScreen profile={PROFILE} visibleSecs={visibleSecs} />
           )}
 
           {stage === "section" && currentDef && (
@@ -156,44 +160,35 @@ export default function App() {
             </button>
           </footer>
         )}
+
+        {stage === "done" && (
+          <footer className="pwa-footer solid pwa-footer-done">
+            <button type="button" className="pwa-cta-block pwa-cta-block-complete" disabled aria-disabled>
+              Sent to clinic
+              <Check className="ico" />
+            </button>
+          </footer>
+        )}
       </div>
     </div>
   );
 }
 
-function CoverScreen({ profile, visibleSecs, onStart }) {
+function CoverScreen({ profile, visibleSecs }) {
   const firstName = profile.name.split(" ")[0];
-  const sectionNames = visibleSecs.slice(0, 3).map((s) => s.name);
   return (
     <div className="pwa-cover">
-      <div className="pwa-cover-welcome">
-        <span className="pwa-cover-kicker">Welcome back</span>
-        <h1 className="pwa-cover-greet">Hi, {firstName}.</h1>
-        <p className="pwa-cover-line">Take a moment. We will guide you through a few simple questions before your visit.</p>
-      </div>
-
-      <div className="pwa-cover-meta">
-        <span>About 3 minutes</span>
-        <span>{visibleSecs.length} short sections</span>
-        <span>Saved as you go</span>
-      </div>
-
-      <div className="pwa-cover-card">
-        <div>
-          <span className="pwa-cover-card-label">Today at</span>
-          <strong>{profile.clinic}</strong>
+      <div className="pwa-cover-inner">
+        <span className="pwa-cover-kicker">{profile.clinic}</span>
+        <h1 className="pwa-cover-greet">Hello, {firstName}.</h1>
+        <p className="pwa-cover-line">A few quiet questions before your visit. Take your time.</p>
+        <div className="pwa-cover-meta" aria-label="Visit summary">
+          <span><strong>3</strong> min</span>
+          <span className="dot" aria-hidden="true" />
+          <span><strong>{visibleSecs.length}</strong> sections</span>
+          <span className="dot" aria-hidden="true" />
+          <span>Private</span>
         </div>
-        <span className="pwa-cover-card-mark">{profile.initials}</span>
-      </div>
-
-      <div className="pwa-cover-next" aria-label="What comes next">
-        <div className="pwa-cover-next-title">First up</div>
-        {sectionNames.map((name, index) => (
-          <div className="pwa-cover-next-row" key={name}>
-            <span>{index + 1}</span>
-            <strong>{name}</strong>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -230,23 +225,36 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx 
 }
 
 function DoneScreen({ profile, answers }) {
+  const firstName = profile.name.split(" ")[0];
   const visitReasons = answers.s1?.visitReason || [];
+  const medCount = answers.s3?.rx?.length || 0;
   const summary = [
-    { lbl: "Visit reasons captured", val: `${visitReasons.length} selected` },
-    { lbl: "Pre-test prep", val: answers.s2?.fasting === "fasting" ? "Fasting confirmed" : "Captured" },
-    { lbl: "Medications", val: (answers.s3?.rx?.length || 0) + " medications" },
-    { lbl: "Lifestyle snapshot", val: "Captured" },
-    { lbl: "Sample comfort", val: "Captured" },
+    { lbl: "Visit notes", val: visitReasons.length ? `${visitReasons.length} selected` : "Ready" },
+    { lbl: "Pre-test prep", val: answers.s2?.fasting === "fasting" ? "Fasting confirmed" : "Reviewed" },
+    { lbl: "Medication list", val: medCount ? `${medCount} item${medCount === 1 ? "" : "s"}` : "No current meds added" },
+    { lbl: "Private details", val: "Sent securely" },
   ];
   return (
     <div className="pwa-done">
-      <div className="pwa-done-mark">
-        <Check />
+      <div className="pwa-done-top">
+        <div className="pwa-done-mark">
+          <span className="pwa-done-pulse" aria-hidden="true" />
+          <Check />
+        </div>
+        <span className="pwa-done-kicker">Sent to clinic</span>
+        <h1>All set, {firstName}.</h1>
+        <p>Your intake has reached Kura's front desk. The team can review it before they call you in.</p>
       </div>
-      <h1>Thank you, {profile.name.split(" ")[0]}</h1>
-      <p>Your visit form is sent to the clinic. The team is reviewing it now.</p>
 
-      <div className="pwa-done-summary">
+      <section className="pwa-done-pass" aria-label="Clinic handoff status">
+        <div>
+          <span>Reception handoff</span>
+          <strong>Ready for review</strong>
+        </div>
+        <span className="pwa-done-stamp">Kura</span>
+      </section>
+
+      <div className="pwa-done-summary" aria-label="Submitted intake summary">
         {summary.map((row) => (
           <div className="pwa-done-row" key={row.lbl}>
             <Check className="ico" />
@@ -256,14 +264,9 @@ function DoneScreen({ profile, answers }) {
         ))}
       </div>
 
-      <Banner kind="info" title="What's next">
-        When you arrive at {profile.clinic}, your nurse will already have everything they need. Bring this device. Your check-in QR will appear here at the clinic.
-      </Banner>
-
-      <div style={{ marginTop: 22 }}>
-        <button type="button" className="pwa-cta-block" disabled aria-disabled>
-          <Send style={{ width: 18, height: 18 }} /> Sent to clinic
-        </button>
+      <div className="pwa-done-note">
+        <Stethoscope className="ico" />
+        <span>Keep this phone nearby. Your nurse may use it to confirm details at reception.</span>
       </div>
     </div>
   );
