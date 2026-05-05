@@ -257,7 +257,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   min-height: 0;
   display: grid;
   align-content: stretch;
-  padding: 34px 24px 28px;
+  padding: 24px 24px 24px;
   background: var(--surface);
 }
 .pwa-cover-inner {
@@ -266,8 +266,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   margin: 0 auto;
   text-align: left;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 22px;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 16px;
   height: 100%;
 }
 .pwa-cover-topline {
@@ -287,18 +288,20 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-cover-composition {
   min-height: 0;
   display: grid;
-  align-items: center;
+  align-items: start;
 }
 .pwa-cover-copy {
   min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 .pwa-cover-greet {
-  font-size: 48px;
+  font-size: 42px;
   line-height: 1.06;
   letter-spacing: 0;
   color: var(--ink-900);
   font-weight: 600;
-  margin: 0 0 16px;
+  margin: 0;
   animation: coverRise 0.68s 0.08s cubic-bezier(.2,.8,.2,1) both;
 }
 .pwa-cover-greet .name {
@@ -306,7 +309,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   color: var(--brand-500);
 }
 .pwa-cover-line {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.55;
   color: var(--ink-500);
   margin: 0;
@@ -1549,7 +1552,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: calc(var(--safe-top) + 14px) 24px calc(var(--safe-bottom) + 14px);
+  padding: calc(var(--safe-top) + 10px) 20px calc(var(--safe-bottom) + 10px);
   background: linear-gradient(180deg, var(--splash-soft) 0%, var(--surface) 56%);
   overflow: hidden;
   animation: splashIn 0.42s cubic-bezier(.22,.9,.25,1) both;
@@ -1600,9 +1603,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 380px;
   height: 100%;
   max-height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: clamp(8px, 1.8vh, 14px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.4vh, 12px);
   text-align: left;
   min-height: 0;
   overflow: hidden;
@@ -1689,7 +1692,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-splash-title {
   margin: 0;
-  font-size: 25px;
+  font-size: 23px;
   line-height: 1.18;
   font-weight: 700;
   letter-spacing: -0.018em;
@@ -1698,8 +1701,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash-body {
   margin: 0;
-  font-size: 14.5px;
-  line-height: 1.5;
+  font-size: 13.8px;
+  line-height: 1.42;
   color: var(--ink-600);
   max-width: 34ch;
   animation: copyRise 0.55s cubic-bezier(.22,.9,.25,1) 0.26s both;
@@ -1708,12 +1711,12 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: clamp(10px, 2vh, 18px);
+  justify-content: flex-start;
+  gap: clamp(8px, 1.6vh, 14px);
 }
 .pwa-splash-text {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 @keyframes copyRise {
   from { opacity: 0; transform: translateY(8px); }
@@ -1748,13 +1751,19 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 @media (max-height: 700px) {
   .pwa-splash {
-    padding: calc(var(--safe-top) + 10px) 22px calc(var(--safe-bottom) + 10px);
+    padding: calc(var(--safe-top) + 8px) 18px calc(var(--safe-bottom) + 8px);
   }
   .pwa-splash-inner {
     gap: 8px;
   }
   .pwa-splash-copy {
     gap: 9px;
+  }
+  .pwa-cover {
+    padding: 20px 20px 20px;
+  }
+  .pwa-cover-inner {
+    gap: 12px;
   }
   .pwa-splash-icon {
     width: 58px;
@@ -1778,6 +1787,16 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 
 @media (max-height: 610px) {
+  .pwa-cover {
+    padding: 16px 18px 18px;
+  }
+  .pwa-cover-greet {
+    font-size: 36px;
+  }
+  .pwa-cover-line {
+    font-size: 13.8px;
+    line-height: 1.42;
+  }
   .pwa-splash-meta .streak {
     display: none;
   }
