@@ -56,7 +56,7 @@
   --purple-500: #3f779e;
   --purple-600: #2b5d81;
 
-  --bg: #f3f1ea;
+  --bg: #f6f7fa;
   --surface: #ffffff;
   --surface-2: #fafbfd;
   --border: #e6e9f1;
@@ -86,7 +86,7 @@ html, body {
   overscroll-behavior-y: contain;
 }
 body {
-  font-family: 'Noto Sans', 'Noto Sans Khmer', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: 'Noto Sans', sans-serif;
   font-size: 15px;
   line-height: 1.45;
   color: var(--ink-800);
@@ -103,21 +103,21 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   height: 100vh;
   display: flex;
   justify-content: center;
-  background: linear-gradient(180deg, #ebeef3 0%, #f3f1ea 280px);
+  background: linear-gradient(180deg, #eef3f8 0%, #f6f7fa 280px);
   overflow: hidden;
 }
 .pwa-canvas {
   width: 100%;
   max-width: 480px;
   height: 100%;
-  background: var(--ink-50);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
 }
 @media (min-width: 600px) {
-  .pwa { padding: 0 16px; align-items: stretch; background: linear-gradient(180deg, #e4e9f0 0%, #f3f1ea 360px); }
+  .pwa { padding: 0 16px; align-items: stretch; background: linear-gradient(180deg, #e4e9f0 0%, #f6f7fa 360px); }
   .pwa-canvas {
     height: 100dvh;
     max-height: 100dvh;
@@ -137,7 +137,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(250,248,241,0.92);
+  background: rgba(255,255,255,0.92);
   backdrop-filter: saturate(160%) blur(10px);
   -webkit-backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid rgba(15,23,42,0.06);
@@ -191,10 +191,11 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-main-cover {
   overflow: hidden;
-  padding-bottom: calc(var(--footer-h) + var(--safe-bottom) + 10px);
+  background: var(--surface);
+  padding: 0;
 }
 .pwa-main-done {
-  background: var(--ink-50);
+  background: var(--surface);
 }
 .pwa-main::-webkit-scrollbar { width: 6px; }
 .pwa-main::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 999px; }
@@ -202,34 +203,54 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 /* === Cover / Welcome: minimal, calm, airy === */
 .pwa-cover {
-  height: 100%;
+  height: calc(100vh - var(--header-h) - var(--footer-h) - var(--safe-top) - var(--safe-bottom));
+  height: calc(100dvh - var(--header-h) - var(--footer-h) - var(--safe-top) - var(--safe-bottom));
   min-height: 0;
   display: grid;
-  align-content: center;
-  padding: 32px 24px;
+  align-content: stretch;
+  padding: 34px 24px 28px;
+  background: var(--surface);
 }
 .pwa-cover-inner {
   width: 100%;
   max-width: 380px;
   margin: 0 auto;
   text-align: left;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 22px;
+  height: 100%;
+}
+.pwa-cover-topline {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  animation: coverRise 0.55s cubic-bezier(.2,.8,.2,1) both;
 }
 .pwa-cover-kicker {
   display: block;
-  color: var(--brand-500);
+  color: var(--ink-500);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  margin-bottom: 24px;
+}
+.pwa-cover-composition {
+  min-height: 0;
+  display: grid;
+  align-items: center;
+}
+.pwa-cover-copy {
+  min-width: 0;
 }
 .pwa-cover-greet {
-  font-size: 44px;
+  font-size: 48px;
   line-height: 1.06;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--ink-900);
   font-weight: 600;
-  margin: 0 0 18px;
+  margin: 0 0 16px;
+  animation: coverRise 0.68s 0.08s cubic-bezier(.2,.8,.2,1) both;
 }
 .pwa-cover-greet .name {
   font-weight: 700;
@@ -239,36 +260,45 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   font-size: 16px;
   line-height: 1.55;
   color: var(--ink-500);
-  margin: 0 0 40px;
+  margin: 0;
   font-weight: 400;
   max-width: 320px;
+  animation: coverRise 0.68s 0.16s cubic-bezier(.2,.8,.2,1) both;
 }
 .pwa-cover-meta {
   list-style: none;
   margin: 0;
-  padding: 24px 0 0;
-  border-top: 1px solid var(--ink-150);
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 0;
+  animation: coverRise 0.68s 0.24s cubic-bezier(.2,.8,.2,1) both;
 }
 .pwa-cover-meta li {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 0;
+  border-top: 1px solid var(--border);
 }
 .pwa-cover-meta .num {
   color: var(--ink-900);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 .pwa-cover-meta .lbl {
   color: var(--ink-500);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+@keyframes coverRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* === Section header (in-section): legacy, unused === */
@@ -694,7 +724,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   gap: 8px;
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  min-height: 42px;
+  padding: 7px 8px;
   border-radius: var(--radius);
   font-size: 13px;
   background: transparent;
@@ -702,25 +733,45 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   color: inherit;
 }
 .pwa-footer-status.ok {
+  color: var(--ink-600);
+  font-weight: 550;
+}
+.pwa-footer-status.ok .ico {
+  width: 16px;
+  height: 16px;
   color: var(--success-600);
-  font-weight: 600;
+  flex-shrink: 0;
 }
-.pwa-footer-status.ok .ico { width: 16px; height: 16px; }
+.pwa-footer-status.ok .copy {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pwa-footer-status.missing {
-  background: var(--warn-50);
-  color: var(--warn-700);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--ink-700);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s, transform 0.08s;
 }
-.pwa-footer-status.missing:hover { background: var(--warn-100); }
+.pwa-footer-status.missing:hover {
+  background: var(--surface);
+  border-color: var(--brand-200);
+}
+.pwa-footer-status.missing:active {
+  transform: translateY(1px);
+}
 .pwa-footer-status.missing .badge {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
-  background: var(--warn-500);
-  color: white;
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  color: var(--brand-700);
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
@@ -729,25 +780,26 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  font-weight: 500;
-  color: var(--warn-700);
+  font-weight: 550;
+  color: var(--ink-600);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .pwa-footer-status.missing .copy strong {
   font-weight: 700;
-  color: var(--warn-700);
+  color: var(--ink-900);
 }
 .pwa-footer-status.missing .more {
-  color: var(--warn-600);
+  margin-left: 8px;
+  color: var(--ink-500);
   font-weight: 500;
 }
 .pwa-footer-status.missing .arrow {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  color: var(--warn-600);
+  color: var(--brand-500);
 }
 
 .pwa-footer-skip {
@@ -820,24 +872,47 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 @media (max-height: 700px) {
   .pwa-cover {
-    padding: 20px 24px;
+    padding: 24px 24px 22px;
+  }
+  .pwa-cover-inner {
+    gap: 12px;
   }
   .pwa-cover-greet {
-    font-size: 34px;
-    margin-bottom: 14px;
+    font-size: 38px;
+    margin-bottom: 12px;
   }
   .pwa-cover-line {
-    margin-bottom: 28px;
     font-size: 14.5px;
   }
-  .pwa-cover-kicker {
-    margin-bottom: 18px;
-  }
-  .pwa-cover-meta {
-    padding-top: 18px;
-  }
   .pwa-cover-meta .num {
-    font-size: 20px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 380px) {
+  .pwa-cover {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .pwa-cover-composition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pwa-cover-greet {
+    font-size: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwa-cover-topline,
+  .pwa-cover-greet,
+  .pwa-cover-line,
+  .pwa-cover-meta {
+    animation: none;
+  }
+  .pwa-footer-status.missing,
+  .pwa-cta,
+  .pwa-cta-block {
+    transition: none;
   }
 }
 
@@ -926,7 +1001,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-done-title {
   font-size: 28px;
   line-height: 1.15;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ink-900);
   font-weight: 700;
   margin: 0;

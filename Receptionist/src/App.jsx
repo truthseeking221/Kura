@@ -782,6 +782,7 @@ function AppShell() {
                 onNext={handleNext}
                 onPrev={handlePrev}
                 onPushToast={pushToast}
+                onSendIntake={sendIntakeLink}
                 gate={gate}
               />
             )}

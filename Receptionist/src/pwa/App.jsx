@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Logo, ChevronLeft, Check, ArrowRight, AlertTriangle, X } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
-import { sectionApplies, isSectionComplete, requiredRemaining, remainingRequiredKeys, SECTION_SKIP_REASON, SECTION_REQ_LABEL } from "./logic";
+import { sectionApplies, isSectionComplete, requiredRemaining, remainingRequiredFields, SECTION_SKIP_REASON } from "./logic";
 
 const PROFILE = {
   name: "Sokha Pich",
@@ -59,8 +59,8 @@ export default function App() {
   const isLast = currentIdx === visibleNums.length - 1;
   const sectionDone = isSectionComplete(currentSec, PROFILE, ORDERED_TESTS, answers);
   const remaining = requiredRemaining(currentSec, PROFILE, ORDERED_TESTS, answers);
-  const remainingKeys = remainingRequiredKeys(currentSec, PROFILE, ORDERED_TESTS, answers);
-  const firstMissing = remainingKeys[0] ? SECTION_REQ_LABEL[remainingKeys[0]] : null;
+  const remainingFields = remainingRequiredFields(currentSec, PROFILE, ORDERED_TESTS, answers);
+  const firstMissing = remainingFields[0] || null;
 
   const scrollToFirstMissing = () => {
     if (!firstMissing || !mainRef.current) return;
@@ -148,7 +148,8 @@ export default function App() {
             </div>
             {sectionDone ? (
               <div className="pwa-footer-status ok">
-                <Check className="ico" /> Section complete
+                <Check className="ico" />
+                <span className="copy">Add more details so Kura can prepare better.</span>
               </div>
             ) : firstMissing ? (
               <button
@@ -159,8 +160,8 @@ export default function App() {
               >
                 <span className="badge">{remaining}</span>
                 <span className="copy">
-                  Answer <strong>{firstMissing.num} {firstMissing.label}</strong>
-                  {remaining > 1 && <span className="more"> · {remaining - 1} more</span>}
+                  Next up <strong>{firstMissing.num} {firstMissing.label}</strong>
+                  {remaining > 1 && <span className="more">{remaining - 1} more after this</span>}
                 </span>
                 <ArrowRight className="arrow" />
               </button>
@@ -225,16 +226,24 @@ function CoverScreen({ profile, visibleSecs }) {
   return (
     <div className="pwa-cover">
       <div className="pwa-cover-inner">
-        <span className="pwa-cover-kicker">{profile.clinic}</span>
-        <h1 className="pwa-cover-greet">
-          Hello,<br />
-          <span className="name">{firstName}.</span>
-        </h1>
-        <p className="pwa-cover-line">A few quiet questions before your visit. Take your time.</p>
+        <div className="pwa-cover-topline">
+          <span className="pwa-cover-kicker">{profile.clinic}</span>
+        </div>
+
+        <div className="pwa-cover-composition">
+          <div className="pwa-cover-copy">
+            <h1 className="pwa-cover-greet">
+              Hello,<br />
+              <span className="name">{firstName}.</span>
+            </h1>
+            <p className="pwa-cover-line">Take a breath. We'll keep this short and only ask what helps your visit.</p>
+          </div>
+        </div>
+
         <ul className="pwa-cover-meta" aria-label="Visit summary">
-          <li><span className="num">{visibleSecs.length}</span><span className="lbl">sections</span></li>
-          <li><span className="num">~3</span><span className="lbl">minutes</span></li>
-          <li><span className="num">100%</span><span className="lbl">private</span></li>
+          <li><span className="lbl">Short sections</span><span className="num">{visibleSecs.length}</span></li>
+          <li><span className="lbl">Expected time</span><span className="num">~3 min</span></li>
+          <li><span className="lbl">Shared with Kura</span><span className="num">Private</span></li>
         </ul>
       </div>
     </div>

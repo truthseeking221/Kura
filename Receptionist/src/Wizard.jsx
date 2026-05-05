@@ -20,7 +20,7 @@ export const STEP_DEFS = [
   { id: 2, key: "Review",       icon: "FileText",    labelKey: "step.review"      },
   { id: 3, key: "Insurance",    icon: "Shield",      labelKey: "step.insurance"   },
   { id: 4, key: "Orders",       icon: "Sparkles",    labelKey: "step.orders"      },
-  { id: 5, key: "Teleconsult",  icon: "Video",       labelKey: "step.teleconsult" },
+  { id: 5, key: "PrePost",      icon: "Stethoscope", labelKey: "step.preAndPost"  },
   { id: 6, key: "Payment",      icon: "CreditCard",  labelKey: "step.payment"     },
 ];
 
@@ -40,7 +40,10 @@ export function canNavigateToStep(stepId, currentStep, gate) {
 //   Step 3 (Insurance)  → has insurance OR explicitly marked "no insurance"
 //                         (auto-completes — never blocking)
 //   Step 4 (Orders)     → at least one item in cart
-//   Step 5 (Teleconsult)→ teleconsult booked OR explicitly skipped
+//   Step 5 (PrePost)    → teleconsult booked OR explicitly skipped.
+//                         Visit Details (pre-consult intake) lives in this step
+//                         too but is NOT gated — patient may not be present to
+//                         complete every section, so it stays optional.
 //   Step 6 (Payment)    → payment confirmed (or marked pay-later)
 //
 //   Cart CTA per spec v12 §Order Cart gates only on identity + items, not on

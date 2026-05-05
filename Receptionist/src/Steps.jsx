@@ -2576,7 +2576,13 @@ function makeMonthGrid(viewYear, viewMonth) {
   return grid;
 }
 
-export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToast, gate }) {
+// Step 5 wraps two sections that frame the consultation:
+//   Pre-Consultation  → Visit Details (intake form, fillable now while patient is here)
+//   Post-Consultation → Teleconsultation (optional follow-up booking)
+// Visit Details was previously rendered in Step 6 (Payment), but the patient
+// often leaves before payment, which made "Fill on behalf" useless. Moving it
+// here keeps the form actionable while the patient is still in the queue.
+export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToast, gate, onSendIntake }) {
   const t = useLang();
   const cart = patient.cart || { items: [] };
   const tele = patient.teleconsult || { status: "notBooked", slot: null };
@@ -2701,7 +2707,34 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
   };
 
   return (
-    <StepShell title={t("step5.title") || "Book a teleconsultation"} subtitle={t("step5.sub") || "Schedule a call with a doctor to review results."} className="step-shell-tele">
+    <StepShell
+      title={t("step5.wrapTitle") || "Pre & post consultation"}
+      subtitle={t("step5.wrapSub") || "Capture intake while the patient is still here, then schedule any follow-up call."}
+      className="step-shell-prepost step-shell-tele"
+    >
+      <section className="prepost-section prepost-section-pre">
+        <header className="prepost-section-head">
+          <span className="prepost-section-kicker">Pre-consultation</span>
+          <h3 className="prepost-section-title">Visit details</h3>
+          <p className="prepost-section-sub">
+            Fill on behalf works best while the patient is still in the queue.
+          </p>
+        </header>
+        <Step2VisitDetails
+          patient={patient}
+          onUpdate={onUpdate}
+          onSendIntake={onSendIntake}
+          onPushToast={onPushToast}
+          channelReady={!!patient.telegramVerified || !!patient.otpVerified}
+        />
+      </section>
+
+      <section className="prepost-section prepost-section-post">
+        <header className="prepost-section-head">
+          <span className="prepost-section-kicker">Post-consultation</span>
+          <h3 className="prepost-section-title">{t("step5.title") || "Book a teleconsultation"}</h3>
+          <p className="prepost-section-sub">{t("step5.sub") || "Schedule a call with a doctor to review results."}</p>
+        </header>
       <section className="card-soft tele-step-card next-action-target" data-next-action="teleconsult" tabIndex={-1}>
         <div className="tele-step-context">
           <div className="tele-step-context-row">
@@ -2862,6 +2895,7 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
       <p className="tele-step-foot-note">
         <I.Info size={11} /> {t("step5.footNote") || "Slots are based on estimated result availability. We'll notify the patient if the lab is delayed."}
       </p>
+      </section>
 
       <StepFooter
         onPrev={onPrev}
@@ -2991,16 +3025,9 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
         </div>
       }
     >
-      {/* Visit details — relocated from Step 2 per PM v13.
-          Send link fires now (post-order) so the patient can fill while
-          waiting for blood draw, instead of competing with steps 3-6. */}
-      <Step2VisitDetails
-        patient={patient}
-        onUpdate={onUpdate}
-        onSendIntake={onSendIntake}
-        onPushToast={onPushToast}
-        channelReady={!!patient.telegramVerified || !!patient.otpVerified}
-      />
+      {/* Visit Details now lives in Step 5 (Pre & Post Consultation) so it
+          can be filled while the patient is still in the queue. Step 6 stays
+          focused on payment + check-in. */}
 
       <section className="card-soft step6-summary">
         <header className="step6-summary-head">

@@ -781,6 +781,7 @@ const en = {
   "step.insurance": "Insurance",
   "step.orders": "Orders",
   "step.teleconsult": "Teleconsult",
+  "step.preAndPost": "Pre & post consult",
   "step.payment": "Payment",
   "step.back": "Back",
   "step.next": "Continue",
@@ -952,6 +953,8 @@ const en = {
   "step4.proceedPay": "Continue to payment",
 
   // Step 5
+  "step5.wrapTitle": "Pre & post consultation",
+  "step5.wrapSub": "Capture intake while the patient is still here, then schedule any follow-up call.",
   "step5.title": "Book a teleconsultation",
   "step5.sub": "Schedule a call with a doctor to review results.",
   "step5.context.tat": "Estimated results available: ${eta}. First post-TAT slot is highlighted.",
@@ -1786,6 +1789,7 @@ const km = {
   "step.insurance": "ធានារ៉ាប់រង",
   "step.orders": "បញ្ជាទិញ",
   "step.teleconsult": "ពិគ្រោះតាមអនឡាញ",
+  "step.preAndPost": "មុន និង ក្រោយ ពិគ្រោះ",
   "step.payment": "ការទូទាត់",
   "step.back": "ត្រឡប់",
   "step.next": "បន្ត",
@@ -1952,6 +1956,8 @@ const km = {
   "step4.tele.toastWaived": "បានរំលងការហៅ",
   "step4.proceedPay": "ទៅកាន់ការទូទាត់",
 
+  "step5.wrapTitle": "មុន និង ក្រោយ ពិគ្រោះ",
+  "step5.wrapSub": "កត់ត្រាព័ត៌មានអ្នកជំងឺនៅពេលនៅទីនេះ បន្ទាប់មកកំណត់ពេលហៅតាមអនឡាញ។",
   "step5.title": "កក់ការពិគ្រោះតាមអនឡាញ",
   "step5.sub": "កំណត់ពេលជួបវេជ្ជបណ្ឌិត ដើម្បីពិនិត្យលទ្ធផល។",
   "step5.context.tat": "លទ្ធផលប៉ាន់ស្មាន: ${eta}",

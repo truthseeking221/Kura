@@ -111,69 +111,84 @@ export const computeWarnings = (profile, ordered, answers) => {
   return warns;
 };
 
-// Compute per-section completion based on visible required questions
-export const SECTION_REQ = {
-  1: ["visitReason"],
-  2: ["hydrated"],
-  3: ["biotin"],
-  4: ["lmp", "pregnancy"],
-  5: ["illness", "vaccine", "transfusion", "surgery", "injury", "sleep"],
-  6: ["smoking", "alcoholHabit", "exercise", "diet"],
-  7: ["bloodDrawHistory", "preferredArm", "latex", "port"],
-  8: ["resultsDelivery"],
+// Compute per-section completion based on visible required questions. Keep
+// question numbers here aligned with the rendered <Question num="..."> values
+// so the footer hint always points to the actual unanswered question.
+export const SECTION_REQ_FIELDS = {
+  1: [{ key: "visitReason", num: "1.1", label: "Visit reason" }],
+  2: [{ key: "hydrated", num: "2.5", label: "Hydration" }],
+  3: [{ key: "biotin", num: "3.2", label: "Biotin / B-complex use" }],
+  4: [
+    { key: "lmp", num: "4.1", label: "Last menstrual period" },
+    { key: "pregnancy", num: "4.2", label: "Could you be pregnant" },
+  ],
+  5: [
+    { key: "illness", num: "5.1", label: "Recent illness" },
+    { key: "vaccine", num: "5.2", label: "Recent vaccination" },
+    { key: "transfusion", num: "5.3", label: "Recent transfusion" },
+    { key: "surgery", num: "5.4", label: "Recent surgery" },
+    { key: "injury", num: "5.5", label: "Recent injury" },
+    { key: "sleep", num: "5.7", label: "Sleep last 48 hours" },
+  ],
+  6: [
+    { key: "smoking", num: "6.1", label: "Smoking" },
+    { key: "alcoholHabit", num: "6.2", label: "Alcohol" },
+    { key: "exercise", num: "6.3", label: "Exercise habit" },
+    { key: "diet", num: "6.4", label: "Diet" },
+  ],
+  7: [
+    { key: "bloodDrawHistory", num: "7.1", label: "Past blood draws" },
+    { key: "fainted", num: "7.2", label: "Fainting during blood draw" },
+    { key: "preferredArm", num: "7.3", label: "Preferred arm" },
+    { key: "latex", num: "7.5", label: "Latex allergy" },
+    { key: "port", num: "7.6", label: "Port / fistula" },
+  ],
+  8: [
+    { key: "hivConsent", num: "8.1", label: "HIV / STI test consent", visibleKey: "s8.hivConsent" },
+    { key: "geneticConsent", num: "8.2", label: "Genetic test consent", visibleKey: "s8.geneticConsent" },
+    { key: "resultsDelivery", num: "8.3", label: "Results delivery" },
+  ],
 };
 
-export const SECTION_REQ_LABEL = {
-  visitReason: { num: "1.1", label: "Visit reason" },
-  hydrated: { num: "2.1", label: "Hydration" },
-  biotin: { num: "3.4", label: "Biotin / B-complex use" },
-  lmp: { num: "4.1", label: "Last menstrual period" },
-  pregnancy: { num: "4.2", label: "Could you be pregnant" },
-  illness: { num: "5.1", label: "Recent illness" },
-  vaccine: { num: "5.2", label: "Recent vaccination" },
-  transfusion: { num: "5.3", label: "Recent transfusion" },
-  surgery: { num: "5.4", label: "Recent surgery" },
-  injury: { num: "5.5", label: "Recent injury" },
-  sleep: { num: "5.6", label: "Sleep last night" },
-  smoking: { num: "6.1", label: "Smoking" },
-  alcoholHabit: { num: "6.2", label: "Alcohol" },
-  exercise: { num: "6.3", label: "Exercise habit" },
-  diet: { num: "6.4", label: "Diet" },
-  bloodDrawHistory: { num: "7.1", label: "Past blood draws" },
-  preferredArm: { num: "7.2", label: "Preferred arm" },
-  latex: { num: "7.3", label: "Latex allergy" },
-  port: { num: "7.4", label: "Port / fistula" },
-  resultsDelivery: { num: "8.1", label: "Results delivery" },
-};
+export const SECTION_REQ = Object.fromEntries(
+  Object.entries(SECTION_REQ_FIELDS).map(([sec, fields]) => [sec, fields.map((f) => f.key)])
+);
+
+export const SECTION_REQ_LABEL = Object.fromEntries(
+  Object.values(SECTION_REQ_FIELDS).flat().map((field) => [field.key, { num: field.num, label: field.label }])
+);
+
+const isAnswered = (value) => (
+  Array.isArray(value) ? value.length > 0 : value != null && value !== ""
+);
+
+const requiredFieldsFor = (sec, profile, ordered, answers) => (
+  (SECTION_REQ_FIELDS[sec] || []).filter((field) => (
+    field.visibleKey ? isQVisible(field.visibleKey, profile, ordered, answers) : true
+  ))
+);
 
 export const isSectionComplete = (sec, profile, ordered, answers) => {
   const a = answers[`s${sec}`] || {};
-  const req = SECTION_REQ[sec] || [];
-  for (const k of req) {
-    const v = a[k];
-    if (Array.isArray(v) ? v.length === 0 : v == null || v === "") return false;
+  const req = requiredFieldsFor(sec, profile, ordered, answers);
+  for (const field of req) {
+    if (!isAnswered(a[field.key])) return false;
   }
   return true;
 };
 
-export const requiredRemaining = (sec, profile, ordered, answers) => {
+export const remainingRequiredFields = (sec, profile, ordered, answers) => {
   const a = answers[`s${sec}`] || {};
-  const req = SECTION_REQ[sec] || [];
-  let n = 0;
-  for (const k of req) {
-    const v = a[k];
-    if (Array.isArray(v) ? v.length === 0 : v == null || v === "") n += 1;
-  }
-  return n;
+  const req = requiredFieldsFor(sec, profile, ordered, answers);
+  return req.filter((field) => !isAnswered(a[field.key]));
+};
+
+export const requiredRemaining = (sec, profile, ordered, answers) => {
+  return remainingRequiredFields(sec, profile, ordered, answers).length;
 };
 
 export const remainingRequiredKeys = (sec, profile, ordered, answers) => {
-  const a = answers[`s${sec}`] || {};
-  const req = SECTION_REQ[sec] || [];
-  return req.filter((k) => {
-    const v = a[k];
-    return Array.isArray(v) ? v.length === 0 : v == null || v === "";
-  });
+  return remainingRequiredFields(sec, profile, ordered, answers).map((field) => field.key);
 };
 
 export const SECTION_SKIP_REASON = {
