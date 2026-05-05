@@ -26,35 +26,35 @@ const ORDERED_TESTS = [
 ];
 
 const SECTION_DEFS = [
-  { num: 1, name: "Today's visit",  sub: "Why you came in",                  Comp: Section1,
+  { num: 1, name: "Today's visit",  short: "Visit",   sub: "Why you came in",                  Comp: Section1,
     splashIcon: Stethoscope, splashTone: "brand",
     splashTitle: "Tell us what brings you in",
     splashBody: "A few quick questions about today's visit. This helps your doctor focus." },
-  { num: 5, name: "Recent health",  sub: "Last 3 months",                    Comp: Section5,
+  { num: 5, name: "Recent health",  short: "Health",  sub: "Last 3 months",                    Comp: Section5,
     splashIcon: Heart, splashTone: "rose",
     splashTitle: "Now, your recent health",
     splashBody: "Recent illness, surgery or travel can affect today's labs. Tell us what stands out." },
-  { num: 6, name: "Lifestyle",      sub: "Smoking, alcohol, diet, sleep",    Comp: Section6,
+  { num: 6, name: "Lifestyle",      short: "Life",    sub: "Smoking, alcohol, diet, sleep",    Comp: Section6,
     splashIcon: Coffee, splashTone: "amber",
     splashTitle: "A bit about your lifestyle",
     splashBody: "Smoking, alcohol, sleep and diet help the doctor read borderline values correctly." },
-  { num: 2, name: "Right now",      sub: "Pre-test prep",                    Comp: Section2,
+  { num: 2, name: "Right now",      short: "Prep",    sub: "Pre-test prep",                    Comp: Section2,
     splashIcon: Sun, splashTone: "amber",
     splashTitle: "How you arrived today",
-    splashBody: "These questions may impact the quality of your lab test results — fasting, exercise, hydration." },
-  { num: 3, name: "Medications",    sub: "Rx, OTC, supplements & herbals",   Comp: Section3,
+    splashBody: "These questions may impact the quality of your lab test results: fasting, exercise and hydration." },
+  { num: 3, name: "Medications",    short: "Meds",    sub: "Rx, OTC, supplements & herbals",   Comp: Section3,
     splashIcon: Pill, splashTone: "violet",
     splashTitle: "Medications & supplements",
     splashBody: "Many medications change blood-test interpretation. We'll only ask if you actually take them." },
-  { num: 4, name: "Women's health", sub: "Private, physician only",          Comp: Section4,
+  { num: 4, name: "Women's health", short: "Private", sub: "Private, physician only",          Comp: Section4,
     splashIcon: Heart, splashTone: "rose",
     splashTitle: "A few private questions",
     splashBody: "Only your physician sees these. They help us interpret hormone tests correctly." },
-  { num: 7, name: "Sample comfort", sub: "Phlebotomy preferences & safety",  Comp: Section7,
+  { num: 7, name: "Sample comfort", short: "Draw",    sub: "Phlebotomy preferences & safety",  Comp: Section7,
     splashIcon: Droplet, splashTone: "brand",
     splashTitle: "About your blood draw",
-    splashBody: "Quick preferences so the phlebotomist can prepare — preferred arm, allergies, comfort." },
-  { num: 8, name: "Consent",        sub: "Sensitive tests",                  Comp: Section8,
+    splashBody: "Quick preferences so the phlebotomist can prepare: preferred arm, allergies and comfort." },
+  { num: 8, name: "Consent",        short: "Consent", sub: "Sensitive tests",                  Comp: Section8,
     splashIcon: Shield, splashTone: "teal",
     splashTitle: "One last thing: consent",
     splashBody: "A couple of consent questions before any sensitive tests are run today." },
@@ -224,7 +224,7 @@ export default function App() {
                 <ArrowRight className="arrow" />
               </button>
             ) : null}
-            <div className="pwa-footer-row">
+            <div className={`pwa-footer-row ${sectionDone ? "is-complete" : ""}`}>
               <button
                 type="button"
                 className="pwa-footer-skip"
@@ -234,31 +234,29 @@ export default function App() {
               >
                 Skip
               </button>
-              <div className="pwa-footer-actions">
-                <button
-                  type="button"
-                  className="pwa-footer-back"
-                  onClick={() => {
-                    navigator.vibrate?.(8);
-                    if (currentIdx === 0) { setStage("cover"); return; }
-                    setCurrentSec(visibleNums[currentIdx - 1]);
-                  }}
-                  aria-label={currentIdx === 0 ? "Back to start" : "Back to previous section"}
-                >
-                  <ArrowLeft className="ico" />
-                  <span>Back</span>
-                </button>
-                <button
-                  type="button"
-                  className="pwa-cta"
-                  onClick={goNext}
-                  aria-disabled={!sectionDone}
-                  disabled={!sectionDone}
-                >
-                  {isLast ? "Finish" : "Next"}
-                  <ArrowRight className="ico" />
-                </button>
-              </div>
+              <button
+                type="button"
+                className="pwa-footer-back"
+                onClick={() => {
+                  navigator.vibrate?.(8);
+                  if (currentIdx === 0) { setStage("cover"); return; }
+                  setCurrentSec(visibleNums[currentIdx - 1]);
+                }}
+                aria-label={currentIdx === 0 ? "Back to start" : "Back to previous section"}
+              >
+                <ArrowLeft className="ico" />
+                <span>Back</span>
+              </button>
+              <button
+                type="button"
+                className="pwa-cta"
+                onClick={goNext}
+                aria-disabled={!sectionDone}
+                disabled={!sectionDone}
+              >
+                {isLast ? "Finish" : "Next"}
+                <ArrowRight className="ico" />
+              </button>
             </div>
           </footer>
         )}
@@ -343,16 +341,20 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
           )}
         </div>
 
-        {Icon && (
-          <div className="pwa-splash-icon" aria-hidden="true">
-            <span className="ring ring-outer" />
-            <span className="ring ring-inner" />
-            <Icon className="ico" />
-          </div>
-        )}
+        <div className="pwa-splash-copy">
+          {Icon && (
+            <div className="pwa-splash-icon" aria-hidden="true">
+              <span className="ring ring-outer" />
+              <span className="ring ring-inner" />
+              <Icon className="ico" />
+            </div>
+          )}
 
-        <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
-        <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+          <div className="pwa-splash-text">
+            <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
+            <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+          </div>
+        </div>
 
         <div className="pwa-splash-progress" aria-hidden="true">
           {Array.from({ length: total }).map((_, i) => (
@@ -361,7 +363,7 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
         </div>
 
         <button type="button" className="pwa-cta-block pwa-splash-cta" onClick={onContinue}>
-          {isFirst ? "Let's begin" : remaining === 0 ? "Last one — finish strong" : "Continue"}
+          {isFirst ? "Let's begin" : remaining === 0 ? "Last one, finish strong" : "Continue"}
           <ArrowRight className="ico" />
         </button>
       </div>
@@ -372,14 +374,13 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
 function Stepper({ visibleSecs, visibleNums, completedNums, currentSec, onJump }) {
   const completedSet = new Set(completedNums);
   const currentPos = visibleNums.indexOf(currentSec);
-  const [peek, setPeek] = useState(null);
-  useEffect(() => {
-    if (peek == null) return;
-    const t = setTimeout(() => setPeek(null), 1600);
-    return () => clearTimeout(t);
-  }, [peek]);
   return (
-    <div className="pwa-stepper" role="tablist" aria-label="Form progress — tap a step to revisit">
+    <div
+      className="pwa-stepper"
+      role="tablist"
+      aria-label="Form progress, tap a step to revisit"
+      style={{ "--step-count": visibleSecs.length }}
+    >
       <div className="pwa-stepper-track" aria-hidden="true">
         <div
           className="pwa-stepper-fill"
@@ -392,7 +393,6 @@ function Stepper({ visibleSecs, visibleNums, completedNums, currentSec, onJump }
         const isDone = completedSet.has(n);
         const isCurr = n === currentSec;
         const canJump = i <= currentPos;
-        const showPeek = peek === n;
         return (
           <button
             key={n}
@@ -400,22 +400,18 @@ function Stepper({ visibleSecs, visibleNums, completedNums, currentSec, onJump }
             role="tab"
             aria-selected={isCurr}
             disabled={!canJump || isCurr}
-            className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""} ${showPeek ? "peeking" : ""}`}
-            aria-label={`${s.name}${isDone ? " — complete, tap to revisit" : isCurr ? " — current" : ""}`}
+            className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""}`}
+            aria-label={`${s.name}${isDone ? ", complete, tap to revisit" : isCurr ? ", current" : ""}`}
             onClick={() => {
-              if (!canJump || isCurr) {
-                setPeek(n);
-                return;
-              }
+              if (!canJump || isCurr) return;
               navigator.vibrate?.(8);
               onJump?.(n);
             }}
-            onPointerDown={() => setPeek(n)}
           >
             <span className="dot" aria-hidden>
               {isDone ? <Check className="ico" /> : Icon ? <Icon className="ico" /> : (i + 1)}
             </span>
-            <span className="peek" aria-hidden>{s.name}</span>
+            <span className="label" aria-hidden>{s.short || s.name}</span>
           </button>
         );
       })}

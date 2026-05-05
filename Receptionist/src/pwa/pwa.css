@@ -73,7 +73,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
-  --header-h: 56px;
+  --header-h: 48px;
   --footer-h: 88px;
 
   --tap: 48px;
@@ -129,22 +129,29 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 /* === Header: logo + (optional) section context + stepper === */
 .pwa-header {
-  position: sticky;
-  top: 0;
+  position: relative;
+  flex-shrink: 0;
   z-index: 30;
-  padding: var(--safe-top) 18px 0;
+  padding: var(--safe-top) 14px 0;
   display: flex;
   flex-direction: column;
   background: rgba(255,255,255,0.92);
   backdrop-filter: saturate(160%) blur(10px);
   -webkit-backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid rgba(15,23,42,0.06);
+  overflow: visible;
 }
 .pwa-header-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   height: var(--header-h);
+}
+.pwa-header.with-context {
+  padding-bottom: 8px;
+}
+.pwa-header.with-context .pwa-header-row {
+  height: 44px;
 }
 .pwa-header-title {
   flex: 1;
@@ -153,7 +160,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   flex-direction: column;
 }
 .pwa-header-title .name {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 650;
   color: var(--ink-900);
   line-height: 1.2;
@@ -163,7 +170,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   text-overflow: ellipsis;
 }
 .pwa-header-title .sub {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--ink-500);
   font-weight: 500;
   margin-top: 1px;
@@ -173,14 +180,18 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   text-overflow: ellipsis;
 }
 .pwa-header-meta {
-  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--ink-50);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
   color: var(--ink-500);
-  font-weight: 500;
+  font-weight: 600;
   flex-shrink: 0;
 }
 .pwa-header-meta strong { color: var(--ink-800); font-weight: 700; }
-.pwa-header.with-context .pwa-logo-mark { width: 28px; height: 28px; }
-.pwa-header.with-context .pwa-stepper { padding-bottom: 10px; }
+.pwa-header.with-context .pwa-logo-mark { width: 30px; height: 30px; }
+.pwa-header.with-context .pwa-stepper { padding-bottom: 0; }
 .pwa-logo {
   display: flex; align-items: center; gap: 10px;
   border-radius: 8px;
@@ -217,7 +228,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 12px 18px calc(var(--footer-h) + var(--safe-bottom) + 32px);
+  padding: 12px 18px calc(132px + var(--safe-bottom) + 24px);
   scrollbar-width: thin;
   scrollbar-color: var(--ink-200) transparent;
   background: #F5F6FC;
@@ -765,23 +776,22 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   gap: 8px;
 }
 .pwa-footer-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(62px, 0.72fr) minmax(78px, 0.82fr) minmax(112px, 1.35fr);
   align-items: center;
   gap: 8px;
-  justify-content: space-between;
 }
-.pwa-footer-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
+.pwa-footer-row.is-complete {
+  grid-template-columns: minmax(78px, 0.82fr) minmax(150px, 1.45fr);
 }
 .pwa-footer-back {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  width: 100%;
   height: var(--tap);
-  padding: 0 14px;
+  padding: 0 10px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
@@ -900,9 +910,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 
 .pwa-footer-skip {
-  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
   height: var(--tap);
-  padding: 0 16px;
+  padding: 0 10px;
   border-radius: var(--radius);
   background: transparent;
   border: 1px solid var(--border);
@@ -917,10 +928,11 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-footer-skip:disabled { display: none; }
 
 .pwa-cta {
-  flex: 1;
+  width: 100%;
+  min-width: 0;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: var(--tap);
-  padding: 0 22px;
+  padding: 0 14px;
   border-radius: var(--radius);
   background: var(--brand-500);
   color: white;
@@ -1048,15 +1060,17 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 /* === Stepper (lives inside header) === */
 .pwa-stepper {
   position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 4px 4px;
+  display: grid;
+  grid-template-columns: repeat(var(--step-count), minmax(0, 1fr));
+  align-items: start;
+  padding: 4px 0 2px;
+  min-height: 48px;
 }
 .pwa-stepper-track {
   position: absolute;
-  left: 16px; right: 16px;
-  top: 50%;
+  left: calc(50% / var(--step-count));
+  right: calc(50% / var(--step-count));
+  top: 14px;
   margin-top: -1px;
   height: 2px;
   background: var(--ink-150);
@@ -1072,16 +1086,21 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-stepper-step {
   position: relative;
   z-index: 1;
-  width: 44px; height: 44px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
   padding: 0;
   border: none;
   background: transparent;
-  display: grid; place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .pwa-stepper-step .dot {
-  width: 26px; height: 26px;
+  width: 24px; height: 24px;
   border-radius: 999px;
   background: var(--surface);
   border: 2px solid var(--ink-150);
@@ -1093,10 +1112,25 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
 .pwa-stepper-step .dot .ico { width: 14px; height: 14px; stroke-width: 2.2; }
+.pwa-stepper-step .label {
+  max-width: 48px;
+  min-width: 0;
+  color: var(--ink-500);
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pwa-stepper-step.done .dot {
   background: var(--success-500);
   border-color: var(--success-500);
   color: #fff;
+}
+.pwa-stepper-step.done .label {
+  color: var(--success-700);
 }
 .pwa-stepper-step.current .dot {
   background: var(--surface);
@@ -1105,43 +1139,19 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   transform: scale(1.18);
   box-shadow: 0 0 0 4px rgba(38,140,255,0.18);
 }
+.pwa-stepper-step.current .label {
+  color: var(--brand-700);
+}
+.pwa-stepper-step:disabled:not(.current) .label {
+  color: var(--ink-300);
+}
+.pwa-stepper-step:disabled:not(.current) .dot {
+  color: var(--ink-400);
+}
 .pwa-stepper-step[disabled] { cursor: default; }
 .pwa-stepper-step:not([disabled]):active .dot { transform: scale(0.92); }
 .pwa-stepper-step:focus-visible { outline: none; }
 .pwa-stepper-step:focus-visible .dot { box-shadow: 0 0 0 4px rgba(38,140,255,0.32); }
-
-.pwa-stepper-step .peek {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-4px);
-  background: var(--ink-900);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  padding: 5px 9px;
-  border-radius: 6px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 5;
-}
-.pwa-stepper-step .peek::after {
-  content: "";
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  width: 0; height: 0;
-  margin-left: -4px;
-  border: 4px solid transparent;
-  border-bottom-color: var(--ink-900);
-}
-.pwa-stepper-step.peeking .peek {
-  opacity: 1;
-  transform: translateX(-50%);
-}
 
 /* === Done screen (Receptionist DS) === */
 .pwa-done {
@@ -1536,7 +1546,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: calc(var(--safe-top) + 18px) 24px calc(var(--safe-bottom) + 16px);
+  padding: calc(var(--safe-top) + 14px) 24px calc(var(--safe-bottom) + 14px);
   background: linear-gradient(180deg, var(--splash-soft) 0%, var(--surface) 56%);
   overflow: hidden;
   animation: splashIn 0.42s cubic-bezier(.22,.9,.25,1) both;
@@ -1585,16 +1595,18 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   z-index: 1;
   width: 100%;
   max-width: 380px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  height: 100%;
+  max-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: clamp(8px, 1.8vh, 14px);
   text-align: left;
   min-height: 0;
   overflow: hidden;
 }
 .pwa-splash-cta {
   flex-shrink: 0;
-  margin-top: auto;
+  margin-top: 0;
 }
 .pwa-splash-meta {
   display: flex;
@@ -1636,10 +1648,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-splash-icon {
   position: relative;
-  width: 76px; height: 76px;
+  width: 70px; height: 70px;
   flex-shrink: 0;
   display: grid; place-items: center;
-  margin-top: 4px;
   animation: iconRise 0.65s cubic-bezier(.34,1.4,.55,1) 0.08s both;
 }
 .pwa-splash-icon .ring {
@@ -1659,7 +1670,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash-icon .ico {
   position: relative;
-  width: 34px; height: 34px;
+  width: 32px; height: 32px;
   color: var(--splash-tint);
   stroke-width: 1.8;
 }
@@ -1675,7 +1686,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-splash-title {
   margin: 0;
-  font-size: 26px;
+  font-size: 25px;
   line-height: 1.18;
   font-weight: 700;
   letter-spacing: -0.018em;
@@ -1690,6 +1701,17 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 34ch;
   animation: copyRise 0.55s cubic-bezier(.22,.9,.25,1) 0.26s both;
 }
+.pwa-splash-copy {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(10px, 2vh, 18px);
+}
+.pwa-splash-text {
+  display: grid;
+  gap: 10px;
+}
 @keyframes copyRise {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: none; }
@@ -1698,7 +1720,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-splash-progress {
   display: flex;
   gap: 6px;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 .pwa-splash-progress .dot {
   width: 7px; height: 7px;
@@ -1713,10 +1735,61 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   transform: none;
 }
 .pwa-splash .pwa-cta-block {
-  margin-top: auto;
+  margin-top: 0;
   flex-shrink: 0;
   background: var(--splash-tint);
   box-shadow: none;
   animation: copyRise 0.5s cubic-bezier(.22,.9,.25,1) 0.34s both;
 }
 .pwa-splash .pwa-cta-block:hover { background: var(--splash-tint); filter: brightness(0.94); }
+
+@media (max-height: 700px) {
+  .pwa-splash {
+    padding: calc(var(--safe-top) + 10px) 22px calc(var(--safe-bottom) + 10px);
+  }
+  .pwa-splash-inner {
+    gap: 8px;
+  }
+  .pwa-splash-copy {
+    gap: 9px;
+  }
+  .pwa-splash-icon {
+    width: 58px;
+    height: 58px;
+  }
+  .pwa-splash-icon .ring-outer {
+    inset: -7px;
+  }
+  .pwa-splash-icon .ico {
+    width: 27px;
+    height: 27px;
+  }
+  .pwa-splash-title {
+    font-size: 22px;
+  }
+  .pwa-splash-body {
+    font-size: 13.5px;
+    line-height: 1.42;
+    max-width: 36ch;
+  }
+}
+
+@media (max-height: 610px) {
+  .pwa-splash-meta .streak {
+    display: none;
+  }
+  .pwa-splash-icon {
+    width: 50px;
+    height: 50px;
+  }
+  .pwa-splash-title {
+    font-size: 20px;
+  }
+  .pwa-splash-body {
+    font-size: 12.8px;
+    line-height: 1.35;
+  }
+  .pwa-splash-progress {
+    padding: 0;
+  }
+}
