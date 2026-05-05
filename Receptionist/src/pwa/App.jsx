@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Logo, ChevronLeft, Check, ArrowRight } from "./icons";
+import { Logo, ChevronLeft, Check, ArrowRight, Stethoscope, AlertTriangle } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
-import { sectionApplies, isSectionComplete } from "./logic";
+import { sectionApplies, isSectionComplete, requiredRemaining, SECTION_SKIP_REASON } from "./logic";
 
 const PROFILE = {
   name: "Sokha Pich",
@@ -40,6 +40,7 @@ export default function App() {
   const [stage, setStage] = useState("cover");
   const [currentSec, setCurrentSec] = useState(1);
   const [answers, setAnswers] = useState({});
+  const [skipPrompt, setSkipPrompt] = useState(false);
   const mainRef = useRef(null);
 
   const visibleSecs = useMemo(
@@ -57,12 +58,15 @@ export default function App() {
   const currentIdx = visibleNums.indexOf(currentSec);
   const isLast = currentIdx === visibleNums.length - 1;
   const sectionDone = isSectionComplete(currentSec, PROFILE, ORDERED_TESTS, answers);
+  const remaining = requiredRemaining(currentSec, PROFILE, ORDERED_TESTS, answers);
 
   useEffect(() => {
     if (mainRef.current) mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    setSkipPrompt(false);
   }, [stage, currentSec]);
 
   const goNext = () => {
+    setSkipPrompt(false);
     if (isLast) { setStage("done"); return; }
     setCurrentSec(visibleNums[currentIdx + 1]);
   };
@@ -127,28 +131,61 @@ export default function App() {
 
         {stage === "section" && (
           <footer className="pwa-footer">
-            <div className="pwa-footer-progress">
-              <div className="pwa-footer-bar">
-                <div
-                  className="fill"
-                  style={{ width: `${(completedNums.length / visibleNums.length) * 100}%` }}
-                />
+            {skipPrompt && !sectionDone && (
+              <div className="pwa-skip-prompt" role="alertdialog" aria-label="Confirm skip">
+                <div className="pwa-skip-prompt-head">
+                  <AlertTriangle className="ico" />
+                  <strong>Before you skip</strong>
+                </div>
+                <p>{SECTION_SKIP_REASON[currentSec]}</p>
+                <div className="pwa-skip-prompt-actions">
+                  <button type="button" className="pwa-cta-ghost" onClick={() => setSkipPrompt(false)}>
+                    Stay and finish
+                  </button>
+                  <button type="button" className="pwa-skip-confirm" onClick={goNext}>
+                    Skip anyway
+                  </button>
+                </div>
               </div>
-              <div className="meta">
-                <span><strong>{completedNums.length}</strong> of {visibleNums.length} sections</span>
-                <span>{sectionDone ? "Section complete" : "Answer remaining"}</span>
+            )}
+            <div className="pwa-footer-row">
+              <div className="pwa-footer-progress">
+                <div className="pwa-footer-bar">
+                  <div
+                    className="fill"
+                    style={{ width: `${(completedNums.length / visibleNums.length) * 100}%` }}
+                  />
+                </div>
+                <div className="meta">
+                  {sectionDone ? (
+                    <span className="ok"><Check className="ico" /> Section complete</span>
+                  ) : (
+                    <span className="warn">
+                      <strong>{remaining}</strong> required {remaining === 1 ? "answer" : "answers"} left
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="pwa-skip-link"
+                    onClick={() => setSkipPrompt((v) => !v)}
+                    disabled={sectionDone}
+                    hidden={sectionDone}
+                  >
+                    Skip section
+                  </button>
+                </div>
               </div>
+              <button
+                type="button"
+                className="pwa-cta"
+                onClick={goNext}
+                aria-disabled={!sectionDone}
+                disabled={!sectionDone}
+              >
+                {isLast ? "Finish" : "Next"}
+                <ArrowRight className="ico" />
+              </button>
             </div>
-            <button
-              type="button"
-              className="pwa-cta"
-              onClick={goNext}
-              aria-disabled={!sectionDone}
-              disabled={!sectionDone}
-            >
-              {isLast ? "Finish" : "Next"}
-              <ArrowRight className="ico" />
-            </button>
           </footer>
         )}
 
@@ -180,15 +217,16 @@ function CoverScreen({ profile, visibleSecs }) {
     <div className="pwa-cover">
       <div className="pwa-cover-inner">
         <span className="pwa-cover-kicker">{profile.clinic}</span>
-        <h1 className="pwa-cover-greet">Hello, {firstName}.</h1>
+        <h1 className="pwa-cover-greet">
+          Hello,<br />
+          <span className="name">{firstName}.</span>
+        </h1>
         <p className="pwa-cover-line">A few quiet questions before your visit. Take your time.</p>
-        <div className="pwa-cover-meta" aria-label="Visit summary">
-          <span><strong>3</strong> min</span>
-          <span className="dot" aria-hidden="true" />
-          <span><strong>{visibleSecs.length}</strong> sections</span>
-          <span className="dot" aria-hidden="true" />
-          <span>Private</span>
-        </div>
+        <ul className="pwa-cover-meta" aria-label="Visit summary">
+          <li><span className="num">{visibleSecs.length}</span><span className="lbl">sections</span></li>
+          <li><span className="num">~3</span><span className="lbl">minutes</span></li>
+          <li><span className="num">100%</span><span className="lbl">private</span></li>
+        </ul>
       </div>
     </div>
   );

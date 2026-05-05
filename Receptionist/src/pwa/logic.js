@@ -132,3 +132,25 @@ export const isSectionComplete = (sec, profile, ordered, answers) => {
   }
   return true;
 };
+
+export const requiredRemaining = (sec, profile, ordered, answers) => {
+  const a = answers[`s${sec}`] || {};
+  const req = SECTION_REQ[sec] || [];
+  let n = 0;
+  for (const k of req) {
+    const v = a[k];
+    if (Array.isArray(v) ? v.length === 0 : v == null || v === "") n += 1;
+  }
+  return n;
+};
+
+export const SECTION_SKIP_REASON = {
+  1: "Without your visit reason, the doctor may need to ask the same questions again at the desk and your visit will run longer.",
+  2: "Pre-test prep details (fasting, hydration, recent meds) directly affect lab accuracy. Skipping risks invalid results and a repeat draw.",
+  3: "Medications change blood test interpretation. Skipping may lead to misread results or unsafe drug interactions.",
+  4: "Hormone-sensitive tests depend on cycle timing. Skipping may force a redraw on a different day.",
+  5: "Recent illness, transfusion, or surgery can invalidate today's labs. Skipping hides this from the lab team.",
+  6: "Lifestyle context (smoking, alcohol, sleep) helps the doctor read borderline values correctly.",
+  7: "Phlebotomy preferences keep your draw safe and comfortable. Skipping may cause avoidable bruising or fainting.",
+  8: "Without consent, sensitive tests cannot be processed and you'll need to return to sign in person.",
+};

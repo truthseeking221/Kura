@@ -208,56 +208,70 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   height: 100%;
   min-height: 0;
   display: grid;
-  place-items: center;
-  padding: 24px;
+  align-content: center;
+  padding: 32px 24px;
 }
 .pwa-cover-inner {
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
+  margin: 0 auto;
   text-align: left;
 }
 .pwa-cover-kicker {
   display: block;
-  color: #8a93a3;
+  color: var(--brand-500);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 .pwa-cover-greet {
-  font-size: 40px;
-  line-height: 1.08;
-  letter-spacing: -0.01em;
-  color: var(--calm-ink);
+  font-size: 44px;
+  line-height: 1.06;
+  letter-spacing: -0.015em;
+  color: var(--ink-900);
   font-weight: 600;
-  margin: 0 0 16px;
+  margin: 0 0 18px;
+}
+.pwa-cover-greet .name {
+  font-weight: 700;
+  color: var(--brand-500);
 }
 .pwa-cover-line {
   font-size: 16px;
   line-height: 1.55;
-  color: var(--calm-muted);
-  margin: 0 0 36px;
+  color: var(--ink-500);
+  margin: 0 0 40px;
   font-weight: 400;
+  max-width: 320px;
 }
 .pwa-cover-meta {
+  list-style: none;
+  margin: 0;
+  padding: 24px 0 0;
+  border-top: 1px solid var(--ink-150);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.pwa-cover-meta li {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #8a93a3;
-  font-size: 13px;
-  font-weight: 400;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
-.pwa-cover-meta strong {
-  color: var(--calm-ink);
-  font-weight: 600;
-  margin-right: 4px;
+.pwa-cover-meta .num {
+  color: var(--ink-900);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
 }
-.pwa-cover-meta .dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 999px;
-  background: #c8cdd6;
+.pwa-cover-meta .lbl {
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* === Section header (in-section): legacy, unused === */
@@ -633,12 +647,17 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   padding: 12px 18px calc(14px + var(--safe-bottom));
   background: linear-gradient(180deg, rgba(244,246,251,0) 0%, rgba(244,246,251,0.85) 30%, rgba(244,246,251,1) 60%);
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pwa-footer-row {
+  display: flex;
   align-items: center;
   gap: 10px;
 }
 .pwa-footer.solid {
   background: var(--calm-bg);
-  border-top: 1px solid var(--calm-line);
+  border-top: none;
 }
 .pwa-footer-done {
   background: linear-gradient(180deg, rgba(248,246,239,0) 0%, rgba(248,246,239,0.92) 26%, var(--calm-bg) 58%);
@@ -649,11 +668,74 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-footer-progress .meta {
   display: flex; align-items: center; justify-content: space-between;
-  font-size: 11.5px;
+  gap: 10px;
+  font-size: 12px;
   color: var(--ink-500);
   font-weight: 550;
 }
-.pwa-footer-progress .meta strong { color: var(--ink-800); font-weight: 650; }
+.pwa-footer-progress .meta strong { color: var(--ink-800); font-weight: 700; }
+.pwa-footer-progress .meta .ok {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--success-600);
+  font-weight: 600;
+}
+.pwa-footer-progress .meta .ok .ico { width: 12px; height: 12px; }
+.pwa-footer-progress .meta .warn {
+  color: #b07a23;
+  font-weight: 600;
+}
+.pwa-skip-link {
+  background: transparent;
+  border: 0;
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.pwa-skip-link:hover:not(:disabled) { color: var(--brand-600); }
+.pwa-skip-link:disabled { display: none; }
+
+/* Skip confirm prompt */
+.pwa-skip-prompt {
+  background: #fff7e6;
+  border: 1px solid #f3d99a;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pwa-skip-prompt-head {
+  display: flex; align-items: center; gap: 8px;
+  color: #8a5a14;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pwa-skip-prompt-head .ico { width: 16px; height: 16px; color: #c98a1a; }
+.pwa-skip-prompt p {
+  margin: 0;
+  color: #5a4316;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.pwa-skip-prompt-actions {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+}
+.pwa-skip-confirm {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid #d6a55a;
+  color: #8a5a14;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.pwa-skip-confirm:hover { background: #f3d99a; }
 .pwa-footer-bar {
   height: 6px;
   border-radius: 999px;
@@ -690,21 +772,21 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   width: 100%;
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   height: 54px;
-  border-radius: 8px;
-  background: var(--calm-accent);
+  border-radius: 12px;
+  background: var(--brand-500);
   color: white;
   font-size: 16px;
-  font-weight: 700;
-  box-shadow: 0 14px 28px -18px rgba(47, 126, 216, 0.62);
+  font-weight: 650;
+  letter-spacing: 0;
+  transition: background 0.15s, transform 0.08s;
 }
 .pwa-cta-block:hover { background: var(--brand-600); }
 .pwa-cta-block:active { transform: translateY(1px); }
 .pwa-cta-block .ico { width: 20px; height: 20px; flex-shrink: 0; }
 .pwa-cta-block:disabled,
 .pwa-cta-block[aria-disabled="true"] {
-  background: #e4edf5;
-  color: #2d6189;
-  box-shadow: none;
+  background: var(--ink-150);
+  color: var(--ink-500);
   cursor: default;
 }
 .pwa-cta-block-complete {
@@ -720,14 +802,25 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 
 @media (max-height: 700px) {
+  .pwa-cover {
+    padding: 20px 24px;
+  }
   .pwa-cover-greet {
-    font-size: 32px;
+    font-size: 34px;
+    margin-bottom: 14px;
   }
   .pwa-cover-line {
     margin-bottom: 28px;
+    font-size: 14.5px;
   }
   .pwa-cover-kicker {
-    margin-bottom: 22px;
+    margin-bottom: 18px;
+  }
+  .pwa-cover-meta {
+    padding-top: 18px;
+  }
+  .pwa-cover-meta .num {
+    font-size: 20px;
   }
 }
 

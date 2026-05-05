@@ -20,11 +20,6 @@ export function Question({ num, title, required, why, microcopy, locked, prefill
               <Lock /> Private
             </span>
           )}
-          {prefilled && (
-            <span className="pwa-prefill" title="Pre-filled from last visit">
-              <Sparkle /> Pre-filled
-            </span>
-          )}
         </div>
         {why && (
           <button
