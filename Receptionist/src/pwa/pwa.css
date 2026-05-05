@@ -768,7 +768,33 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: center;
   gap: 8px;
+  justify-content: space-between;
 }
+.pwa-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.pwa-footer-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-700);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, border-color 0.15s, transform 0.08s;
+}
+.pwa-footer-back .ico { width: 16px; height: 16px; }
+.pwa-footer-back:hover { background: var(--ink-100); color: var(--ink-900); border-color: var(--ink-200); }
+.pwa-footer-back:active { transform: scale(0.97); }
+.pwa-footer-back:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
 .pwa-footer.solid {
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -1510,7 +1536,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: calc(var(--header-h) + var(--safe-top) + 8px) 24px calc(var(--safe-bottom) + 18px);
+  padding: calc(var(--safe-top) + 18px) 24px calc(var(--safe-bottom) + 16px);
   background: linear-gradient(180deg, var(--splash-soft) 0%, var(--surface) 56%);
   overflow: hidden;
   animation: splashIn 0.42s cubic-bezier(.22,.9,.25,1) both;
@@ -1561,24 +1587,14 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 380px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
   text-align: left;
   min-height: 0;
+  overflow: hidden;
 }
-.pwa-splash-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-bottom: 14px;
-  scrollbar-width: none;
-}
-.pwa-splash-scroll::-webkit-scrollbar { display: none; }
 .pwa-splash-cta {
   flex-shrink: 0;
+  margin-top: auto;
 }
 .pwa-splash-meta {
   display: flex;

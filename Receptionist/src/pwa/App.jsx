@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Logo, Check, ArrowRight, AlertTriangle, X, Stethoscope, Heart, Pill, Coffee, Sun, Droplet, Shield } from "./icons";
+import { Logo, Check, ArrowRight, ArrowLeft, AlertTriangle, X, Stethoscope, Heart, Pill, Coffee, Sun, Droplet, Shield } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
 import { sectionApplies, isSectionComplete, requiredRemaining, remainingRequiredFields, SECTION_SKIP_REASON } from "./logic";
@@ -234,16 +234,31 @@ export default function App() {
               >
                 Skip
               </button>
-              <button
-                type="button"
-                className="pwa-cta"
-                onClick={goNext}
-                aria-disabled={!sectionDone}
-                disabled={!sectionDone}
-              >
-                {isLast ? "Finish" : "Next"}
-                <ArrowRight className="ico" />
-              </button>
+              <div className="pwa-footer-actions">
+                <button
+                  type="button"
+                  className="pwa-footer-back"
+                  onClick={() => {
+                    navigator.vibrate?.(8);
+                    if (currentIdx === 0) { setStage("cover"); return; }
+                    setCurrentSec(visibleNums[currentIdx - 1]);
+                  }}
+                  aria-label={currentIdx === 0 ? "Back to start" : "Back to previous section"}
+                >
+                  <ArrowLeft className="ico" />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  className="pwa-cta"
+                  onClick={goNext}
+                  aria-disabled={!sectionDone}
+                  disabled={!sectionDone}
+                >
+                  {isLast ? "Finish" : "Next"}
+                  <ArrowRight className="ico" />
+                </button>
+              </div>
             </div>
           </footer>
         )}
@@ -321,30 +336,28 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
         <span className="bloom bloom-2" />
       </div>
       <div className="pwa-splash-inner">
-        <div className="pwa-splash-scroll">
-          <div className="pwa-splash-meta">
-            <span className="step">Step {position} of {total}</span>
-            {!isFirst && completed > 0 && (
-              <span className="streak"><Check className="ico" /> {completed} done · keep going</span>
-            )}
-          </div>
-
-          {Icon && (
-            <div className="pwa-splash-icon" aria-hidden="true">
-              <span className="ring ring-outer" />
-              <span className="ring ring-inner" />
-              <Icon className="ico" />
-            </div>
+        <div className="pwa-splash-meta">
+          <span className="step">Step {position} of {total}</span>
+          {!isFirst && completed > 0 && (
+            <span className="streak"><Check className="ico" /> {completed} done · keep going</span>
           )}
+        </div>
 
-          <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
-          <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
-
-          <div className="pwa-splash-progress" aria-hidden="true">
-            {Array.from({ length: total }).map((_, i) => (
-              <span key={i} className={`dot ${i < position - 1 ? "done" : i === position - 1 ? "current" : ""}`} />
-            ))}
+        {Icon && (
+          <div className="pwa-splash-icon" aria-hidden="true">
+            <span className="ring ring-outer" />
+            <span className="ring ring-inner" />
+            <Icon className="ico" />
           </div>
+        )}
+
+        <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
+        <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+
+        <div className="pwa-splash-progress" aria-hidden="true">
+          {Array.from({ length: total }).map((_, i) => (
+            <span key={i} className={`dot ${i < position - 1 ? "done" : i === position - 1 ? "current" : ""}`} />
+          ))}
         </div>
 
         <button type="button" className="pwa-cta-block pwa-splash-cta" onClick={onContinue}>
