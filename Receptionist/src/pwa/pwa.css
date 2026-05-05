@@ -99,7 +99,7 @@ body {
 button { font-family: inherit; cursor: pointer; border: 0; background: transparent; padding: 0; color: inherit; }
 button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-offset: 2px; }
 
-/* === Shell: mobile canvas centered on tablet/desktop === */
+/* === Shell: full-bleed on touch, centered on desktop === */
 .pwa {
   height: 100vh;
   height: 100dvh;
@@ -126,6 +126,21 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
     border-left: 1px solid #e2e8f4;
     border-right: 1px solid #e2e8f4;
     overflow: hidden;
+  }
+}
+@media (hover: none) and (pointer: coarse) {
+  .pwa {
+    justify-content: stretch;
+    padding: 0;
+    background: var(--surface);
+  }
+  .pwa-canvas {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-left: 0;
+    border-right: 0;
   }
 }
 
@@ -257,7 +272,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   min-height: 0;
   display: grid;
   align-content: stretch;
-  padding: 24px 24px 24px;
+  padding: clamp(32px, 5.4vh, 48px) 24px 30px;
   background: var(--surface);
 }
 .pwa-cover-inner {
@@ -268,7 +283,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: grid;
   grid-template-rows: auto auto auto;
   align-content: start;
-  gap: 16px;
+  gap: clamp(24px, 3.4vh, 36px);
   height: 100%;
 }
 .pwa-cover-topline {
@@ -293,10 +308,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-cover-copy {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 16px;
 }
 .pwa-cover-greet {
-  font-size: 42px;
+  font-size: clamp(42px, 6vh, 50px);
   line-height: 1.06;
   letter-spacing: 0;
   color: var(--ink-900);
@@ -309,8 +324,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   color: var(--brand-500);
 }
 .pwa-cover-line {
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 15.5px;
+  line-height: 1.62;
   color: var(--ink-500);
   margin: 0;
   font-weight: 400;
@@ -331,7 +346,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   align-items: baseline;
   justify-content: space-between;
   gap: 18px;
-  padding: 11px 0;
+  padding: 15px 0;
   border-top: 1px solid var(--border);
 }
 .pwa-cover-meta .num {
@@ -1094,14 +1109,14 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   z-index: 1;
   width: 100%;
   min-width: 0;
-  min-height: 50px;
+  min-height: 54px;
   padding: 0;
   border: none;
   background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1119,16 +1134,20 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-stepper-step .dot .ico { width: 14px; height: 14px; stroke-width: 2.2; }
 .pwa-stepper-step .label {
-  max-width: 48px;
   min-width: 0;
+  width: 100%;
   color: var(--ink-500);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 650;
-  line-height: 1.1;
+  line-height: 1.08;
   letter-spacing: 0;
+  text-align: center;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .pwa-stepper-step.done .dot {
   background: var(--success-500);
@@ -1552,7 +1571,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: calc(var(--safe-top) + 10px) 20px calc(var(--safe-bottom) + 10px);
+  padding: calc(var(--safe-top) + clamp(24px, 4vh, 38px)) 20px calc(var(--safe-bottom) + 22px);
   background: linear-gradient(180deg, var(--splash-soft) 0%, var(--surface) 56%);
   overflow: hidden;
   animation: splashIn 0.42s cubic-bezier(.22,.9,.25,1) both;
@@ -1603,9 +1622,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 380px;
   height: 100%;
   max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(8px, 1.4vh, 12px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: clamp(16px, 2.7vh, 28px);
   text-align: left;
   min-height: 0;
   overflow: hidden;
@@ -1692,7 +1711,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-splash-title {
   margin: 0;
-  font-size: 23px;
+  font-size: clamp(24px, 3.6vh, 30px);
   line-height: 1.18;
   font-weight: 700;
   letter-spacing: -0.018em;
@@ -1701,8 +1720,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash-body {
   margin: 0;
-  font-size: 13.8px;
-  line-height: 1.42;
+  font-size: 15px;
+  line-height: 1.58;
   color: var(--ink-600);
   max-width: 34ch;
   animation: copyRise 0.55s cubic-bezier(.22,.9,.25,1) 0.26s both;
@@ -1711,12 +1730,12 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: clamp(8px, 1.6vh, 14px);
+  justify-content: center;
+  gap: clamp(20px, 3.2vh, 34px);
 }
 .pwa-splash-text {
   display: grid;
-  gap: 8px;
+  gap: 14px;
 }
 @keyframes copyRise {
   from { opacity: 0; transform: translateY(8px); }
@@ -1726,7 +1745,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-splash-progress {
   display: flex;
   gap: 6px;
-  padding: 2px 0;
+  padding: 2px 0 0;
 }
 .pwa-splash-progress .dot {
   width: 7px; height: 7px;
@@ -1751,19 +1770,19 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 @media (max-height: 700px) {
   .pwa-splash {
-    padding: calc(var(--safe-top) + 8px) 18px calc(var(--safe-bottom) + 8px);
+    padding: calc(var(--safe-top) + 18px) 18px calc(var(--safe-bottom) + 14px);
   }
   .pwa-splash-inner {
-    gap: 8px;
+    gap: 14px;
   }
   .pwa-splash-copy {
-    gap: 9px;
+    gap: 15px;
   }
   .pwa-cover {
-    padding: 20px 20px 20px;
+    padding: 26px 20px 22px;
   }
   .pwa-cover-inner {
-    gap: 12px;
+    gap: 18px;
   }
   .pwa-splash-icon {
     width: 58px;
@@ -1780,15 +1799,15 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
     font-size: 22px;
   }
   .pwa-splash-body {
-    font-size: 13.5px;
-    line-height: 1.42;
+    font-size: 13.8px;
+    line-height: 1.45;
     max-width: 36ch;
   }
 }
 
 @media (max-height: 610px) {
   .pwa-cover {
-    padding: 16px 18px 18px;
+    padding: 18px 18px 18px;
   }
   .pwa-cover-greet {
     font-size: 36px;
