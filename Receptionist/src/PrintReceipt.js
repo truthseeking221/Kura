@@ -216,33 +216,10 @@ function patientPhotoSrc(patient) {
 }
 
 // ---------- Bill page (lab + paid items) ----------
-function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }) {
+function billPageHtml({ patient, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo }) {
   const fields = patientFields(patient);
   const photoSrc = patientPhotoSrc(patient);
   const due = totals.total;
-  const dueVnd = Math.round(due * 23000); // mock VND for words display only
-  const { bundleGroups, standalone } = groupItemsByBundle(items, bundles);
-  const renderItemRow = (i, child) => {
-    const amt = (i.price || 0) * (i.qty || 1);
-    return `
-      <tr class="${child ? "bp-row-child" : ""}">
-        <td class="col-desc">${child ? `<span class="bp-child-marker">└</span> ` : ""}${escape(i.name || "")}</td>
-        <td class="col-amt">${fmtCcy(amt, ccy)}</td>
-      </tr>`;
-  };
-  const bundleRows = bundleGroups.map(g => `
-      <tr class="bp-row-bundle">
-        <td class="col-desc">
-          <span class="bp-bundle-name">${escape(g.name)}</span>
-          ${g.purpose ? `<span class="bp-bundle-purpose">${escape(g.purpose)}</span>` : ""}
-          <span class="bp-bundle-count">${g.items.length} item${g.items.length === 1 ? "" : "s"}</span>
-        </td>
-        <td class="col-amt">${fmtCcy(g.subtotal, ccy)}</td>
-      </tr>
-      ${g.items.map(i => renderItemRow(i, true)).join("")}
-    `).join("");
-  const standaloneRows = standalone.map(i => renderItemRow(i, false)).join("");
-  const rows = bundleRows + standaloneRows;
 
   return `
   <section class="page bill-page">
@@ -263,26 +240,13 @@ function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLi
 
     <section class="bp-info">
       <div class="bp-info-row"><span class="bp-info-key">Name</span><span class="bp-info-val">: ${escape(fields.name)}</span><span class="bp-info-key">Patient No.</span><span class="bp-info-val">: ${fields.patientNo}</span><span class="bp-info-key">Bill Date</span><span class="bp-info-val">: ${escape(billDateStr)}</span></div>
-      <div class="bp-info-row"><span class="bp-info-key">DOB</span><span class="bp-info-val">: ${fields.dob} ${fields.age ? `<span class="bp-age">${fields.age}</span>` : ""}</span><span class="bp-info-key">Client Name</span><span class="bp-info-val">: ${escape(fields.client)}</span><span class="bp-info-key">URN No</span><span class="bp-info-val">: ${escape(fields.urn)}</span></div>
-      <div class="bp-info-row"><span class="bp-info-key">Gender</span><span class="bp-info-val">: ${escape(fields.gender)}</span><span class="bp-info-key">Email</span><span class="bp-info-val">: ${escape(fields.email)}</span><span class="bp-info-key">Location</span><span class="bp-info-val">: ${escape(fields.location)}</span></div>
-      <div class="bp-info-row"><span class="bp-info-key">Contact No</span><span class="bp-info-val">: ${escape(fields.contact)}</span><span class="bp-info-key">Bill No.</span><span class="bp-info-val">: ${billNo}</span><span class="bp-info-key"></span><span class="bp-info-val"></span></div>
-      <div class="bp-info-row"><span class="bp-info-key">Address</span><span class="bp-info-val">: ${escape(fields.address)}</span><span class="bp-info-key">City</span><span class="bp-info-val">: ${escape(fields.city)}</span><span class="bp-info-key"></span><span class="bp-info-val"></span></div>
+      <div class="bp-info-row"><span class="bp-info-key">DOB</span><span class="bp-info-val">: ${fields.dob} ${fields.age ? `<span class="bp-age">${fields.age}</span>` : ""}</span><span class="bp-info-key">Gender</span><span class="bp-info-val">: ${escape(fields.gender)}</span><span class="bp-info-key">Email</span><span class="bp-info-val">: ${escape(fields.email)}</span></div>
+      <div class="bp-info-row"><span class="bp-info-key">Contact No</span><span class="bp-info-val">: ${escape(fields.contact)}</span><span class="bp-info-key">Address</span><span class="bp-info-val">: ${escape(fields.address)}</span><span class="bp-info-key">City</span><span class="bp-info-val">: ${escape(fields.city)}</span></div>
     </section>
 
-    <table class="bp-orders">
-      <thead>
-        <tr>
-          <th class="col-desc">Description</th>
-          <th class="col-amt">Amount</th>
-        </tr>
-      </thead>
-      <tbody>${rows || `<tr><td colspan="2" class="bp-empty">No orders</td></tr>`}</tbody>
-    </table>
-
-    ${splitInfo && splitInfo.hasInsurance ? `
     <section class="bp-split">
       <div class="bp-split-head">
-        <span class="bp-split-title">Insurance Coverage Breakdown</span>
+        <span class="bp-split-title">Bill Breakdown</span>
         ${splitInfo.insurer ? `<span class="bp-split-insurer">Insurer: ${escape(splitInfo.insurer)}</span>` : ""}
       </div>
       <table class="bp-split-table">
@@ -334,7 +298,7 @@ function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLi
           </tr>
         </tfoot>
       </table>
-    </section>` : ""}
+    </section>
 
     <section class="bp-pay">
       <div class="bp-pay-modes">
@@ -661,7 +625,7 @@ export async function printPatientReceipt(patient) {
   };
 
   const splitInfo = buildSplitInfo(billItems);
-  const pages = [billPageHtml({ patient, items: billItems, bundles: cartBundles, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo })];
+  const pages = [billPageHtml({ patient, totals, payment, ccy, paymentLine, barcodeMarkup, billNo, billDateStr, logoSrc, splitInfo })];
 
   const html = `<!doctype html>
 <html lang="en">
