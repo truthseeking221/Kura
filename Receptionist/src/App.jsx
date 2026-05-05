@@ -64,6 +64,20 @@ function AppShell() {
   const [notifs, setNotifs] = useState(initialNotifications);
 
   const [toasts, setToasts] = useState([]);
+  // Cart focus mode — desktop only. When on, the right rail collapses sibling
+  // cards (visit context) and the cart's items area expands to fill the
+  // viewport, so a nurse can verify long order lists without inner scroll.
+  // Session-scoped: a nurse who prefers focus mode keeps it across patients.
+  const [cartFocused, setCartFocused] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.sessionStorage.getItem("kura.cartFocused") === "1"; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    try { window.sessionStorage.setItem("kura.cartFocused", cartFocused ? "1" : "0"); }
+    catch {}
+  }, [cartFocused]);
+  const toggleCartFocus = () => setCartFocused(v => !v);
   const toastIdRef = useRef(1);
   const dockSummaryRef = useRef(null);
   const cartSheetRef = useRef(null);
@@ -409,6 +423,15 @@ function AppShell() {
     if (document.querySelector(".modal-overlay")) return;
     startNewWalkIn();
   }, [active, patients]);
+
+  // [ — toggle cart focus mode (desktop). Skip when typing or modal open.
+  useKeydown((e) => {
+    if (e.key !== "[" || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isTypingTarget()) return;
+    if (document.querySelector(".modal-overlay")) return;
+    e.preventDefault();
+    toggleCartFocus();
+  }, [cartFocused]);
 
   const sendIntakeLink = (patientArg = active) => {
     const target = patientArg || active;
@@ -951,7 +974,10 @@ function AppShell() {
               )}
             </div>
 
-            <div className="desktop-cart-rail-body">
+            <div
+              className="desktop-cart-rail-body"
+              data-cart-focused={cartFocused ? "1" : undefined}
+            >
               <OrderCart
                 patient={active}
                 onUpdate={updatePatient}
@@ -971,6 +997,8 @@ function AppShell() {
                 onOpenPay={() => setSheetMode("pay")}
                 payerReady={payerReadyForPayment}
                 blankState={isBlankState}
+                cartFocused={cartFocused}
+                onToggleFocus={toggleCartFocus}
               />
               {currentStep === 4 && (
                 <VisitContextBlock patient={active} className="visit-context-rail" />

@@ -823,7 +823,7 @@ function PregnancyConsentModal({ open, patient, pendingItems, onConfirm, onCance
 //   Layout: [icon] name [status icons] · price · [×]
 //   Payer tag is tucked into a hover tooltip (title attr on the row).
 //   Validation / policy info collapses to small badge icons that expand inline on click.
-function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, coverage, hideValidationLabel, showBreakdown = false }) {
+function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDecision, coverage, hideValidationLabel, showBreakdown = false, compactBundle = false }) {
   const meta = KIND_META[item.kind] || KIND_META.lab;
   const payerMeta = PAYER_LABELS[item.payer] || PAYER_LABELS.direct;
   const requiresValidation = item.kind === "imaging";
@@ -842,20 +842,27 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
   const insurancePays = coverage?.kind === "covered" ? gross * ((coverage.percent || 0) / 100) : 0;
   const patientPays = Math.max(0, gross - insurancePays);
   const breakdown = showBreakdown ? getItemBreakdown(item) : [];
-  const visibleBreakdown = breakdown.slice(0, 5);
+  const visibleBreakdown = breakdown.slice(0, compactBundle ? 3 : 5);
+  const compactBreakdown = compactBundle && breakdown.length > 0
+    ? breakdown.join(", ")
+    : "";
+  const showCoverageBadge = coverage && (!compactBundle || coverage.kind === "not-covered" || coverage.kind === "preauth");
+  const showResponsibility = insurancePays > 0 && !compactBundle;
 
   return (
     <div
-      className={"cart-line cart-line-compact" + (isLast ? " is-last" : "") + (breakdown.length > 0 ? " has-breakdown" : "")}
+      className={"cart-line cart-line-compact" + (isLast ? " is-last" : "") + (breakdown.length > 0 ? " has-breakdown" : "") + (compactBundle ? " cart-line-bundle-child" : "")}
       data-payer={item.payer}
     >
       <div
         className="cart-line-row"
         title={rowTitle}
       >
-        <div className="cart-line-ico" style={{ background: meta.bg, color: meta.color }}>
-          <KindGlyph kind={item.kind} size={14} strokeWidth={1.75} />
-        </div>
+        {!compactBundle && (
+          <div className="cart-line-ico" style={{ background: meta.bg, color: meta.color }}>
+            <KindGlyph kind={item.kind} size={14} strokeWidth={1.75} />
+          </div>
+        )}
         <div className="cart-line-name">
           <div className="cart-line-titlebar">
             <span className="cart-line-name-text">{item.name}</span>
@@ -888,7 +895,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
                 <I.AlertCircle size={10} />
               </button>
             )}
-            {coverage && (
+            {showCoverageBadge && (
               <span className={"cart-line-coverage atp-cov atp-cov-" + (
                 coverage.kind === "covered" ? "yes" :
                 coverage.kind === "not-covered" ? "no" :
@@ -901,7 +908,12 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
               </span>
             )}
           </div>
-          {breakdown.length > 0 && (
+          {compactBreakdown && (
+            <div className="cart-line-breakdown cart-line-breakdown-compact" title={breakdown.join(", ")}>
+              {compactBreakdown}
+            </div>
+          )}
+          {!compactBundle && breakdown.length > 0 && (
             <div className="cart-line-breakdown" title={breakdown.join(", ")}>
               {visibleBreakdown.map(part => (
                 <span key={part}>{part}</span>
@@ -911,7 +923,7 @@ function CartLine({ item, onRemove, onSendValidation, isLast, ccy, t, policyDeci
               )}
             </div>
           )}
-          {insurancePays > 0 && (
+          {showResponsibility && (
             <span className="cart-line-responsibility">
               Patient {fmtCcy(patientPays, ccy)} · {coverage.insurer} {fmtCcy(insurancePays, ccy)}
             </span>
@@ -1008,6 +1020,7 @@ function CartBundleGroup({
   ccy,
   t,
   onRemoveItem,
+  onRemoveBundle,
   onSendValidation,
   policyDecisions,
   insurance,
@@ -1015,32 +1028,53 @@ function CartBundleGroup({
 }) {
   const bodyId = `cart-bundle-body-${group.id}`;
   const title = group.name || "Bundle";
+  const groupResponsibility = group.items.map(item => cartItemResponsibility(item, insurance));
+  const groupInsurancePays = groupResponsibility.reduce((sum, row) => sum + row.insurance, 0);
+  const groupPatientPays = groupResponsibility.reduce((sum, row) => sum + row.patient, 0);
+  const showInsuranceSummary = groupInsurancePays > 0;
 
   return (
     <div className={"cart-group cart-bundle-group" + (collapsed ? " is-collapsed" : "")}>
-      <button
-        type="button"
-        className="cart-group-head cart-bundle-head"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-        aria-controls={bodyId}
-        title={collapsed ? t("cart.group.expand") : t("cart.group.collapse")}
-      >
-        <I.ChevronDown
-          size={11}
-          strokeWidth={2.25}
-          className={"cart-group-chev" + (collapsed ? " is-collapsed" : "")}
-        />
-        <span className="cart-bundle-title">
-          <span className="cart-bundle-title-main">
-            <I.Package size={12} strokeWidth={1.8} />
-            <span>{title}</span>
+      <div className="cart-group-head cart-bundle-head">
+        <button
+          type="button"
+          className="cart-bundle-toggle"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-controls={bodyId}
+          title={collapsed ? t("cart.group.expand") : t("cart.group.collapse")}
+        >
+          <I.ChevronDown
+            size={11}
+            strokeWidth={2.25}
+            className={"cart-group-chev" + (collapsed ? " is-collapsed" : "")}
+          />
+          <span className="cart-bundle-title">
+            <span className="cart-bundle-title-main">
+              <span>{title}</span>
+            </span>
+            {group.purpose && <span className="cart-bundle-purpose">{group.purpose}</span>}
           </span>
-          {group.purpose && <span className="cart-bundle-purpose">{group.purpose}</span>}
-        </span>
-        <span className="cart-group-count">{group.items.length}</span>
-        <span className="cart-group-sub">{fmtCcy(group.subtotal, ccy)}</span>
-      </button>
+          <span className="cart-bundle-meta">
+            <span>{group.items.length} orders</span>
+            {showInsuranceSummary && (
+              <span className="cart-bundle-insurance">
+                Insurance pays {fmtCcy(groupInsurancePays, ccy)}
+              </span>
+            )}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="cart-bundle-remove"
+          onClick={() => onRemoveBundle(group.id)}
+          title={`Cancel ${title} bundle`}
+          aria-label={`Cancel ${title} bundle`}
+        >
+          <I.Trash size={11} strokeWidth={2} />
+          <span>Cancel</span>
+        </button>
+      </div>
       {!collapsed && (
         <div id={bodyId} className="cart-group-body cart-bundle-body">
           {group.items.map((item, idx) => (
@@ -1055,8 +1089,15 @@ function CartBundleGroup({
               coverage={getCoverage(item.id, insurance)}
               t={t}
               showBreakdown
+              compactBundle
             />
           ))}
+          {showInsuranceSummary && (
+            <div className="cart-bundle-pay-summary">
+              <span>Patient {fmtCcy(groupPatientPays, ccy)}</span>
+              <span>Insurance {fmtCcy(groupInsurancePays, ccy)}</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1371,7 +1412,7 @@ export function PaymentArea({ patient, cart, totals, tendered, setTendered, onMe
 //   The cart is the always-visible rail for Steps 1–4. It owns payment (KHQR /
 //   Cash) and the Complete check-in CTA — there is no longer a separate Step 5
 //   panel that mirrors it.
-export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1, requestPaidEdit, onOpenAdd, onOpenPay, payerReady = true, blankState = false }) {
+export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityComplete, currentStep = 1, requestPaidEdit, onOpenAdd, onOpenPay, payerReady = true, blankState = false, cartFocused = false, onToggleFocus = null }) {
   const t = useLang();
   const cart = useMemo(() => deriveCart(patient), [patient]);
   const totals = cartTotals(cart, patient.insurance || []);
@@ -1456,11 +1497,30 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
     }));
   };
 
+  const removeBundle = (bundleId) => {
+    const group = bundleGroups.find(g => g.id === bundleId);
+    if (!group) return;
+    const removableIds = new Set(
+      group.items
+        .filter(item => !(item.auto && item.kind === "visit"))
+        .map(item => item.id)
+    );
+    const nextItems = cart.items
+      .filter(item => !removableIds.has(item.id))
+      .map(item => item.bundleId === bundleId ? stripBundleAttrs(item) : item);
+    const nextBundleIds = new Set(nextItems.map(item => item.bundleId).filter(Boolean));
+    guardPaidCartEdit(`Remove ${group.name || "this bundle"} from a paid visit?`, (mode) => ({
+      ...cart,
+      items: nextItems,
+      bundles: (cart.bundles || []).filter(bundle => nextBundleIds.has(bundle.id)),
+      payment: paymentAfterPaidEdit(cart.payment, mode),
+    }));
+  };
+
   // === Clear all — drops every removable item (auto items like the visit fee stay).
   const removableCount = cart.items.filter(i => !(i.auto && i.kind === "visit")).length;
   const handleClearAll = () => {
     if (removableCount === 0) return;
-    const previousCart = cart;
     const result = guardPaidCartEdit(`Clear ${removableCount} order${removableCount === 1 ? "" : "s"} from a paid visit?`, (mode) => ({
       ...cart,
       items: cart.items.filter(i => i.auto && i.kind === "visit").map(stripBundleAttrs),
@@ -1468,10 +1528,6 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
       payment: paymentAfterPaidEdit(cart.payment, mode),
     }));
     if (result?.deferred) return;
-    onPushToast?.(t("cart.clear.toast", { n: removableCount }), "success", {
-      actionLabel: "Undo",
-      onAction: () => setCart(previousCart),
-    });
   };
 
   // === Patient-side validation for imaging (chain of custody) ===
@@ -1690,11 +1746,24 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
 
   return (
     <>
-      <div className="order-cart-shell" style={{
-        position: "sticky", top: "var(--gap)",
-        display: "flex", flexDirection: "column", gap: "var(--gap)",
-      }}>
-        <div className="card order-cart" style={{ display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "calc(100vh - 100px)" }}>
+      <div
+        className="order-cart-shell"
+        data-focused={cartFocused ? "1" : undefined}
+        style={{
+          position: "sticky", top: "var(--gap)",
+          display: "flex", flexDirection: "column", gap: "var(--gap)",
+        }}
+      >
+        <div
+          className="card order-cart"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            maxHeight: cartFocused ? "calc(100vh - 24px)" : "calc(100vh - 100px)",
+            transition: "max-height 320ms cubic-bezier(.2,.7,.3,1)",
+          }}
+        >
           {/* === HEADER (clean) === */}
           <div className="cart-hd2">
             <div className="cart-hd2-ico"><I.ShoppingCart size={16} strokeWidth={2} /></div>
@@ -1714,6 +1783,22 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                   aria-label={t("cart.clear.title")}
                 >
                   <I.Trash size={10} /> {t("cart.clear")}
+                </button>
+              )}
+              {onToggleFocus && (
+                <button
+                  type="button"
+                  className={"cart-hd2-focus" + (cartFocused ? " is-active" : "")}
+                  onClick={onToggleFocus}
+                  aria-pressed={cartFocused}
+                  title={cartFocused ? "Collapse cart focus  ·  [" : "Expand cart for full review  ·  ["}
+                  aria-label={cartFocused ? "Collapse cart focus" : "Expand cart for full review"}
+                >
+                  <span className="cart-hd2-focus-ico" aria-hidden="true">
+                    {cartFocused
+                      ? <I.Collapse size={12} strokeWidth={2.1} />
+                      : <I.Expand size={12} strokeWidth={2.1} />}
+                  </span>
                 </button>
               )}
             </div>
@@ -1755,6 +1840,7 @@ export function OrderCart({ patient, onUpdate, onPushToast, onCheckIn, identityC
                     ccy={cart.ccy || "USD"}
                     t={t}
                     onRemoveItem={removeItem}
+                    onRemoveBundle={removeBundle}
                     onSendValidation={sendValidation}
                     policyDecisions={policyDecisions}
                     insurance={patient.insurance || []}

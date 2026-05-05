@@ -246,19 +246,19 @@ function billPageHtml({ patient, items, bundles, totals, payment, ccy, paymentLi
 
   return `
   <section class="page bill-page">
-    <header class="bp-header">
-      <div class="bp-brand${photoSrc ? " has-photo" : ""}">
-        ${photoSrc ? `<div class="bp-patient-photo"><img src="${photoSrc}" alt="Patient photo"/></div>` : ""}
-        <img src="${logoSrc}" class="bp-logo" alt="Kura"/>
-        <div class="bp-brand-text">
-          <div class="bp-brand-name">K&nbsp;U&nbsp;R&nbsp;A&nbsp;&nbsp;&nbsp;H&nbsp;E&nbsp;A&nbsp;L&nbsp;T&nbsp;H</div>
-          <div class="bp-brand-sub">#42 Street 240, Sangkat Chaktomuk, Khan Daun Penh, Phnom Penh</div>
-          <div class="bp-brand-sub">Hotline 1800 23 90 90 · info@kura.med</div>
-          <div class="bp-brand-sub">View your result at www.kura.med</div>
-        </div>
-        <div class="bp-barcode">${barcodeMarkup}<div class="bp-barcode-num">${billNo}</div></div>
+    <header class="bp-header${photoSrc ? " has-photo" : ""}">
+      ${photoSrc ? `<div class="bp-patient-photo"><img src="${photoSrc}" alt="Patient photo"/></div>` : ""}
+      <img src="${logoSrc}" class="bp-logo" alt="Kura"/>
+      <div class="bp-brand-text">
+        <div class="bp-brand-name">KURA HEALTH</div>
+        <div class="bp-brand-sub">#42 Street 240, Sangkat Chaktomuk, Khan Daun Penh, Phnom Penh</div>
+        <div class="bp-brand-sub">Hotline 1800 23 90 90 · info@kura.med · www.kura.med</div>
       </div>
-      <div class="bp-title">ORDER DETAILS</div>
+      <div class="bp-header-right">
+        <div class="bp-title">ORDER DETAILS</div>
+        <div class="bp-barcode">${barcodeMarkup}</div>
+        <div class="bp-barcode-num">${billNo}</div>
+      </div>
     </header>
 
     <section class="bp-info">
@@ -440,22 +440,28 @@ html, body { background: #e7eaee; font-family: 'Noto Sans', -apple-system, syste
 .mono { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; }
 
 /* ---------- Bill page ---------- */
-.bp-header { padding-bottom: 8px; border-bottom: 1.5px solid #0c1a3f; margin-bottom: 12px; position: relative; }
-.bp-brand { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: flex-start; }
-.bp-brand.has-photo { grid-template-columns: auto auto 1fr auto; gap: 10px; }
+.bp-header {
+  display: grid; grid-template-columns: auto 1fr auto; column-gap: 14px; align-items: center;
+  padding-bottom: 10px; border-bottom: 1.5px solid #0c1a3f; margin-bottom: 12px;
+}
+.bp-header.has-photo { grid-template-columns: auto auto 1fr auto; column-gap: 12px; }
 .bp-patient-photo {
-  width: 50px; height: 62px; border: 1px solid #cfd4df; border-radius: 3px;
-  overflow: hidden; background: #f3f4f7; align-self: flex-start;
+  width: 48px; height: 60px; border: 1px solid #cfd4df; border-radius: 3px;
+  overflow: hidden; background: #f3f4f7;
 }
 .bp-patient-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bp-logo { width: 70px; height: 70px; object-fit: contain; }
-.bp-brand-text { padding-top: 4px; }
-.bp-brand-name { font-size: 9pt; font-weight: 700; letter-spacing: 0.18em; color: #10069f; }
-.bp-brand-sub { font-size: 7pt; color: #4a5169; line-height: 1.5; margin-top: 2px; }
-.bp-barcode { text-align: right; padding-top: 4px; }
-.bp-barcode svg { width: 130px; height: 38px; }
-.bp-barcode-num { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; font-size: 9pt; font-weight: 600; margin-top: 2px; letter-spacing: 0.04em; }
-.bp-title { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 12pt; font-weight: 700; letter-spacing: 0.12em; color: #0c1a3f; }
+.bp-logo { width: 56px; height: 56px; object-fit: contain; display: block; }
+.bp-brand-text { min-width: 0; }
+.bp-brand-name { font-size: 13pt; font-weight: 700; letter-spacing: 0.06em; color: #10069f; line-height: 1.1; }
+.bp-brand-sub { font-size: 7.5pt; color: #4a5169; line-height: 1.45; margin-top: 2px; }
+.bp-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 140px; }
+.bp-title {
+  font-size: 8pt; font-weight: 700; letter-spacing: 0.16em; color: #4a5169;
+  text-transform: uppercase; padding: 2px 8px; border: 1px solid #cfd4df; border-radius: 3px;
+}
+.bp-barcode { line-height: 0; }
+.bp-barcode svg { width: 130px; height: 34px; display: block; }
+.bp-barcode-num { font-family: 'Noto Sans', -apple-system, system-ui, sans-serif; font-size: 9pt; font-weight: 700; letter-spacing: 0.06em; color: #0c1a3f; }
 
 .bp-info { padding: 4px 0 8px; }
 .bp-info-row { display: grid; grid-template-columns: 70px 1fr 80px 1fr 70px 1fr; gap: 0 6px; padding: 3px 0; font-size: 9.5pt; }

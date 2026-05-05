@@ -271,7 +271,6 @@ export function Step1Identity({ patient, onUpdate, onNext, onPushToast, allPatie
         payment: paymentAfterPaidEdit(currentCart.payment, "normal"),
       },
     });
-    onPushToast?.(`Booking code ${code} applied · ${additions.length} order${additions.length === 1 ? "" : "s"} staged`, "success");
   };
 
   const handleLoadDrawerPatient = () => {
@@ -1181,13 +1180,16 @@ function PatientKhqrCapture({ patient, onUpdate, onPushToast, t }) {
 
 function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
   const t = useLang();
-  const inputRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
   const flashTimerRef = useRef(null);
-  const [reading, setReading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraState, setCameraState] = useState("idle"); // idle | starting | ready | error
+  const [cameraError, setCameraError] = useState("");
   const [justCaptured, setJustCaptured] = useState(false);
   const photoSrc = patient.photoDataUrl || patient.photo?.dataUrl || "";
   const hasPhoto = typeof photoSrc === "string" && photoSrc.startsWith("data:image/");
-  const initials = (patient.initials || (patient.name || "P").split(" ").map(part => part[0]).join("").slice(0, 2) || "P").toUpperCase();
 
   const capturedAt = (() => {
     const raw = patient.photoCapturedAt || patient.photo?.capturedAt;
@@ -1197,13 +1199,12 @@ function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   })();
 
-  useEffect(() => () => {
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-  }, []);
-
-  const openPicker = () => {
-    if (reading) return;
-    inputRef.current?.click();
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
   };
 
   const markCaptured = () => {
@@ -1212,40 +1213,117 @@ function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
     flashTimerRef.current = setTimeout(() => setJustCaptured(false), 900);
   };
 
-  const handleFile = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      onPushToast?.(t("step2.photo.unsupported"), "error");
-      return;
-    }
-    if (file.size > 6 * 1024 * 1024) {
-      onPushToast?.(t("step2.photo.tooLarge"), "error");
-      return;
-    }
-    const reader = new FileReader();
-    setReading(true);
-    reader.onload = () => {
-      const dataUrl = String(reader.result || "");
-      if (!dataUrl.startsWith("data:image/")) {
-        onPushToast?.(t("step2.photo.unsupported"), "error");
+  useEffect(() => () => {
+    stopCamera();
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!cameraOpen) return;
+    let cancelled = false;
+
+    const startCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraState("error");
+        setCameraError(t("step2.photo.noCameraApi"));
+        onPushToast?.(t("step2.photo.noCameraApi"), "error");
         return;
       }
-      onUpdate({
-        ...patient,
-        photoDataUrl: dataUrl,
-        photoCapturedAt: new Date().toISOString(),
-        photoName: file.name,
-      });
-      markCaptured();
-      onPushToast?.(t(hasPhoto ? "step2.photo.replacedToast" : "step2.photo.capturedToast"), "success");
+
+      setCameraState("starting");
+      setCameraError("");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 960 },
+          },
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setCameraState("ready");
+      } catch (error) {
+        if (cancelled) return;
+        setCameraState("error");
+        setCameraError(t("step2.photo.cameraError"));
+        onPushToast?.(t("step2.photo.cameraError"), "error");
+      }
     };
-    reader.onerror = () => {
-      onPushToast?.(t("step2.photo.readError"), "error");
+
+    startCamera();
+
+    return () => {
+      cancelled = true;
+      stopCamera();
     };
-    reader.onloadend = () => setReading(false);
-    reader.readAsDataURL(file);
+  }, [cameraOpen]);
+
+  const openCamera = () => {
+    if (cameraOpen) return;
+    setCameraOpen(true);
+  };
+
+  const closeCamera = () => {
+    setCameraOpen(false);
+    setCameraState("idle");
+    setCameraError("");
+  };
+
+  const captureFrame = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      onPushToast?.(t("step2.photo.noFrame"), "error");
+      return;
+    }
+
+    const targetWidth = 640;
+    const targetHeight = 800;
+    const targetRatio = targetWidth / targetHeight;
+    let sx = 0;
+    let sy = 0;
+    let sw = video.videoWidth;
+    let sh = video.videoHeight;
+    const sourceRatio = sw / sh;
+
+    if (sourceRatio > targetRatio) {
+      sw = sh * targetRatio;
+      sx = (video.videoWidth - sw) / 2;
+    } else {
+      sh = sw / targetRatio;
+      sy = (video.videoHeight - sh) / 2;
+    }
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      onPushToast?.(t("step2.photo.noFrame"), "error");
+      return;
+    }
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+
+    onUpdate({
+      ...patient,
+      photoDataUrl: canvas.toDataURL("image/jpeg", 0.9),
+      photoCapturedAt: new Date().toISOString(),
+      photoName: "camera-capture.jpg",
+      photoSource: "camera",
+    });
+    markCaptured();
+    closeCamera();
+    onPushToast?.(t(hasPhoto ? "step2.photo.replacedToast" : "step2.photo.capturedToast"), "success");
   };
 
   const deletePhoto = () => {
@@ -1261,22 +1339,13 @@ function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
   };
 
   return (
-    <div className={"patient-photo-capture" + (hasPhoto ? " is-captured" : "") + (reading ? " is-reading" : "") + (justCaptured ? " just-captured" : "")}>
-      <input
-        ref={inputRef}
-        className="patient-photo-input"
-        type="file"
-        accept="image/*"
-        capture="user"
-        onChange={handleFile}
-        aria-label={t("step2.photo.capture")}
-      />
+    <div className={"patient-photo-capture" + (hasPhoto ? " is-captured" : "") + (cameraOpen ? " is-camera-open" : "") + (justCaptured ? " just-captured" : "")}>
       {hasPhoto ? (
         <>
           <button
             type="button"
             className="patient-photo-thumb patient-photo-thumb-button"
-            onClick={openPicker}
+            onClick={openCamera}
             title={t("step2.photo.retake")}
             aria-label={t("step2.photo.retake")}
           >
@@ -1287,8 +1356,8 @@ function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
             <span className="patient-photo-title">{t("step2.photo.captured")}</span>
             <span className="patient-photo-sub">{capturedAt || t("step2.photo.ready")}</span>
           </div>
-          <button type="button" className="patient-photo-action" onClick={openPicker} disabled={reading}>
-            <I.Camera size={11} /> {reading ? t("step2.photo.reading") : t("step2.photo.retake")}
+          <button type="button" className="patient-photo-action" onClick={openCamera} disabled={cameraOpen}>
+            <I.Camera size={11} /> {cameraOpen ? t("step2.photo.cameraStarting") : t("step2.photo.retake")}
           </button>
           <button
             type="button"
@@ -1301,16 +1370,52 @@ function PatientPhotoCapture({ patient, onUpdate, onPushToast }) {
           </button>
         </>
       ) : (
-        <button type="button" className="patient-photo-empty" onClick={openPicker} disabled={reading}>
+        <button type="button" className="patient-photo-empty" onClick={openCamera} disabled={cameraOpen}>
           <span className="patient-photo-thumb patient-photo-placeholder" aria-hidden="true">
-            {reading ? <span className="patient-photo-loader" /> : <span>{initials}</span>}
+            {cameraOpen ? <span className="patient-photo-loader" /> : <I.Camera size={12} />}
           </span>
-          <span className="patient-photo-empty-text">
-            <span className="patient-photo-title">{reading ? t("step2.photo.reading") : t("step2.photo.capture")}</span>
-            <span className="patient-photo-sub">{t("step2.photo.billHint")}</span>
-          </span>
-          <I.Camera size={12} className="patient-photo-empty-icon" />
+          <span className="patient-photo-title">{cameraOpen ? t("step2.photo.cameraStarting") : t("step2.photo.capture")}</span>
         </button>
+      )}
+      {cameraOpen && (
+        <div className="patient-camera-dialog" role="dialog" aria-modal="true" aria-label={t("step2.photo.cameraTitle")}>
+          <button type="button" className="patient-camera-scrim" onClick={closeCamera} aria-label={t("step2.photo.closeCamera")} />
+          <div className="patient-camera-panel">
+            <header className="patient-camera-head">
+              <div>
+                <div className="patient-camera-title">{t("step2.photo.cameraTitle")}</div>
+                <div className="patient-camera-sub">{t("step2.photo.cameraSub")}</div>
+              </div>
+              <button type="button" className="icon-btn patient-camera-close" onClick={closeCamera} aria-label={t("step2.photo.closeCamera")}>
+                <I.X size={14} />
+              </button>
+            </header>
+            <div className={"patient-camera-preview is-" + cameraState}>
+              <video ref={videoRef} autoPlay muted playsInline />
+              {cameraState === "starting" && (
+                <div className="patient-camera-overlay">
+                  <span className="patient-photo-loader" />
+                  <span>{t("step2.photo.cameraStarting")}</span>
+                </div>
+              )}
+              {cameraState === "error" && (
+                <div className="patient-camera-overlay patient-camera-error">
+                  <I.AlertCircle size={18} />
+                  <span>{cameraError || t("step2.photo.cameraError")}</span>
+                </div>
+              )}
+            </div>
+            <canvas ref={canvasRef} className="patient-camera-canvas" aria-hidden="true" />
+            <footer className="patient-camera-actions">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={closeCamera}>
+                {t("step2.photo.closeCamera")}
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={captureFrame} disabled={cameraState !== "ready"}>
+                <I.Camera size={11} /> {t("step2.photo.captureFrame")}
+              </button>
+            </footer>
+          </div>
+        </div>
       )}
     </div>
   );

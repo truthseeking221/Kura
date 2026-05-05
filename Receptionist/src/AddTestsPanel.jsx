@@ -1006,11 +1006,6 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
   const toggleWhy = useCallback((id) => {
     setWhyOpenId(prev => prev === id ? null : id);
   }, []);
-  const pushAddedToast = (text, result) => {
-    if (result?.deferred) return;
-    onPushToast?.(text, "success", result?.undo ? { actionLabel: "Undo", onAction: result.undo } : undefined);
-  };
-
   const addOne = (row) => {
     if (row.unavailable) {
       onPushToast?.(`${row.name} is unavailable · use Notify me`, "error");
@@ -1018,13 +1013,10 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
     }
     const sourceEl = rowsRef.current?.querySelector(`[data-row-id="${row.id}"]`);
     flyToCart(sourceEl, { name: row.name, kind: row.kind });
-    const result = onAdd?.([{ testId: row.id, name: row.name, price: row.price, kind: row.kind }]);
-    pushAddedToast(`${row.name} added`, result);
+    onAdd?.([{ testId: row.id, name: row.name, price: row.price, kind: row.kind }]);
   };
   const removeOne = (row) => {
-    const result = onRemove?.(row.id, row);
-    if (result?.deferred) return;
-    onPushToast?.(`${row.name} removed`, "success", result?.undo ? { actionLabel: "Undo", onAction: result.undo } : undefined);
+    onRemove?.(row.id, row);
   };
   const orderSameAsLast = (e) => {
     if (priors.length === 0) return;
@@ -1040,8 +1032,7 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
       const el = rowsRef.current?.querySelector(`[data-row-id="${it.testId}"]`) || fallback;
       window.setTimeout(() => flyToCart(el, { name: it.name, kind: it.kind }), i * 70);
     });
-    const result = onAdd?.(items);
-    pushAddedToast(`${items.length} test${items.length > 1 ? "s" : ""} re-ordered`, result);
+    onAdd?.(items);
   };
 
   const addBundle = (bundle) => {
@@ -1058,7 +1049,7 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
     items.forEach((it, i) => {
       window.setTimeout(() => flyToCart(sourceEl, { name: it.name, kind: it.kind }), i * 80);
     });
-    const result = onAdd?.(items, {
+    onAdd?.(items, {
       bundle: {
         id: bundle.id,
         name: bundle.name,
@@ -1066,7 +1057,6 @@ export function AddTestsPanel({ patient, onAdd, onRemove, onPushToast, ccy = "US
         itemIds: bundle.items.map(it => it.id),
       },
     });
-    pushAddedToast(`${bundle.name} added · ${items.length} test${items.length > 1 ? "s" : ""}`, result);
   };
 
   const notifyUnavailable = (row) => {

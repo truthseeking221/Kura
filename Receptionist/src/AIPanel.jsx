@@ -390,12 +390,10 @@ export function AIInlinePanel({ patient, onAdd, onPushToast }) {
     const items = allItems.filter(i => picks.has(i.testId));
     onAdd?.(items);
     setPicks(new Set());
-    onPushToast?.(`${items.length} test${items.length > 1 ? "s" : ""} added`, "success");
   };
   const addOne = (item) => {
     if (item.inCart) return;
     onAdd?.([item]);
-    onPushToast?.(`${item.name} added`, "success");
   };
 
   // Empty state — keep the surface present so the user knows AI is "watching"

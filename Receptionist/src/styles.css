@@ -5254,13 +5254,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   min-height: 34px;
   max-width: min(360px, 48vw);
 }
-.patient-photo-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
 .patient-photo-empty,
 .patient-photo-capture.is-captured {
   display: inline-flex;
@@ -5337,12 +5330,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     linear-gradient(135deg, color-mix(in srgb, var(--brand-50) 58%, var(--surface)), var(--surface-2));
   color: var(--ink-600);
   border: 1px solid var(--border);
-  font-size: 9.5px;
-  font-weight: 760;
-  letter-spacing: 0.02em;
 }
-.patient-photo-meta,
-.patient-photo-empty-text {
+.patient-photo-placeholder svg {
+  width: 12px;
+  height: 12px;
+}
+.patient-photo-meta {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -5364,14 +5357,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-weight: 600;
   color: var(--ink-500);
   white-space: nowrap;
-}
-.patient-photo-empty-icon {
-  color: var(--ink-400);
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms ease;
-}
-.patient-photo-empty:hover .patient-photo-empty-icon {
-  color: var(--brand-600);
-  transform: translateX(1px);
 }
 .patient-photo-action,
 .patient-photo-delete {
@@ -5424,6 +5409,99 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border: 2px solid var(--brand-100);
   border-top-color: var(--brand-500);
   animation: patient-photo-spin 720ms linear infinite;
+}
+.patient-camera-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.patient-camera-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+}
+.patient-camera-panel {
+  position: relative;
+  width: min(520px, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-xl, var(--shadow-lg));
+  overflow: hidden;
+}
+.patient-camera-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.patient-camera-title {
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ink-900);
+  letter-spacing: -0.01em;
+}
+.patient-camera-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--ink-500);
+}
+.patient-camera-close {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.patient-camera-preview {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  margin: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ink-900);
+  border: 1px solid var(--border);
+}
+.patient-camera-preview video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.patient-camera-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink-700);
+  font-size: 12px;
+  font-weight: 650;
+}
+.patient-camera-error {
+  padding: 18px;
+  text-align: center;
+  color: var(--danger-600);
+  background: color-mix(in srgb, var(--danger-50) 92%, var(--surface));
+}
+.patient-camera-canvas {
+  display: none;
+}
+.patient-camera-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 14px;
 }
 .patient-photo-sheen {
   position: absolute;
@@ -5478,8 +5556,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .patient-photo-empty {
     max-width: 100%;
   }
-  .patient-photo-empty-text {
-    flex: 1;
+  .patient-camera-dialog {
+    padding: 12px;
+    align-items: end;
+  }
+  .patient-camera-panel {
+    width: 100%;
+    border-radius: 12px;
+  }
+  .patient-camera-preview {
+    margin: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -5487,8 +5573,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .patient-photo-capture.is-captured,
   .patient-photo-thumb img,
   .patient-photo-action,
-  .patient-photo-delete,
-  .patient-photo-empty-icon {
+  .patient-photo-delete {
     transition: none;
   }
   .patient-photo-loader,
@@ -5662,68 +5747,85 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .collision-banner {
   display: grid;
-  grid-template-columns: 34px 1fr auto;
+  grid-template-columns: 26px 1fr auto;
   gap: 10px;
-  padding: 9px 11px;
-  border: 1px solid color-mix(in srgb, var(--warn-500) 18%, var(--border));
-  border-left: 3px solid color-mix(in srgb, var(--warn-500) 72%, var(--surface));
-  background: color-mix(in srgb, var(--warn-50) 42%, var(--surface));
-  border-radius: 9px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
   align-items: center;
 }
 .collision-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--warn-50) 34%, var(--surface));
-  color: var(--warn-600);
-  border: 1px solid color-mix(in srgb, var(--warn-500) 22%, var(--border));
-  box-shadow: 0 1px 2px rgba(138, 86, 0, 0.06);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-500);
+  border: 0;
+  box-shadow: none;
   flex-shrink: 0;
 }
+.collision-icon svg { width: 16px; height: 16px; }
 .collision-body {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 .collision-body strong {
   display: block;
   font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-900);
+  font-weight: 600;
+  color: var(--ink-800);
   line-height: 1.3;
 }
 .collision-kicker {
   display: inline-flex;
   align-items: center;
-  margin-bottom: 2px;
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--warn-600);
-  opacity: 0.78;
+  margin-bottom: 0;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-500);
+  opacity: 1;
 }
 .collision-body p {
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   font-size: 11.5px;
-  color: var(--ink-600);
+  color: var(--ink-500);
   line-height: 1.4;
 }
 .collision-body em {
   font-style: normal;
-  font-weight: 600;
-  color: var(--ink-800);
+  font-weight: 500;
+  color: var(--ink-700);
 }
 .collision-actions {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
   flex-shrink: 0;
 }
+.collision-actions .btn-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--ink-700);
+  font-weight: 500;
+}
+.collision-actions .btn-secondary:hover {
+  background: var(--ink-50);
+  border-color: var(--border-strong);
+  color: var(--ink-900);
+}
+.collision-actions .btn-ghost {
+  color: var(--ink-500);
+  font-weight: 500;
+}
+.collision-actions .btn-ghost:hover { color: var(--ink-700); }
 .collision-override {
   grid-column: 1 / -1;
   margin-top: 8px;
@@ -7692,6 +7794,83 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   100% { transform: scale(1); }
 }
 
+/* Focus toggle — desktop only. Lets a nurse expand the items area to use the
+   full rail height when verifying a long order list. Square ghost icon button
+   sized to match the clear-all trigger; subtly tints when active so the
+   "expanded" state stays legible without screaming. */
+.cart-hd2-focus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--ink-400);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease, transform 220ms cubic-bezier(.34,1.56,.64,1);
+}
+.cart-hd2-focus:hover {
+  color: var(--brand-600, var(--brand-500));
+  background: color-mix(in srgb, var(--brand-500) 7%, transparent);
+}
+.cart-hd2-focus:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-500) 55%, transparent);
+  outline-offset: 1px;
+}
+.cart-hd2-focus.is-active {
+  color: var(--brand-600, var(--brand-500));
+  background: color-mix(in srgb, var(--brand-500) 11%, transparent);
+  border-color: color-mix(in srgb, var(--brand-500) 22%, var(--border));
+}
+.cart-hd2-focus-ico {
+  display: inline-flex;
+  transition: transform 260ms cubic-bezier(.2,.7,.3,1);
+}
+.cart-hd2-focus.is-active .cart-hd2-focus-ico { transform: scale(0.94); }
+@media (max-width: 767px) {
+  .mobile-cart-sheet .cart-hd2-focus { display: none; }
+}
+
+/* === Cart focus mode — desktop rail ===
+   When the rail wrapper has data-cart-focused="1", sibling rail content
+   (visit context) gracefully collapses and the cart's items-scroll opens up
+   to let the nurse see the full list without inner scroll. Smooth height +
+   opacity interpolation keeps the transition feeling intentional, not jumpy. */
+.desktop-cart-rail-body .visit-context-rail {
+  transition: max-height 280ms cubic-bezier(.2,.7,.3,1),
+              opacity 200ms ease,
+              margin 280ms cubic-bezier(.2,.7,.3,1),
+              padding 280ms cubic-bezier(.2,.7,.3,1),
+              border-color 200ms ease;
+  max-height: 1200px;
+  overflow: hidden;
+  transform-origin: top;
+}
+.desktop-cart-rail-body[data-cart-focused="1"] .visit-context-rail {
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+.wizard-workspace-step-4 .desktop-cart-rail-body .cart-items-scroll {
+  transition: max-height 320ms cubic-bezier(.2,.7,.3,1),
+              min-height 320ms cubic-bezier(.2,.7,.3,1);
+}
+.wizard-workspace-step-4 .desktop-cart-rail-body[data-cart-focused="1"] .cart-items-scroll {
+  min-height: clamp(280px, 50vh, 560px);
+  max-height: clamp(360px, 72vh, 920px);
+}
+.wizard-workspace-step-4 .desktop-cart-rail-body[data-cart-focused="1"] .order-cart-shell {
+  flex: 1 1 auto;
+}
+
 /* === Items scroll area === */
 .cart-items-scroll {
   flex: 1;
@@ -7813,19 +7992,77 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 .order-cart .cart-bundle-group {
-  background: color-mix(in srgb, var(--brand-50) 34%, var(--surface));
+  background: var(--surface);
 }
 
 .order-cart .cart-bundle-head {
-  --group-color: var(--brand-600);
-  padding-top: 9px;
-  padding-bottom: 7px;
-  border-left: 3px solid var(--brand-200);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-50) 70%, transparent), transparent 68%);
+  --group-color: var(--ink-500);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 0 8px 0 0;
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  cursor: default;
 }
 
 .order-cart .cart-bundle-head:hover {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-100) 72%, transparent), transparent 68%);
+  background: var(--surface-2);
+}
+
+.order-cart .cart-bundle-toggle {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 6px 8px 14px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.order-cart .cart-bundle-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.order-cart .cart-bundle-remove {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-400);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  justify-self: end;
+  align-self: center;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+  opacity: 0.72;
+  transition: opacity 100ms ease, background 100ms ease, color 100ms ease;
+  white-space: nowrap;
+}
+.order-cart .cart-bundle-remove:hover {
+  background: var(--danger-50);
+  color: var(--danger-600);
+  opacity: 1;
+}
+.order-cart .cart-bundle-remove:focus-visible {
+  background: var(--danger-50);
+  color: var(--danger-600);
+  opacity: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 
 .order-cart .cart-bundle-title {
@@ -7839,16 +8076,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
-  font-weight: 720;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--ink-900);
-  letter-spacing: -0.006em;
+  letter-spacing: 0;
   line-height: 1.15;
-}
-
-.order-cart .cart-bundle-title-main svg {
-  color: var(--brand-500);
-  flex-shrink: 0;
 }
 
 .order-cart .cart-bundle-title-main span {
@@ -7869,11 +8101,42 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   line-height: 1.15;
 }
 
+.order-cart .cart-bundle-meta {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: var(--ink-500);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-cart .cart-bundle-insurance {
+  color: var(--success-700, #047857);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
 .order-cart .cart-bundle-body {
-  padding-left: 15px;
+  padding-left: 35px;
   padding-right: 14px;
+  padding-bottom: 4px;
   background: var(--surface);
-  border-left: 3px solid var(--brand-100);
+}
+
+.order-cart .cart-bundle-pay-summary {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 0 7px;
+  color: var(--ink-500);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.order-cart .cart-bundle-pay-summary span:last-child {
+  color: var(--success-700, #047857);
 }
 
 /* === Cart row === */
@@ -7895,6 +8158,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .order-cart .cart-line:not(.is-last) .cart-line-row { border-bottom: 1px solid var(--border); }
 .order-cart .cart-line.is-last .cart-line-row { border-bottom: none; }
+
+.order-cart .cart-line-bundle-child .cart-line-row {
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 0;
+}
+.order-cart .cart-line-bundle-child:not(.is-last) .cart-line-row {
+  border-bottom-color: color-mix(in srgb, var(--border) 68%, transparent);
+}
 
 .order-cart .cart-line-ico {
   width: 24px;
@@ -7963,6 +8236,29 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .order-cart .cart-line-breakdown-more {
   color: var(--ink-600);
   font-weight: 650;
+}
+.order-cart .cart-line-breakdown-compact {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  color: var(--ink-500);
+  line-height: 1.32;
+}
+.order-cart .cart-line-bundle-child .cart-line-titlebar {
+  gap: 4px;
+}
+.order-cart .cart-line-bundle-child .cart-line-name-text {
+  font-weight: 500;
+}
+.order-cart .cart-line-bundle-child .cart-line-price {
+  grid-column: 2;
+}
+.order-cart .cart-line-bundle-child .cart-line-remove {
+  grid-column: 3;
+}
+.order-cart .cart-line-bundle-child .cart-line-expand,
+.order-cart .cart-line-bundle-child .cart-line-validation-panel {
+  margin-left: 0;
 }
 .order-cart .cart-line-badge {
   display: inline-grid;
@@ -12056,12 +12352,35 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .mobile-cart-sheet .order-cart .cart-group-body {
     padding: 0 12px 4px;
   }
+  .mobile-cart-sheet .order-cart .cart-bundle-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0 8px 0 0;
+  }
+  .mobile-cart-sheet .order-cart .cart-bundle-toggle {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    padding: 9px 4px 8px 12px;
+  }
+  .mobile-cart-sheet .order-cart .cart-bundle-remove {
+    min-width: 28px;
+    height: 28px;
+    opacity: 1;
+  }
+  .mobile-cart-sheet .order-cart .cart-bundle-remove span {
+    display: none;
+  }
+  .mobile-cart-sheet .order-cart .cart-bundle-body {
+    padding: 0 12px 4px 34px;
+  }
   .mobile-cart-sheet .order-cart .cart-line-row {
     grid-template-columns: 28px minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
     min-height: 42px;
     height: auto;
     gap: var(--cart-mobile-col-gap);
     padding: 4px 0;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-bundle-child .cart-line-row {
+    grid-template-columns: minmax(0, 1fr) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
+    min-height: 36px;
   }
   .mobile-cart-sheet .order-cart .cart-line-ico {
     width: 28px;
@@ -12071,6 +12390,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .mobile-cart-sheet .order-cart .cart-line-name {
     grid-column: 2 / 4;
     gap: 3px;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-bundle-child .cart-line-name {
+    grid-column: 1;
   }
   .mobile-cart-sheet .order-cart .cart-line-titlebar {
     row-gap: 2px;
@@ -12090,6 +12412,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     min-width: 0;
     text-align: right;
   }
+  .mobile-cart-sheet .order-cart .cart-line-bundle-child .cart-line-price {
+    grid-column: 2;
+  }
 
   /* On touch we don't have hover, so remove buttons must always show. */
   .mobile-cart-sheet .order-cart .cart-line-row .cart-line-remove {
@@ -12098,6 +12423,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
     opacity: 1;
     width: var(--cart-mobile-action-col);
     height: 34px;
+  }
+  .mobile-cart-sheet .order-cart .cart-line-bundle-child .cart-line-remove {
+    grid-column: 3;
   }
   .mobile-cart-sheet .order-cart .cart-total-toggle {
     grid-template-columns: minmax(0, 1fr) var(--cart-mobile-count-col) var(--cart-mobile-price-col) var(--cart-mobile-action-col);
