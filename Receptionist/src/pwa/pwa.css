@@ -81,8 +81,10 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
+  height: 100%;
   margin: 0; padding: 0;
   background: var(--bg);
+  overflow: hidden;
   overscroll-behavior-y: contain;
 }
 body {
@@ -99,9 +101,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 /* === Shell: mobile canvas centered on tablet/desktop === */
 .pwa {
-  height: 100dvh;
   height: 100vh;
-  display: flex;
+  height: 100dvh;
+  display: grid;
   justify-content: center;
   background: linear-gradient(180deg, #eef3f8 0%, #f6f7fa 280px);
   overflow: hidden;
@@ -111,8 +113,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 480px;
   height: 100%;
   background: var(--surface);
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   position: relative;
   overflow: hidden;
 }
@@ -129,8 +131,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 /* === Header: logo + (optional) section context + stepper === */
 .pwa-header {
-  position: relative;
-  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  grid-row: 1;
+  align-self: start;
   z-index: 30;
   padding: var(--safe-top) 14px 0;
   display: flex;
@@ -148,7 +152,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   height: var(--header-h);
 }
 .pwa-header.with-context {
-  padding-bottom: 8px;
+  padding-bottom: 10px;
 }
 .pwa-header.with-context .pwa-header-row {
   height: 44px;
@@ -222,8 +226,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 /* === Body scroll area === */
 .pwa-main {
-  flex: 1;
+  grid-row: 2;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -760,12 +765,11 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 /* === Footer (sticky) === */
 .pwa-footer {
-  position: fixed;
-  left: 50%;
-  right: auto;
+  position: absolute;
+  left: 0;
+  right: 0;
   bottom: 0;
-  width: min(100%, 480px);
-  transform: translateX(-50%);
+  width: 100%;
   z-index: 80;
   padding: 10px 14px calc(12px + var(--safe-bottom));
   background: var(--surface);
@@ -993,7 +997,6 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 @media (min-width: 600px) {
   .pwa-footer {
-    width: min(480px, calc(100% - 32px));
     border-left: 1px solid #e2e8f4;
     border-right: 1px solid #e2e8f4;
   }
@@ -1063,14 +1066,14 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: grid;
   grid-template-columns: repeat(var(--step-count), minmax(0, 1fr));
   align-items: start;
-  padding: 4px 0 2px;
-  min-height: 48px;
+  padding: 8px 0 2px;
+  min-height: 56px;
 }
 .pwa-stepper-track {
   position: absolute;
   left: calc(50% / var(--step-count));
   right: calc(50% / var(--step-count));
-  top: 14px;
+  top: 20px;
   margin-top: -1px;
   height: 2px;
   background: var(--ink-150);
@@ -1088,14 +1091,14 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   z-index: 1;
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  min-height: 50px;
   padding: 0;
   border: none;
   background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
