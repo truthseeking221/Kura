@@ -38,7 +38,7 @@ const SECTION_DEFS = [
     splashIcon: Coffee, splashTone: "amber",
     splashTitle: "A bit about your lifestyle",
     splashBody: "Smoking, alcohol, sleep and diet help the doctor read borderline values correctly." },
-  { num: 2, name: "Preparations",   short: "Preparations",   sub: "Pre-test preparations",      Comp: Section2,
+  { num: 2, name: "Preparation",    short: "Preparation",    sub: "Pre-test preparation",       Comp: Section2,
     splashIcon: Sun, splashTone: "amber",
     splashTitle: "How you arrived today",
     splashBody: "These questions may impact the quality of your lab test results: fasting, exercise and hydration." },
