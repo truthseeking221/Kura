@@ -954,9 +954,9 @@ const en = {
 
   // Step 5
   "step5.wrapTitle": "Pre & post consultation",
-  "step5.wrapSub": "Capture intake while the patient is still here, then schedule any follow-up call.",
-  "step5.title": "Book a teleconsultation",
-  "step5.sub": "Schedule a call with a doctor to review results.",
+  "step5.wrapSub": "Fill intake now · book a follow-up call after.",
+  "step5.title": "Teleconsultation",
+  "step5.sub": "Book a call to review test results.",
   "step5.context.tat": "Estimated results available: ${eta}. First post-TAT slot is highlighted.",
   "step5.context.noTat": "No TAT-bound tests in cart — book any slot.",
   "step5.pickHead": "Pick a slot",

@@ -2717,7 +2717,7 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
           <span className="prepost-section-kicker">Pre-consultation</span>
           <h3 className="prepost-section-title">Visit details</h3>
           <p className="prepost-section-sub">
-            Fill on behalf works best while the patient is still in the queue.
+            Fill while patient is still in the queue.
           </p>
         </header>
         <Step2VisitDetails
