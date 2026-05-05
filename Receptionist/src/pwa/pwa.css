@@ -127,34 +127,21 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   }
 }
 
-/* === Header: logo left, back chip inline === */
+/* === Header: logo only, left-aligned === */
 .pwa-header {
   position: sticky;
   top: 0;
   z-index: 30;
   height: calc(var(--header-h) + var(--safe-top));
-  padding: var(--safe-top) 14px 0;
+  padding: var(--safe-top) 18px 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
   background: rgba(255,255,255,0.92);
   backdrop-filter: saturate(160%) blur(10px);
   -webkit-backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid rgba(15,23,42,0.06);
 }
-.pwa-header-back {
-  width: 44px; height: 44px;
-  display: grid; place-items: center;
-  border-radius: 999px;
-  color: var(--ink-900);
-  background: var(--ink-100);
-  flex-shrink: 0;
-  transition: transform 0.08s ease, background 0.15s;
-}
-.pwa-header-back:active { transform: scale(0.94); }
-.pwa-header-back:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
-.pwa-header-back .ico { width: 24px; height: 24px; }
 .pwa-logo {
   display: flex; align-items: center; gap: 10px;
 }
@@ -184,9 +171,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 12px 18px calc(var(--footer-h) + var(--safe-bottom) + 18px);
-  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  padding: 12px 18px calc(var(--footer-h) + var(--safe-bottom) + 32px);
   scrollbar-width: thin;
   scrollbar-color: var(--ink-200) transparent;
   background: #F5F6FC;
@@ -347,7 +335,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   padding: 16px 16px 18px;
   margin-bottom: 14px;
   position: relative;
-  transition: border-color 0.2s, transform 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   scroll-margin-top: calc(var(--header-h) + var(--safe-top) + 12px);
 }
 .pwa-q.answered { background: var(--surface); }
@@ -1043,7 +1031,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-stepper-step {
   position: relative;
   z-index: 1;
-  width: 40px; height: 40px;
+  width: 44px; height: 44px;
   padding: 0;
   border: none;
   background: transparent;
@@ -1052,7 +1040,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   -webkit-tap-highlight-color: transparent;
 }
 .pwa-stepper-step .dot {
-  width: 24px; height: 24px;
+  width: 26px; height: 26px;
   border-radius: 999px;
   background: var(--surface);
   border: 2px solid var(--ink-150);
@@ -1063,7 +1051,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   letter-spacing: 0;
   transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
-.pwa-stepper-step .dot .ico { width: 14px; height: 14px; stroke-width: 3; }
+.pwa-stepper-step .dot .ico { width: 14px; height: 14px; stroke-width: 2.2; }
 .pwa-stepper-step.done .dot {
   background: var(--success-500);
   border-color: var(--success-500);
@@ -1080,6 +1068,39 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-stepper-step:not([disabled]):active .dot { transform: scale(0.92); }
 .pwa-stepper-step:focus-visible { outline: none; }
 .pwa-stepper-step:focus-visible .dot { box-shadow: 0 0 0 4px rgba(38,140,255,0.32); }
+
+.pwa-stepper-step .peek {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--ink-900);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 5px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 5;
+}
+.pwa-stepper-step .peek::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 0; height: 0;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--ink-900);
+}
+.pwa-stepper-step.peeking .peek {
+  opacity: 1;
+  transform: translateX(-50%);
+}
 .pwa-progress-meta {
   font-size: 12px;
   color: var(--ink-500);
@@ -1481,7 +1502,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: calc(var(--header-h) + var(--safe-top) + 12px) 28px calc(var(--safe-bottom) + 28px);
+  padding: calc(var(--header-h) + var(--safe-top) + 8px) 24px calc(var(--safe-bottom) + 18px);
   background: linear-gradient(180deg, var(--splash-soft) 0%, var(--surface) 56%);
   overflow: hidden;
   animation: splashIn 0.42s cubic-bezier(.22,.9,.25,1) both;
@@ -1532,8 +1553,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 380px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   text-align: left;
+  min-height: 0;
+  overflow: hidden;
 }
 .pwa-splash-meta {
   display: flex;
@@ -1556,15 +1579,17 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-splash-meta .streak {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--success-700);
-  background: var(--success-50);
-  padding: 4px 10px;
+  background: #fff;
+  padding: 5px 11px 5px 9px;
   border-radius: 999px;
+  border: 1px solid rgba(15,23,42,0.05);
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
   text-transform: none;
   letter-spacing: 0;
   font-size: 11.5px;
   animation: streakPop 0.6s cubic-bezier(.34,1.56,.64,1) 0.18s both;
 }
-.pwa-splash-meta .streak .ico { width: 13px; height: 13px; stroke-width: 3; }
+.pwa-splash-meta .streak .ico { width: 13px; height: 13px; stroke-width: 3; color: var(--success-500); }
 @keyframes streakPop {
   0%   { transform: scale(0.5) translateY(4px); opacity: 0; }
   60%  { transform: scale(1.08); opacity: 1; }
@@ -1573,9 +1598,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-splash-icon {
   position: relative;
-  width: 88px; height: 88px;
+  width: 76px; height: 76px;
+  flex-shrink: 0;
   display: grid; place-items: center;
-  margin-top: 8px;
+  margin-top: 4px;
   animation: iconRise 0.65s cubic-bezier(.34,1.4,.55,1) 0.08s both;
 }
 .pwa-splash-icon .ring {
@@ -1595,7 +1621,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash-icon .ico {
   position: relative;
-  width: 38px; height: 38px;
+  width: 34px; height: 34px;
   color: var(--splash-tint);
   stroke-width: 1.8;
 }
@@ -1611,8 +1637,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-splash-title {
   margin: 0;
-  font-size: 30px;
-  line-height: 1.16;
+  font-size: 26px;
+  line-height: 1.18;
   font-weight: 700;
   letter-spacing: -0.018em;
   color: var(--ink-900);
@@ -1620,8 +1646,8 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash-body {
   margin: 0;
-  font-size: 15.5px;
-  line-height: 1.55;
+  font-size: 14.5px;
+  line-height: 1.5;
   color: var(--ink-600);
   max-width: 34ch;
   animation: copyRise 0.55s cubic-bezier(.22,.9,.25,1) 0.26s both;
@@ -1650,8 +1676,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash .pwa-cta-block {
   margin-top: auto;
+  flex-shrink: 0;
   background: var(--splash-tint);
-  box-shadow: 0 10px 28px rgba(var(--splash-tint-rgb), 0.32);
+  box-shadow: none;
   animation: copyRise 0.5s cubic-bezier(.22,.9,.25,1) 0.34s both;
 }
 .pwa-splash .pwa-cta-block:hover { background: var(--splash-tint); filter: brightness(0.94); }

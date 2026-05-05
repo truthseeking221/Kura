@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Logo, ChevronLeft, Check, ArrowRight, AlertTriangle, X, Stethoscope, Heart, Pill, Coffee, Sun, Droplet, Shield } from "./icons";
+import { Logo, Check, ArrowRight, AlertTriangle, X, Stethoscope, Heart, Pill, Coffee, Sun, Droplet, Shield } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
 import { sectionApplies, isSectionComplete, requiredRemaining, remainingRequiredFields, SECTION_SKIP_REASON } from "./logic";
@@ -94,10 +94,12 @@ export default function App() {
     const target = mainRef.current.querySelector(`[data-q-num="${num}"]`);
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "center" });
-    target.classList.remove("pwa-q-flash");
-    void target.offsetWidth;
-    target.classList.add("pwa-q-flash");
-    setTimeout(() => target.classList.remove("pwa-q-flash"), 1700);
+    setTimeout(() => {
+      target.classList.remove("pwa-q-flash");
+      void target.offsetWidth;
+      target.classList.add("pwa-q-flash");
+      setTimeout(() => target.classList.remove("pwa-q-flash"), 1800);
+    }, 480);
   };
 
   useEffect(() => {
@@ -112,12 +114,6 @@ export default function App() {
     setCurrentSec(visibleNums[currentIdx + 1]);
   };
 
-  const goPrev = () => {
-    navigator.vibrate?.(8);
-    if (currentIdx === 0) { setStage("cover"); return; }
-    setCurrentSec(visibleNums[currentIdx - 1]);
-  };
-
   const startForm = () => {
     navigator.vibrate?.(12);
     setStage("section");
@@ -130,7 +126,6 @@ export default function App() {
     setSeenSplashes((s) => { const n = new Set(s); n.add(currentSec); return n; });
   };
 
-  const showHeaderBack = stage === "section";
   const mainClass = [
     "pwa-main",
     stage === "cover" ? "pwa-main-cover" : "",
@@ -141,11 +136,6 @@ export default function App() {
     <div className="pwa">
       <div className="pwa-canvas">
         <header className="pwa-header">
-          {showHeaderBack && (
-            <button type="button" className="pwa-header-back" onClick={goPrev} aria-label="Back">
-              <ChevronLeft className="ico" />
-            </button>
-          )}
           <div className="pwa-logo">
             <span className="pwa-logo-mark"><Logo /></span>
           </div>
@@ -154,6 +144,7 @@ export default function App() {
         {stage === "section" && currentDef && !showSplash && (
           <ProgressRail
             def={currentDef}
+            visibleSecs={visibleSecs}
             visibleNums={visibleNums}
             completedNums={completedNums}
             currentSec={currentSec}
@@ -347,9 +338,15 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
   );
 }
 
-function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx, onJump }) {
+function ProgressRail({ def, visibleSecs, visibleNums, completedNums, currentSec, currentIdx, onJump }) {
   const completedSet = new Set(completedNums);
   const currentPos = visibleNums.indexOf(currentSec);
+  const [peek, setPeek] = useState(null);
+  useEffect(() => {
+    if (peek == null) return;
+    const t = setTimeout(() => setPeek(null), 1600);
+    return () => clearTimeout(t);
+  }, [peek]);
   return (
     <div className="pwa-progress-rail">
       <div className="pwa-progress-row">
@@ -361,17 +358,20 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx,
           <strong>{currentIdx + 1}</strong> of {visibleNums.length}
         </div>
       </div>
-      <div className="pwa-stepper" role="tablist" aria-label="Form progress — tap a completed step to go back">
+      <div className="pwa-stepper" role="tablist" aria-label="Form progress — tap a step to revisit">
         <div className="pwa-stepper-track" aria-hidden="true">
           <div
             className="pwa-stepper-fill"
             style={{ width: `${visibleNums.length > 1 ? (currentPos / (visibleNums.length - 1)) * 100 : 0}%` }}
           />
         </div>
-        {visibleNums.map((n, i) => {
+        {visibleSecs.map((s, i) => {
+          const n = s.num;
+          const Icon = s.splashIcon;
           const isDone = completedSet.has(n);
           const isCurr = n === currentSec;
           const canJump = i <= currentPos;
+          const showPeek = peek === n;
           return (
             <button
               key={n}
@@ -379,11 +379,22 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx,
               role="tab"
               aria-selected={isCurr}
               disabled={!canJump || isCurr}
-              className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""}`}
-              aria-label={`Step ${i + 1} ${isDone ? "complete, tap to revisit" : isCurr ? "current" : "pending"}`}
-              onClick={() => { if (canJump && !isCurr) { navigator.vibrate?.(8); onJump?.(n); } }}
+              className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""} ${showPeek ? "peeking" : ""}`}
+              aria-label={`${s.name}${isDone ? " — complete, tap to revisit" : isCurr ? " — current" : ""}`}
+              onClick={() => {
+                if (!canJump || isCurr) {
+                  setPeek(n);
+                  return;
+                }
+                navigator.vibrate?.(8);
+                onJump?.(n);
+              }}
+              onPointerDown={() => setPeek(n)}
             >
-              <span className="dot" aria-hidden>{isDone ? <Check className="ico" /> : i + 1}</span>
+              <span className="dot" aria-hidden>
+                {isDone ? <Check className="ico" /> : Icon ? <Icon className="ico" /> : (i + 1)}
+              </span>
+              <span className="peek" aria-hidden>{s.name}</span>
             </button>
           );
         })}
