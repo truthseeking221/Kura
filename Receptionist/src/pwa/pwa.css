@@ -189,6 +189,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: var(--ink-200) transparent;
+  background: #F5F6FC;
 }
 .pwa-main-cover {
   overflow: hidden;
@@ -196,7 +197,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   padding: 0;
 }
 .pwa-main-done {
-  background: var(--surface);
+  background: #F5F6FC;
 }
 .pwa-main::-webkit-scrollbar { width: 6px; }
 .pwa-main::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 999px; }
