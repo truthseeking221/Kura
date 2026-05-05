@@ -1557,10 +1557,24 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   max-width: 380px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
   text-align: left;
   min-height: 0;
-  overflow: hidden;
+}
+.pwa-splash-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 14px;
+  scrollbar-width: none;
+}
+.pwa-splash-scroll::-webkit-scrollbar { display: none; }
+.pwa-splash-cta {
+  flex-shrink: 0;
 }
 .pwa-splash-meta {
   display: flex;
