@@ -1159,10 +1159,10 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-stepper-step.current .label {
   color: var(--brand-700);
 }
-.pwa-stepper-step:disabled:not(.current) .label {
+.pwa-stepper-step:disabled:not(.current):not(.done) .label {
   color: var(--ink-300);
 }
-.pwa-stepper-step:disabled:not(.current) .dot {
+.pwa-stepper-step:disabled:not(.current):not(.done) .dot {
   color: var(--ink-400);
 }
 .pwa-stepper-step[disabled] { cursor: default; }
