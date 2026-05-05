@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:pwa": "KURA_TARGET=pwa vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:pwa": "KURA_TARGET=pwa vite build && node scripts/finalize-pwa-build.mjs",
+    "preview": "vite preview",
+    "preview:pwa": "vite preview --outDir dist-pwa"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",

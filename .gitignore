@@ -1,5 +1,6 @@
 node_modules/
 dist/
+Receptionist/dist-pwa/
 *.log
 *.png
 !src/assets/bundles/
@@ -7,3 +8,4 @@ dist/
 !Receptionist/src/assets/bundles/
 !Receptionist/src/assets/bundles/*.png
 .playwright-mcp/
+.vercel

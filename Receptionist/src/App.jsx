@@ -750,7 +750,6 @@ function AppShell() {
                 onPrev={handlePrev}
                 onPushToast={pushToast}
                 gate={gate}
-                onSendIntake={sendIntakeLink}
                 allPatients={patients.filter(p => p.id !== active.id && p.name)}
                 onSelectPatient={openPatientAtIdentity}
               />
@@ -794,6 +793,7 @@ function AppShell() {
                 onPrev={handlePrev}
                 onPushToast={pushToast}
                 onCheckIn={handleCheckIn}
+                onSendIntake={sendIntakeLink}
                 gate={gate}
                 payerReady={payerReadyForPayment}
               />

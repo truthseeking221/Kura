@@ -685,8 +685,9 @@ function ClearableInput({ value, onChange, locked, className = "", ...props }) {
 
 // =====================================================================
 // Visit details — clinical intake the patient owns from their phone,
-// with a "fill on behalf" escape hatch for staff. Lives inside Step 2 so
-// the receptionist sees the same form their patient sees on their device.
+// with a "fill on behalf" escape hatch for staff. Mounted in Step 6
+// (post-order) so the link fires while the patient waits for blood draw,
+// rather than competing with steps 3-5.
 // =====================================================================
 function Step2VisitDetails({ patient, onUpdate, onSendIntake, onPushToast, channelReady }) {
   const t = useLang();
@@ -1581,7 +1582,7 @@ function PatientRecordDrawer({ patient, open, onClose, onLoad }) {
   );
 }
 
-export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, gate, onSendIntake, allPatients = [], onSelectPatient }) {
+export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, gate, allPatients = [], onSelectPatient }) {
   const t = useLang();
   const lockedFields = patient.identity?.lockedFields || [];
   const isLocked = (field) => lockedFields.includes(field);
@@ -1854,31 +1855,41 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
           <div className="contact-verified-stack">
             {tgVerified && (
               <div className="contact-verified-row">
-                <span className="contact-card-ico" style={{ color: "#229ed9" }}><I.Send size={13} /></span>
-                <span className="contact-verified-name">Telegram</span>
-                <span className="contact-verified-sep">·</span>
-                <span className="contact-card-handle">{patient.telegramHandle || "—"}</span>
-                <span className="contact-card-badge"><I.Check size={9} strokeWidth={3} /> {t("step2.verified")}</span>
-                {patient.phoneNumber && (
-                  <span className="contact-verified-meta"><I.Smartphone size={10} /> {(patient.countryCode || "+855")} {patient.phoneNumber} · via Telegram</span>
-                )}
-                <button type="button" className="link-btn contact-verified-action" onClick={handleTgReset}>
-                  {t("step2.changeHandle")}
-                </button>
+                <span className="contact-verified-ico" style={{ color: "#229ed9" }}><I.Send size={14} /></span>
+                <div className="contact-verified-body">
+                  <div className="contact-verified-title">
+                    <span className="contact-verified-name">Telegram</span>
+                    <span className="contact-card-handle">{patient.telegramHandle || "—"}</span>
+                  </div>
+                  {patient.phoneNumber && (
+                    <span className="contact-verified-meta">
+                      <I.Smartphone size={10} /> {(patient.countryCode || "+855")} {patient.phoneNumber} · via Telegram
+                    </span>
+                  )}
+                </div>
+                <div className="contact-verified-right">
+                  <span className="contact-card-badge"><I.Check size={9} strokeWidth={3} /> {t("step2.verified")}</span>
+                  <button type="button" className="link-btn contact-verified-action" onClick={handleTgReset}>
+                    {t("step2.changeHandle")}
+                  </button>
+                </div>
               </div>
             )}
             {otpVerified && (
               <div className="contact-verified-row">
-                <span className="contact-card-ico" style={{ color: "#268cff" }}><I.MessageSquare size={13} /></span>
-                <span className="contact-verified-name">SMS / Mobile</span>
-                <span className="contact-verified-sep">·</span>
-                <span className="contact-card-handle">
-                  {(patient.countryCode || "+855")} {patient.phoneNumber || "—"}
-                </span>
-                <span className="contact-card-badge"><I.Check size={9} strokeWidth={3} /> {t("step2.verified")}</span>
-                <button type="button" className="link-btn contact-verified-action" onClick={handleResetMobile}>
-                  <I.Edit size={10} /> {t("step2.editToReverify")}
-                </button>
+                <span className="contact-verified-ico" style={{ color: "#268cff" }}><I.MessageSquare size={14} /></span>
+                <div className="contact-verified-body">
+                  <div className="contact-verified-title">
+                    <span className="contact-verified-name">SMS / Mobile</span>
+                    <span className="contact-card-handle">{(patient.countryCode || "+855")} {patient.phoneNumber || "—"}</span>
+                  </div>
+                </div>
+                <div className="contact-verified-right">
+                  <span className="contact-card-badge"><I.Check size={9} strokeWidth={3} /> {t("step2.verified")}</span>
+                  <button type="button" className="link-btn contact-verified-action" onClick={handleResetMobile}>
+                    <I.Edit size={10} /> {t("step2.editToReverify")}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -2020,16 +2031,6 @@ export function Step2Review({ patient, onUpdate, onNext, onPrev, onPushToast, ga
           </div>
         )}
       </section>
-
-      {/* Visit details — clinical intake the patient owns
-         (or that staff can fill on behalf when the patient can't). */}
-      <Step2VisitDetails
-        patient={patient}
-        onUpdate={onUpdate}
-        onSendIntake={onSendIntake}
-        onPushToast={onPushToast}
-        channelReady={tgVerified || otpVerified}
-      />
 
       <StepFooter
         onPrev={onPrev}
@@ -2882,7 +2883,7 @@ export function Step5Teleconsult({ patient, onUpdate, onNext, onPrev, onPushToas
 //   so the payment surface stays a single source of truth. Phase 3 layers the
 //   spec's split-bill, mixed cash+KHQR, and auto-split-from-coverage on top.
 //
-export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, onCheckIn, gate, payerReady }) {
+export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, onCheckIn, gate, payerReady, onSendIntake }) {
   const t = useLang();
   const pay = useCartPayment(patient, onUpdate, onPushToast);
   const cart = pay.cart;
@@ -2990,6 +2991,17 @@ export function Step6Payment({ patient, onUpdate, onNext, onPrev, onPushToast, o
         </div>
       }
     >
+      {/* Visit details — relocated from Step 2 per PM v13.
+          Send link fires now (post-order) so the patient can fill while
+          waiting for blood draw, instead of competing with steps 3-6. */}
+      <Step2VisitDetails
+        patient={patient}
+        onUpdate={onUpdate}
+        onSendIntake={onSendIntake}
+        onPushToast={onPushToast}
+        channelReady={!!patient.telegramVerified || !!patient.otpVerified}
+      />
+
       <section className="card-soft step6-summary">
         <header className="step6-summary-head">
           <strong>{t("step6.summaryTitle") || "Order summary"}</strong>

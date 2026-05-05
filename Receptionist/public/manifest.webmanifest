@@ -1,0 +1,19 @@
+{
+  "name": "Kura Patient Intake",
+  "short_name": "Kura Intake",
+  "description": "Patient-facing intake form for Kura Clinic.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#268cff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/kura-pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
