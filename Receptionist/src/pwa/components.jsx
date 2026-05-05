@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Check, Search, Lock, AlertTriangle, Info, X, Sparkle } from "./icons";
 
+const haptic = (ms = 10) => { try { navigator.vibrate?.(ms); } catch {} };
+
 /* ---------- Question wrapper ---------- */
 export function Question({ num, title, required, why, microcopy, locked, prefilled, children, banner }) {
   const [showWhy, setShowWhy] = useState(false);
@@ -75,9 +77,8 @@ export function Pills({ options, value, onChange, multi, variant, columns }) {
             role={multi ? "checkbox" : "radio"}
             aria-checked={sel}
             className={cls}
-            onClick={() => toggle(o.value, o)}
+            onClick={() => { haptic(); toggle(o.value, o); }}
           >
-            {sel && multi && <Check className="check" />}
             {o.label}
           </button>
         );
@@ -99,7 +100,7 @@ export function Stack({ options, value, onChange }) {
             role="radio"
             aria-checked={sel}
             className={`pwa-radio ${sel ? "selected" : ""}`}
-            onClick={() => onChange(o.value)}
+            onClick={() => { haptic(); onChange(o.value); }}
           >
             <span className="dot" aria-hidden />
             <span className="lbl">
@@ -140,7 +141,7 @@ export function CheckList({ options, value, onChange, columns }) {
             role="checkbox"
             aria-checked={sel}
             className={`pwa-check ${sel ? "selected" : ""}`}
-            onClick={() => toggle(o.value, o)}
+            onClick={() => { haptic(); toggle(o.value, o); }}
           >
             <span className="box" aria-hidden><Check /></span>
             <span className="lbl">{o.label}</span>
@@ -167,6 +168,7 @@ export function MedGroup({ title, options, value, onChange }) {
               aria-checked={sel}
               className={`pwa-check ${sel ? "selected" : ""}`}
               onClick={() => {
+                haptic();
                 const cur = value || [];
                 onChange(cur.includes(o.value) ? cur.filter((x) => x !== o.value) : [...cur, o.value]);
               }}
@@ -190,7 +192,7 @@ export function DayGrid({ value, onChange, max = 28 }) {
           key={d}
           type="button"
           className={`pwa-day-cell ${value === d ? "selected" : ""}`}
-          onClick={() => onChange(d)}
+          onClick={() => { haptic(); onChange(d); }}
         >{d}</button>
       ))}
     </div>
@@ -274,9 +276,8 @@ export function SearchablePills({ options, value, onChange, placeholder = "Searc
               key={o.value}
               type="button"
               className={`pwa-pill ${sel ? "selected" : ""}`}
-              onClick={() => toggle(o.value)}
+              onClick={() => { haptic(); toggle(o.value); }}
             >
-              {sel && <Check className="check" />}
               {o.label}
             </button>
           );

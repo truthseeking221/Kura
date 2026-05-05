@@ -17,7 +17,7 @@ const PROFILE = {
 };
 
 const ORDERED_TESTS = [
-  "lipid_panel", "glucose_fasting", "thyroid_meds",
+  "lipid_panel", "glucose_fasting", "thyroid_meds", "tsh",
   "ggt", "liver_function",
   "fsh", "lh", "estradiol",
   "uacr", "dipstick",
@@ -26,14 +26,30 @@ const ORDERED_TESTS = [
 ];
 
 const SECTION_DEFS = [
-  { num: 1, name: "Today's visit",  sub: "Why you came in",                  Comp: Section1 },
-  { num: 2, name: "Right now",      sub: "Pre-test prep",                    Comp: Section2 },
-  { num: 3, name: "Medications",    sub: "Rx, OTC, supplements & herbals",   Comp: Section3 },
-  { num: 4, name: "Women's health", sub: "Private, physician only",          Comp: Section4 },
-  { num: 5, name: "Recent health",  sub: "Last 3 months",                    Comp: Section5 },
-  { num: 6, name: "Lifestyle",      sub: "Smoking, alcohol, diet, sleep",    Comp: Section6 },
-  { num: 7, name: "Sample comfort", sub: "Phlebotomy preferences & safety",  Comp: Section7 },
-  { num: 8, name: "Consent",        sub: "Sensitive tests",                  Comp: Section8 },
+  { num: 1, name: "Today's visit",  sub: "Why you came in",                  Comp: Section1,
+    splashTitle: "Tell us what brings you in",
+    splashBody: "A few quick questions about today's visit. This helps your doctor focus." },
+  { num: 5, name: "Recent health",  sub: "Last 3 months",                    Comp: Section5,
+    splashTitle: "Now, your recent health",
+    splashBody: "Recent illness, surgery or travel can affect today's labs. Tell us what stands out." },
+  { num: 6, name: "Lifestyle",      sub: "Smoking, alcohol, diet, sleep",    Comp: Section6,
+    splashTitle: "A bit about your lifestyle",
+    splashBody: "Smoking, alcohol, sleep and diet help the doctor read borderline values correctly." },
+  { num: 2, name: "Right now",      sub: "Pre-test prep",                    Comp: Section2,
+    splashTitle: "How you arrived today",
+    splashBody: "These questions may impact the quality of your lab test results — fasting, exercise, hydration." },
+  { num: 3, name: "Medications",    sub: "Rx, OTC, supplements & herbals",   Comp: Section3,
+    splashTitle: "Medications & supplements",
+    splashBody: "Many medications change blood-test interpretation. We'll only ask if you actually take them." },
+  { num: 4, name: "Women's health", sub: "Private, physician only",          Comp: Section4,
+    splashTitle: "A few private questions",
+    splashBody: "Only your physician sees these. They help us interpret hormone tests correctly." },
+  { num: 7, name: "Sample comfort", sub: "Phlebotomy preferences & safety",  Comp: Section7,
+    splashTitle: "About your blood draw",
+    splashBody: "Quick preferences so the phlebotomist can prepare — preferred arm, allergies, comfort." },
+  { num: 8, name: "Consent",        sub: "Sensitive tests",                  Comp: Section8,
+    splashTitle: "One last thing: consent",
+    splashBody: "A couple of consent questions before any sensitive tests are run today." },
 ];
 
 export default function App() {
@@ -41,6 +57,7 @@ export default function App() {
   const [currentSec, setCurrentSec] = useState(1);
   const [answers, setAnswers] = useState({});
   const [skipPrompt, setSkipPrompt] = useState(false);
+  const [seenSplashes, setSeenSplashes] = useState(() => new Set());
   const mainRef = useRef(null);
 
   const visibleSecs = useMemo(
@@ -75,19 +92,28 @@ export default function App() {
   }, [stage, currentSec]);
 
   const goNext = () => {
+    navigator.vibrate?.(12);
     setSkipPrompt(false);
     if (isLast) { setStage("done"); return; }
     setCurrentSec(visibleNums[currentIdx + 1]);
   };
 
   const goPrev = () => {
+    navigator.vibrate?.(8);
     if (currentIdx === 0) { setStage("cover"); return; }
     setCurrentSec(visibleNums[currentIdx - 1]);
   };
 
   const startForm = () => {
+    navigator.vibrate?.(12);
     setStage("section");
     setCurrentSec(visibleNums[0]);
+  };
+
+  const showSplash = stage === "section" && currentDef && !seenSplashes.has(currentSec);
+  const ackSplash = () => {
+    navigator.vibrate?.(10);
+    setSeenSplashes((s) => { const n = new Set(s); n.add(currentSec); return n; });
   };
 
   const showHeaderBack = stage === "section";
@@ -111,17 +137,18 @@ export default function App() {
           </div>
         </header>
 
-        {stage === "section" && currentDef && (
+        {stage === "section" && currentDef && !showSplash && (
           <ProgressRail
             def={currentDef}
             visibleNums={visibleNums}
             completedNums={completedNums}
             currentSec={currentSec}
             currentIdx={currentIdx}
+            onJump={(n) => setCurrentSec(n)}
           />
         )}
 
-        <main className={mainClass} ref={mainRef}>
+        <main className={mainClass} ref={mainRef} aria-hidden={showSplash}>
           {stage === "cover" && (
             <CoverScreen profile={PROFILE} visibleSecs={visibleSecs} />
           )}
@@ -138,7 +165,17 @@ export default function App() {
           {stage === "done" && <DoneScreen profile={PROFILE} answers={answers} />}
         </main>
 
-        {stage === "section" && (
+        {showSplash && (
+          <SectionSplash
+            def={currentDef}
+            position={currentIdx + 1}
+            total={visibleNums.length}
+            completed={completedNums.length}
+            onContinue={ackSplash}
+          />
+        )}
+
+        {stage === "section" && !showSplash && (
           <footer className="pwa-footer">
             <div className="pwa-footer-bar">
               <div
@@ -242,7 +279,7 @@ function CoverScreen({ profile, visibleSecs }) {
 
         <ul className="pwa-cover-meta" aria-label="Visit summary">
           <li><span className="lbl">Short sections</span><span className="num">{visibleSecs.length}</span></li>
-          <li><span className="lbl">Expected time</span><span className="num">~3 min</span></li>
+          <li><span className="lbl">Expected time</span><span className="num">approx 3 min</span></li>
           <li><span className="lbl">Shared with Kura</span><span className="num">Private</span></li>
         </ul>
       </div>
@@ -250,8 +287,38 @@ function CoverScreen({ profile, visibleSecs }) {
   );
 }
 
-function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx }) {
+function SectionSplash({ def, position, total, completed, onContinue }) {
+  if (!def) return null;
+  const isFirst = position === 1;
+  const remaining = Math.max(0, total - position);
+  return (
+    <div className="pwa-splash" role="dialog" aria-modal="true" aria-label={`Starting ${def.name}`}>
+      <div className="pwa-splash-inner">
+        <div className="pwa-splash-meta">
+          <span className="step">Step {position} of {total}</span>
+          {!isFirst && completed > 0 && (
+            <span className="streak"><Check className="ico" /> {completed} done</span>
+          )}
+        </div>
+        <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
+        <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+        <div className="pwa-splash-progress" aria-hidden="true">
+          {Array.from({ length: total }).map((_, i) => (
+            <span key={i} className={`dot ${i < position - 1 ? "done" : i === position - 1 ? "current" : ""}`} />
+          ))}
+        </div>
+        <button type="button" className="pwa-cta-block" onClick={onContinue}>
+          {isFirst ? "Let's go" : remaining === 0 ? "Last one — finish strong" : "Continue"}
+          <ArrowRight className="ico" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx, onJump }) {
   const completedSet = new Set(completedNums);
+  const currentPos = visibleNums.indexOf(currentSec);
   return (
     <div className="pwa-progress-rail">
       <div className="pwa-progress-row">
@@ -263,15 +330,21 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx 
           <strong>{currentIdx + 1}</strong> of {visibleNums.length}
         </div>
       </div>
-      <div className="pwa-progress-segments" aria-label="Form progress">
-        {visibleNums.map((n) => {
+      <div className="pwa-progress-segments" role="tablist" aria-label="Form progress — tap a completed step to go back">
+        {visibleNums.map((n, i) => {
           const isDone = completedSet.has(n);
           const isCurr = n === currentSec;
+          const canJump = i <= currentPos;
           return (
-            <div
+            <button
               key={n}
+              type="button"
+              role="tab"
+              aria-selected={isCurr}
+              disabled={!canJump || isCurr}
               className={`pwa-progress-segment ${isDone ? "done" : ""} ${isCurr ? "current" : ""}`}
-              aria-label={`Section ${n} ${isDone ? "complete" : isCurr ? "current" : "pending"}`}
+              aria-label={`Section ${n} ${isDone ? "complete, tap to revisit" : isCurr ? "current" : "pending"}`}
+              onClick={() => { if (canJump && !isCurr) { navigator.vibrate?.(8); onJump?.(n); } }}
             />
           );
         })}

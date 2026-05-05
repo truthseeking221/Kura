@@ -14,6 +14,7 @@ export const TEST_GROUPS = {
   sensitive: ["hiv", "sti_panel", "genetic_panel"],
   hiv: ["hiv", "sti_panel"],
   genetic: ["genetic_panel"],
+  biotin: ["tsh", "troponin", "tumor_markers", "bnp", "ferritin", "prolactin", "vitamin_d", "psa"],
 };
 
 export const has = (orderedTests, group) =>
@@ -57,6 +58,10 @@ export const isQVisible = (key, profile, ordered, answers) => {
       return has(ordered, "medTiming");
     case "s2.lastVoid":
       return has(ordered, "urine");
+    case "s3.rxList":
+      return answers.s3?.takesRx === "yes";
+    case "s3.biotin":
+      return has(ordered, "biotin");
     case "s4.cycleDate":
       return ["this_week", "1_2", "2_4"].includes(answers.s4?.lmp);
     case "s4.cycleDay":
@@ -117,7 +122,10 @@ export const computeWarnings = (profile, ordered, answers) => {
 export const SECTION_REQ_FIELDS = {
   1: [{ key: "visitReason", num: "1.1", label: "Visit reason" }],
   2: [{ key: "hydrated", num: "2.5", label: "Hydration" }],
-  3: [{ key: "biotin", num: "3.2", label: "Biotin / B-complex use" }],
+  3: [
+    { key: "takesRx", num: "3.1", label: "Prescription medications" },
+    { key: "biotin", num: "3.2", label: "Biotin / B-complex use", visibleKey: "s3.biotin" },
+  ],
   4: [
     { key: "lmp", num: "4.1", label: "Last menstrual period" },
     { key: "pregnancy", num: "4.2", label: "Could you be pregnant" },
@@ -128,7 +136,7 @@ export const SECTION_REQ_FIELDS = {
     { key: "transfusion", num: "5.3", label: "Recent transfusion" },
     { key: "surgery", num: "5.4", label: "Recent surgery" },
     { key: "injury", num: "5.5", label: "Recent injury" },
-    { key: "sleep", num: "5.7", label: "Sleep last 48 hours" },
+    { key: "sleep", num: "5.7", label: "Sleep per night" },
   ],
   6: [
     { key: "smoking", num: "6.1", label: "Smoking" },
@@ -146,7 +154,6 @@ export const SECTION_REQ_FIELDS = {
   8: [
     { key: "hivConsent", num: "8.1", label: "HIV / STI test consent", visibleKey: "s8.hivConsent" },
     { key: "geneticConsent", num: "8.2", label: "Genetic test consent", visibleKey: "s8.geneticConsent" },
-    { key: "resultsDelivery", num: "8.3", label: "Results delivery" },
   ],
 };
 
