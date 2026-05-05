@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Logo, ChevronLeft, Check, ArrowRight, Stethoscope, AlertTriangle } from "./icons";
+import { Logo, ChevronLeft, Check, ArrowRight, AlertTriangle, X } from "./icons";
 import { Section1, Section2, Section3, Section4 } from "./sections-1-4";
 import { Section5, Section6, Section7, Section8 } from "./sections-5-8";
-import { sectionApplies, isSectionComplete, requiredRemaining, SECTION_SKIP_REASON } from "./logic";
+import { sectionApplies, isSectionComplete, requiredRemaining, remainingRequiredKeys, SECTION_SKIP_REASON, SECTION_REQ_LABEL } from "./logic";
 
 const PROFILE = {
   name: "Sokha Pich",
@@ -59,6 +59,15 @@ export default function App() {
   const isLast = currentIdx === visibleNums.length - 1;
   const sectionDone = isSectionComplete(currentSec, PROFILE, ORDERED_TESTS, answers);
   const remaining = requiredRemaining(currentSec, PROFILE, ORDERED_TESTS, answers);
+  const remainingKeys = remainingRequiredKeys(currentSec, PROFILE, ORDERED_TESTS, answers);
+  const firstMissing = remainingKeys[0] ? SECTION_REQ_LABEL[remainingKeys[0]] : null;
+
+  const scrollToFirstMissing = () => {
+    if (!firstMissing || !mainRef.current) return;
+    const num = firstMissing.num;
+    const target = mainRef.current.querySelector(`[data-q-num="${num}"]`);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   useEffect(() => {
     if (mainRef.current) mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
@@ -131,50 +140,41 @@ export default function App() {
 
         {stage === "section" && (
           <footer className="pwa-footer">
-            {skipPrompt && !sectionDone && (
-              <div className="pwa-skip-prompt" role="alertdialog" aria-label="Confirm skip">
-                <div className="pwa-skip-prompt-head">
-                  <AlertTriangle className="ico" />
-                  <strong>Before you skip</strong>
-                </div>
-                <p>{SECTION_SKIP_REASON[currentSec]}</p>
-                <div className="pwa-skip-prompt-actions">
-                  <button type="button" className="pwa-cta-ghost" onClick={() => setSkipPrompt(false)}>
-                    Stay and finish
-                  </button>
-                  <button type="button" className="pwa-skip-confirm" onClick={goNext}>
-                    Skip anyway
-                  </button>
-                </div>
+            <div className="pwa-footer-bar">
+              <div
+                className="fill"
+                style={{ width: `${(completedNums.length / visibleNums.length) * 100}%` }}
+              />
+            </div>
+            {sectionDone ? (
+              <div className="pwa-footer-status ok">
+                <Check className="ico" /> Section complete
               </div>
-            )}
+            ) : firstMissing ? (
+              <button
+                type="button"
+                className="pwa-footer-status missing"
+                onClick={scrollToFirstMissing}
+                aria-label={`Jump to question ${firstMissing.num}`}
+              >
+                <span className="badge">{remaining}</span>
+                <span className="copy">
+                  Answer <strong>{firstMissing.num} {firstMissing.label}</strong>
+                  {remaining > 1 && <span className="more"> · {remaining - 1} more</span>}
+                </span>
+                <ArrowRight className="arrow" />
+              </button>
+            ) : null}
             <div className="pwa-footer-row">
-              <div className="pwa-footer-progress">
-                <div className="pwa-footer-bar">
-                  <div
-                    className="fill"
-                    style={{ width: `${(completedNums.length / visibleNums.length) * 100}%` }}
-                  />
-                </div>
-                <div className="meta">
-                  {sectionDone ? (
-                    <span className="ok"><Check className="ico" /> Section complete</span>
-                  ) : (
-                    <span className="warn">
-                      <strong>{remaining}</strong> required {remaining === 1 ? "answer" : "answers"} left
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="pwa-skip-link"
-                    onClick={() => setSkipPrompt((v) => !v)}
-                    disabled={sectionDone}
-                    hidden={sectionDone}
-                  >
-                    Skip section
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                className="pwa-footer-skip"
+                onClick={() => setSkipPrompt(true)}
+                disabled={sectionDone}
+                hidden={sectionDone}
+              >
+                Skip
+              </button>
               <button
                 type="button"
                 className="pwa-cta"
@@ -187,6 +187,15 @@ export default function App() {
               </button>
             </div>
           </footer>
+        )}
+
+        {stage === "section" && skipPrompt && !sectionDone && (
+          <SkipSheet
+            sectionName={currentDef?.name}
+            reason={SECTION_SKIP_REASON[currentSec]}
+            onStay={() => setSkipPrompt(false)}
+            onSkip={goNext}
+          />
         )}
 
         {stage === "cover" && (
@@ -262,6 +271,40 @@ function ProgressRail({ def, visibleNums, completedNums, currentSec, currentIdx 
   );
 }
 
+function SkipSheet({ sectionName, reason, onStay, onSkip }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onStay(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onStay]);
+  return (
+    <div className="pwa-sheet-overlay" role="dialog" aria-modal="true" aria-label="Confirm skip section" onClick={onStay}>
+      <div className="pwa-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="pwa-sheet-grip" aria-hidden="true" />
+        <div className="pwa-sheet-head">
+          <div className="pwa-sheet-icon"><AlertTriangle /></div>
+          <div className="pwa-sheet-title">
+            <strong>Skip {sectionName ? `"${sectionName}"` : "this section"}?</strong>
+            <span>Why we ask first</span>
+          </div>
+          <button type="button" className="pwa-sheet-close" onClick={onStay} aria-label="Close">
+            <X className="ico" />
+          </button>
+        </div>
+        <p className="pwa-sheet-body">{reason}</p>
+        <div className="pwa-sheet-actions">
+          <button type="button" className="pwa-btn pwa-btn-primary" onClick={onStay}>
+            Stay and finish
+          </button>
+          <button type="button" className="pwa-btn pwa-btn-ghost" onClick={onSkip}>
+            Skip anyway
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DoneScreen({ profile, answers }) {
   const firstName = profile.name.split(" ")[0];
   const visitReasons = answers.s1?.visitReason || [];
@@ -274,38 +317,28 @@ function DoneScreen({ profile, answers }) {
   ];
   return (
     <div className="pwa-done">
-      <div className="pwa-done-top">
-        <div className="pwa-done-mark">
-          <span className="pwa-done-pulse" aria-hidden="true" />
-          <Check />
-        </div>
-        <span className="pwa-done-kicker">Sent to clinic</span>
-        <h1>All set, {firstName}.</h1>
-        <p>Your intake has reached Kura's front desk. The team can review it before they call you in.</p>
+      <div className="pwa-done-mark">
+        <Check />
       </div>
+      <h1 className="pwa-done-title">All set, {firstName}.</h1>
+      <p className="pwa-done-line">Your intake reached Kura's front desk. The team can review it before they call you in.</p>
 
-      <section className="pwa-done-pass" aria-label="Clinic handoff status">
-        <div>
-          <span>Reception handoff</span>
-          <strong>Ready for review</strong>
+      <section className="pwa-done-card" aria-label="Submitted intake summary">
+        <div className="pwa-done-card-head">
+          <strong>Intake summary</strong>
+          <span className="pwa-done-card-tag">Sent</span>
         </div>
-        <span className="pwa-done-stamp">Kura</span>
+        <ul className="pwa-done-list">
+          {summary.map((row) => (
+            <li key={row.lbl}>
+              <span className="lbl">{row.lbl}</span>
+              <span className="val">{row.val}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <div className="pwa-done-summary" aria-label="Submitted intake summary">
-        {summary.map((row) => (
-          <div className="pwa-done-row" key={row.lbl}>
-            <Check className="ico" />
-            <span className="lbl">{row.lbl}</span>
-            <span className="val">{row.val}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="pwa-done-note">
-        <Stethoscope className="ico" />
-        <span>Keep this phone nearby. Your nurse may use it to confirm details at reception.</span>
-      </div>
+      <p className="pwa-done-foot">Keep this phone nearby. Your nurse may use it to confirm details at reception.</p>
     </div>
   );
 }

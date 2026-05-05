@@ -5,7 +5,7 @@ import { Check, Search, Lock, AlertTriangle, Info, X, Sparkle } from "./icons";
 export function Question({ num, title, required, why, microcopy, locked, prefilled, children, banner }) {
   const [showWhy, setShowWhy] = useState(false);
   return (
-    <div className="pwa-q">
+    <div className="pwa-q" data-q-num={num}>
       <div className="pwa-q-head">
         {num && <div className="pwa-q-num">{num}</div>}
         <div className="pwa-q-title">
@@ -197,12 +197,50 @@ export function DayGrid({ value, onChange, max = 28 }) {
   );
 }
 
-/* ---------- Date picker (native) ---------- */
+/* ---------- Date picker (mobile-friendly: 3 selects) ---------- */
 export function DateField({ value, onChange, max }) {
+  const parts = (value || "").split("-");
+  const [yy, mm, dd] = [parts[0] || "", parts[1] || "", parts[2] || ""];
+  const maxDate = max ? new Date(max) : new Date();
+  const maxY = maxDate.getFullYear();
+  const today = new Date();
+  const yearList = Array.from({ length: 8 }, (_, i) => maxY - i);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const daysInMonth = (y, m) => {
+    if (!y || !m) return 31;
+    return new Date(Number(y), Number(m), 0).getDate();
+  };
+  const dayList = Array.from({ length: daysInMonth(yy, mm) }, (_, i) => i + 1);
+  const emit = (nd, nm, ny) => {
+    if (!nd || !nm || !ny) { onChange(""); return; }
+    const iso = `${ny}-${String(nm).padStart(2, "0")}-${String(nd).padStart(2, "0")}`;
+    if (max && iso > max) return;
+    onChange(iso);
+  };
   return (
-    <label className="pwa-date-input">
-      <input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} max={max} />
-    </label>
+    <div className="pwa-date">
+      <label className="pwa-date-cell">
+        <span className="lbl">Day</span>
+        <select value={dd} onChange={(e) => emit(e.target.value, mm, yy)}>
+          <option value="">--</option>
+          {dayList.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </label>
+      <label className="pwa-date-cell">
+        <span className="lbl">Month</span>
+        <select value={mm} onChange={(e) => emit(dd, e.target.value, yy)}>
+          <option value="">--</option>
+          {months.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+        </select>
+      </label>
+      <label className="pwa-date-cell">
+        <span className="lbl">Year</span>
+        <select value={yy} onChange={(e) => emit(dd, mm, e.target.value)}>
+          <option value="">--</option>
+          {yearList.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </label>
+    </div>
   );
 }
 

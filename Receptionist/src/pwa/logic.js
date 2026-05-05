@@ -123,6 +123,29 @@ export const SECTION_REQ = {
   8: ["resultsDelivery"],
 };
 
+export const SECTION_REQ_LABEL = {
+  visitReason: { num: "1.1", label: "Visit reason" },
+  hydrated: { num: "2.1", label: "Hydration" },
+  biotin: { num: "3.4", label: "Biotin / B-complex use" },
+  lmp: { num: "4.1", label: "Last menstrual period" },
+  pregnancy: { num: "4.2", label: "Could you be pregnant" },
+  illness: { num: "5.1", label: "Recent illness" },
+  vaccine: { num: "5.2", label: "Recent vaccination" },
+  transfusion: { num: "5.3", label: "Recent transfusion" },
+  surgery: { num: "5.4", label: "Recent surgery" },
+  injury: { num: "5.5", label: "Recent injury" },
+  sleep: { num: "5.6", label: "Sleep last night" },
+  smoking: { num: "6.1", label: "Smoking" },
+  alcoholHabit: { num: "6.2", label: "Alcohol" },
+  exercise: { num: "6.3", label: "Exercise habit" },
+  diet: { num: "6.4", label: "Diet" },
+  bloodDrawHistory: { num: "7.1", label: "Past blood draws" },
+  preferredArm: { num: "7.2", label: "Preferred arm" },
+  latex: { num: "7.3", label: "Latex allergy" },
+  port: { num: "7.4", label: "Port / fistula" },
+  resultsDelivery: { num: "8.1", label: "Results delivery" },
+};
+
 export const isSectionComplete = (sec, profile, ordered, answers) => {
   const a = answers[`s${sec}`] || {};
   const req = SECTION_REQ[sec] || [];
@@ -142,6 +165,15 @@ export const requiredRemaining = (sec, profile, ordered, answers) => {
     if (Array.isArray(v) ? v.length === 0 : v == null || v === "") n += 1;
   }
   return n;
+};
+
+export const remainingRequiredKeys = (sec, profile, ordered, answers) => {
+  const a = answers[`s${sec}`] || {};
+  const req = SECTION_REQ[sec] || [];
+  return req.filter((k) => {
+    const v = a[k];
+    return Array.isArray(v) ? v.length === 0 : v == null || v === "";
+  });
 };
 
 export const SECTION_SKIP_REASON = {
