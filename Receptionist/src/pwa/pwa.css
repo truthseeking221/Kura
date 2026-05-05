@@ -104,13 +104,13 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   height: 100vh;
   height: 100dvh;
   display: grid;
-  justify-content: center;
-  background: linear-gradient(180deg, #eef3f8 0%, #f6f7fa 280px);
+  justify-content: stretch;
+  background: var(--surface);
   overflow: hidden;
 }
 .pwa-canvas {
-  width: 100%;
-  max-width: 480px;
+  width: 100vw;
+  max-width: none;
   height: 100%;
   background: var(--surface);
   display: grid;
@@ -118,29 +118,21 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   position: relative;
   overflow: hidden;
 }
-@media (min-width: 600px) {
-  .pwa { padding: 0 16px; align-items: stretch; background: linear-gradient(180deg, #e4e9f0 0%, #f6f7fa 360px); }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .pwa {
+    justify-content: center;
+    padding: 0 16px;
+    align-items: stretch;
+    background: linear-gradient(180deg, #e4e9f0 0%, #f6f7fa 360px);
+  }
   .pwa-canvas {
+    width: 100%;
+    max-width: 480px;
     height: 100dvh;
     max-height: 100dvh;
     border-left: 1px solid #e2e8f4;
     border-right: 1px solid #e2e8f4;
     overflow: hidden;
-  }
-}
-@media (hover: none) and (pointer: coarse) {
-  .pwa {
-    justify-content: stretch;
-    padding: 0;
-    background: var(--surface);
-  }
-  .pwa-canvas {
-    width: 100vw;
-    max-width: none;
-    height: 100dvh;
-    max-height: 100dvh;
-    border-left: 0;
-    border-right: 0;
   }
 }
 
@@ -1653,7 +1645,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-splash-meta .streak {
   display: inline-flex; align-items: center; gap: 6px;
-  color: var(--success-700);
+  color: var(--ink-900);
   background: #fff;
   padding: 5px 11px 5px 9px;
   border-radius: 999px;
