@@ -144,7 +144,11 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-logo {
   display: flex; align-items: center; gap: 10px;
+  border-radius: 8px;
+  transition: transform 0.08s ease, opacity 0.15s;
 }
+.pwa-logo:active { transform: scale(0.94); }
+.pwa-logo:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 4px; }
 .pwa-logo-mark {
   width: 32px; height: 32px;
   display: grid; place-items: center;
