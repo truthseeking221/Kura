@@ -277,31 +277,38 @@ export function Section3({ profile, ordered, answers, setAnswers }) {
     <>
       <Question
         num="3.1"
-        title="Prescription medications you take regularly"
+        title="Do you take prescription medications regularly?"
+        required
         prefilled={isReturning}
         why="Many medications change blood-test results. For example, statins lower cholesterol numbers and warfarin extends clotting times."
       >
-        {a.noRx ? (
-          <Pills
-            value={a.noRx ? "none" : null}
-            onChange={() => set("noRx", false)}
-            options={[{ value: "none", label: "None, I don't take prescriptions", variant: "muted" }]}
-          />
-        ) : (
-          <>
+        <Pills
+          value={a.takesRx}
+          onChange={(v) => {
+            set("takesRx", v);
+            if (v === "no") { set("rx", []); set("showMore", false); }
+          }}
+          options={[
+            { value: "no", label: "No" },
+            { value: "yes", label: "Yes" },
+          ]}
+        />
+        <Reveal when={a.takesRx === "yes"}>
+          <div style={{ marginTop: 12 }}>
             <MedGroup title="Cardiovascular" options={cardio} value={a.rx} onChange={(v) => set("rx", v)} />
             <MedGroup title="Diabetes" options={diabetes} value={a.rx} onChange={(v) => set("rx", v)} />
             <MedGroup title="Thyroid" options={thyroid} value={a.rx} onChange={(v) => set("rx", v)} />
             {a.showMore && (
               <MedGroup title="Other common" options={more} value={a.rx} onChange={(v) => set("rx", v)} />
             )}
-            <div className="pwa-pills" style={{ marginTop: 6 }}>
-              {!a.showMore && <button type="button" className="pwa-pill expand" onClick={() => set("showMore", true)}>+ Show more categories</button>}
-              <button type="button" className="pwa-pill muted" onClick={() => { set("rx", []); set("noRx", true); }}>None, I don't take Rx</button>
-            </div>
-          </>
-        )}
-        {(a.rx || []).includes("metformin") && (
+            {!a.showMore && (
+              <div className="pwa-pills" style={{ marginTop: 6 }}>
+                <button type="button" className="pwa-pill expand" onClick={() => set("showMore", true)}>+ Show more categories</button>
+              </div>
+            )}
+          </div>
+        </Reveal>
+        {a.takesRx === "yes" && (a.rx || []).includes("metformin") && (
           <div className="pwa-med-detail">
             <div className="pwa-med-detail-row">
               <span className="lbl">Metformin · Dose</span>
@@ -331,28 +338,30 @@ export function Section3({ profile, ordered, answers, setAnswers }) {
         )}
       </Question>
 
-      <Question
-        num="3.2"
-        title="Do you take biotin (Vitamin B7) or any hair / nail / skin vitamins?"
-        required
-        why="Biotin distorts TSH, troponin and tumor marker results. It's hidden in most beauty supplements. The FDA issued a warning."
-        microcopy="Biotin = the hair & nail supplement. Found in many multivitamins and beauty gummies."
-        banner={["yes", "unsure"].includes(a.biotin) && (
-          <Banner kind="danger" title="Critical: biotin distorts results">
-            Ideally hold biotin for 3–7 days before the blood draw. The nurse will discuss this with you on arrival.
-          </Banner>
-        )}
-      >
-        <Stack
-          value={a.biotin}
-          onChange={(v) => set("biotin", v)}
-          options={[
-            { value: "no", label: "No" },
-            { value: "yes", label: "Yes, taking biotin" },
-            { value: "unsure", label: "Not sure, let me check" },
-          ]}
-        />
-      </Question>
+      {isQVisible("s3.biotin", profile, ordered, answers) && (
+        <Question
+          num="3.2"
+          title="Do you take biotin (Vitamin B7) or any hair / nail / skin vitamins?"
+          required
+          why="Biotin distorts TSH, troponin and tumor marker results. It's hidden in most beauty supplements. The FDA issued a warning."
+          microcopy="Biotin = the hair & nail supplement. Found in many multivitamins and beauty gummies."
+          banner={["yes", "unsure"].includes(a.biotin) && (
+            <Banner kind="danger" title="Critical: biotin distorts results">
+              Ideally hold biotin for 3–7 days before the blood draw. The nurse will discuss this with you on arrival.
+            </Banner>
+          )}
+        >
+          <Stack
+            value={a.biotin}
+            onChange={(v) => set("biotin", v)}
+            options={[
+              { value: "no", label: "No" },
+              { value: "yes", label: "Yes, taking biotin" },
+              { value: "unsure", label: "Not sure, let me check" },
+            ]}
+          />
+        </Question>
+      )}
 
       <Question
         num="3.3"

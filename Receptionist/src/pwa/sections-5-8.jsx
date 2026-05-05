@@ -169,17 +169,18 @@ export function Section5({ profile, ordered, answers, setAnswers }) {
 
       <Question
         num="5.7"
-        title="How was your sleep in the last 48 hours?"
+        title="How many hours of sleep do you usually get a night?"
         required
-        why="Severe sleep loss elevates cortisol, glucose and WBC. It also dampens recovery markers."
+        why="Sleep loss elevates cortisol, glucose and WBC. It also dampens recovery markers."
       >
         <Stack
           value={a.sleep}
           onChange={(v) => set("sleep", v)}
           options={[
-            { value: "normal", label: "Normal" },
-            { value: "poor", label: "Poor, under 5 hours" },
-            { value: "very_poor", label: "Very poor, under stress" },
+            { value: "lt5", label: "Less than 5 hours" },
+            { value: "5_6", label: "5–6 hours" },
+            { value: "7_8", label: "7–8 hours" },
+            { value: "gt8", label: "More than 8 hours" },
           ]}
         />
       </Question>
@@ -289,22 +290,6 @@ export function Section6({ profile, ordered, answers, setAnswers }) {
         />
       </Question>
 
-      <Question
-        num="6.5"
-        title="IV drug use"
-        locked
-        why="Affects HIV / Hepatitis B & C considerations and vein access for the phlebotomist. Only your physician sees this."
-      >
-        <Pills
-          value={a.iv}
-          onChange={(v) => set("iv", v)}
-          options={[
-            { value: "no", label: "No" },
-            { value: "former", label: "Former use" },
-            { value: "current", label: "Yes, currently" },
-          ]}
-        />
-      </Question>
     </>
   );
 }
@@ -495,50 +480,6 @@ export function Section8({ profile, ordered, answers, setAnswers }) {
         </Question>
       )}
 
-      <Question
-        num="8.3"
-        title="How would you like to receive your results?"
-        required
-      >
-        <Stack
-          value={a.resultsDelivery}
-          onChange={(v) => set("resultsDelivery", v)}
-          options={[
-            { value: "telegram", label: "Telegram (verified)", desc: "Encrypted, fast" },
-            { value: "sms", label: "SMS to my registered number" },
-            { value: "in_person", label: "In person only. No digital delivery." },
-            { value: "doctor", label: "My doctor receives them directly" },
-          ]}
-        />
-      </Question>
-
-      <Question num="8.4" title="May anyone else receive your results?">
-        <Stack
-          value={a.thirdParty}
-          onChange={(v) => set("thirdParty", v)}
-          options={[
-            { value: "none", label: "No, only me" },
-            { value: "gp", label: "My GP / specialist" },
-            { value: "insurance", label: "My insurance provider" },
-            { value: "family", label: "A family member" },
-          ]}
-        />
-        <Reveal when={a.thirdParty === "family"}>
-          <div>
-            <div className="pwa-sub-label">Relationship</div>
-            <Pills
-              value={a.familyRel}
-              onChange={(v) => set("familyRel", v)}
-              options={[
-                { value: "spouse", label: "Spouse" },
-                { value: "parent", label: "Parent" },
-                { value: "child", label: "Child" },
-                { value: "guardian", label: "Guardian" },
-              ]}
-            />
-          </div>
-        </Reveal>
-      </Question>
     </>
   );
 }
