@@ -310,31 +310,33 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
         <span className="bloom bloom-2" />
       </div>
       <div className="pwa-splash-inner">
-        <div className="pwa-splash-meta">
-          <span className="step">Step {position} of {total}</span>
-          {!isFirst && completed > 0 && (
-            <span className="streak"><Check className="ico" /> {completed} done · keep going</span>
-          )}
-        </div>
-
-        {Icon && (
-          <div className="pwa-splash-icon" aria-hidden="true">
-            <span className="ring ring-outer" />
-            <span className="ring ring-inner" />
-            <Icon className="ico" />
+        <div className="pwa-splash-scroll">
+          <div className="pwa-splash-meta">
+            <span className="step">Step {position} of {total}</span>
+            {!isFirst && completed > 0 && (
+              <span className="streak"><Check className="ico" /> {completed} done · keep going</span>
+            )}
           </div>
-        )}
 
-        <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
-        <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+          {Icon && (
+            <div className="pwa-splash-icon" aria-hidden="true">
+              <span className="ring ring-outer" />
+              <span className="ring ring-inner" />
+              <Icon className="ico" />
+            </div>
+          )}
 
-        <div className="pwa-splash-progress" aria-hidden="true">
-          {Array.from({ length: total }).map((_, i) => (
-            <span key={i} className={`dot ${i < position - 1 ? "done" : i === position - 1 ? "current" : ""}`} />
-          ))}
+          <h2 className="pwa-splash-title">{def.splashTitle || def.name}</h2>
+          <p className="pwa-splash-body">{def.splashBody || def.sub}</p>
+
+          <div className="pwa-splash-progress" aria-hidden="true">
+            {Array.from({ length: total }).map((_, i) => (
+              <span key={i} className={`dot ${i < position - 1 ? "done" : i === position - 1 ? "current" : ""}`} />
+            ))}
+          </div>
         </div>
 
-        <button type="button" className="pwa-cta-block" onClick={onContinue}>
+        <button type="button" className="pwa-cta-block pwa-splash-cta" onClick={onContinue}>
           {isFirst ? "Let's begin" : remaining === 0 ? "Last one — finish strong" : "Continue"}
           <ArrowRight className="ico" />
         </button>
