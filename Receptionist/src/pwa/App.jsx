@@ -136,9 +136,14 @@ export default function App() {
     <div className="pwa">
       <div className="pwa-canvas">
         <header className="pwa-header">
-          <div className="pwa-logo">
+          <button
+            type="button"
+            className="pwa-logo"
+            onClick={() => { navigator.vibrate?.(8); setStage("cover"); }}
+            aria-label="Back to start"
+          >
             <span className="pwa-logo-mark"><Logo /></span>
-          </div>
+          </button>
         </header>
 
         {stage === "section" && currentDef && !showSplash && (
