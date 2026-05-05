@@ -127,21 +127,60 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
   }
 }
 
-/* === Header: logo only, left-aligned === */
+/* === Header: logo + (optional) section context + stepper === */
 .pwa-header {
   position: sticky;
   top: 0;
   z-index: 30;
-  height: calc(var(--header-h) + var(--safe-top));
   padding: var(--safe-top) 18px 0;
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
+  flex-direction: column;
   background: rgba(255,255,255,0.92);
   backdrop-filter: saturate(160%) blur(10px);
   -webkit-backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid rgba(15,23,42,0.06);
 }
+.pwa-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--header-h);
+}
+.pwa-header-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pwa-header-title .name {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink-900);
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pwa-header-title .sub {
+  font-size: 11.5px;
+  color: var(--ink-500);
+  font-weight: 500;
+  margin-top: 1px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pwa-header-meta {
+  font-size: 12px;
+  color: var(--ink-500);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.pwa-header-meta strong { color: var(--ink-800); font-weight: 700; }
+.pwa-header.with-context .pwa-logo-mark { width: 28px; height: 28px; }
+.pwa-header.with-context .pwa-stepper { padding-bottom: 10px; }
 .pwa-logo {
   display: flex; align-items: center; gap: 10px;
   border-radius: 8px;
@@ -980,35 +1019,7 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 }
 .pwa-cta-ghost:hover { background: var(--ink-100); color: var(--ink-900); }
 
-/* === Section progress (sticky under header) === */
-.pwa-progress-rail {
-  flex-shrink: 0;
-  z-index: 25;
-  padding: 14px 18px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 10px;
-}
-.pwa-progress-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-}
-.pwa-progress-title {
-  display: flex; flex-direction: column; min-width: 0;
-}
-.pwa-progress-title .name {
-  font-size: 16px;
-  font-weight: 650;
-  color: var(--ink-900);
-  letter-spacing: 0;
-  line-height: 1.2;
-}
-.pwa-progress-title .sub {
-  font-size: 12px;
-  color: var(--ink-500);
-  font-weight: 500;
-  margin-top: 2px;
-  line-height: 1.3;
-}
+/* === Stepper (lives inside header) === */
 .pwa-stepper {
   position: relative;
   display: flex;
@@ -1075,9 +1086,9 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 
 .pwa-stepper-step .peek {
   position: absolute;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%) translateY(4px);
+  transform: translateX(-50%) translateY(-4px);
   background: var(--ink-900);
   color: #fff;
   font-size: 11px;
@@ -1094,24 +1105,17 @@ button:focus-visible { outline: 2px solid rgba(var(--brand-rgb), 0.4); outline-o
 .pwa-stepper-step .peek::after {
   content: "";
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
   width: 0; height: 0;
   margin-left: -4px;
   border: 4px solid transparent;
-  border-top-color: var(--ink-900);
+  border-bottom-color: var(--ink-900);
 }
 .pwa-stepper-step.peeking .peek {
   opacity: 1;
   transform: translateX(-50%);
 }
-.pwa-progress-meta {
-  font-size: 12px;
-  color: var(--ink-500);
-  font-weight: 500;
-  flex-shrink: 0;
-}
-.pwa-progress-meta strong { color: var(--ink-800); font-weight: 700; }
 
 /* === Done screen (Receptionist DS) === */
 .pwa-done {
