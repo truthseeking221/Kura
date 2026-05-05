@@ -135,28 +135,39 @@ export default function App() {
   return (
     <div className="pwa">
       <div className="pwa-canvas">
-        <header className="pwa-header">
-          <button
-            type="button"
-            className="pwa-logo"
-            onClick={() => { navigator.vibrate?.(8); setStage("cover"); }}
-            aria-label="Back to start"
-          >
-            <span className="pwa-logo-mark"><Logo /></span>
-          </button>
+        <header className={`pwa-header ${stage === "section" && !showSplash ? "with-context" : ""}`}>
+          <div className="pwa-header-row">
+            <button
+              type="button"
+              className="pwa-logo"
+              onClick={() => { navigator.vibrate?.(8); setStage("cover"); }}
+              aria-label="Back to start"
+            >
+              <span className="pwa-logo-mark"><Logo /></span>
+            </button>
+            {stage === "section" && currentDef && !showSplash && (
+              <>
+                <div className="pwa-header-title">
+                  <span className="name">{currentDef.name}</span>
+                  <span className="sub">{currentDef.sub}</span>
+                </div>
+                <div className="pwa-header-meta">
+                  <strong>{currentIdx + 1}</strong> of {visibleNums.length}
+                </div>
+              </>
+            )}
+          </div>
+          {stage === "section" && currentDef && !showSplash && (
+            <Stepper
+              visibleSecs={visibleSecs}
+              visibleNums={visibleNums}
+              completedNums={completedNums}
+              currentSec={currentSec}
+              onJump={(n) => setCurrentSec(n)}
+            />
+          )}
         </header>
 
-        {stage === "section" && currentDef && !showSplash && (
-          <ProgressRail
-            def={currentDef}
-            visibleSecs={visibleSecs}
-            visibleNums={visibleNums}
-            completedNums={completedNums}
-            currentSec={currentSec}
-            currentIdx={currentIdx}
-            onJump={(n) => setCurrentSec(n)}
-          />
-        )}
 
         <main className={mainClass} ref={mainRef} aria-hidden={showSplash}>
           {stage === "cover" && (
@@ -345,7 +356,7 @@ function SectionSplash({ def, position, total, completed, onContinue }) {
   );
 }
 
-function ProgressRail({ def, visibleSecs, visibleNums, completedNums, currentSec, currentIdx, onJump }) {
+function Stepper({ visibleSecs, visibleNums, completedNums, currentSec, onJump }) {
   const completedSet = new Set(completedNums);
   const currentPos = visibleNums.indexOf(currentSec);
   const [peek, setPeek] = useState(null);
@@ -355,57 +366,46 @@ function ProgressRail({ def, visibleSecs, visibleNums, completedNums, currentSec
     return () => clearTimeout(t);
   }, [peek]);
   return (
-    <div className="pwa-progress-rail">
-      <div className="pwa-progress-row">
-        <div className="pwa-progress-title">
-          <span className="name">{def.name}</span>
-          <span className="sub">{def.sub}</span>
-        </div>
-        <div className="pwa-progress-meta">
-          <strong>{currentIdx + 1}</strong> of {visibleNums.length}
-        </div>
+    <div className="pwa-stepper" role="tablist" aria-label="Form progress — tap a step to revisit">
+      <div className="pwa-stepper-track" aria-hidden="true">
+        <div
+          className="pwa-stepper-fill"
+          style={{ width: `${visibleNums.length > 1 ? (currentPos / (visibleNums.length - 1)) * 100 : 0}%` }}
+        />
       </div>
-      <div className="pwa-stepper" role="tablist" aria-label="Form progress — tap a step to revisit">
-        <div className="pwa-stepper-track" aria-hidden="true">
-          <div
-            className="pwa-stepper-fill"
-            style={{ width: `${visibleNums.length > 1 ? (currentPos / (visibleNums.length - 1)) * 100 : 0}%` }}
-          />
-        </div>
-        {visibleSecs.map((s, i) => {
-          const n = s.num;
-          const Icon = s.splashIcon;
-          const isDone = completedSet.has(n);
-          const isCurr = n === currentSec;
-          const canJump = i <= currentPos;
-          const showPeek = peek === n;
-          return (
-            <button
-              key={n}
-              type="button"
-              role="tab"
-              aria-selected={isCurr}
-              disabled={!canJump || isCurr}
-              className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""} ${showPeek ? "peeking" : ""}`}
-              aria-label={`${s.name}${isDone ? " — complete, tap to revisit" : isCurr ? " — current" : ""}`}
-              onClick={() => {
-                if (!canJump || isCurr) {
-                  setPeek(n);
-                  return;
-                }
-                navigator.vibrate?.(8);
-                onJump?.(n);
-              }}
-              onPointerDown={() => setPeek(n)}
-            >
-              <span className="dot" aria-hidden>
-                {isDone ? <Check className="ico" /> : Icon ? <Icon className="ico" /> : (i + 1)}
-              </span>
-              <span className="peek" aria-hidden>{s.name}</span>
-            </button>
-          );
-        })}
-      </div>
+      {visibleSecs.map((s, i) => {
+        const n = s.num;
+        const Icon = s.splashIcon;
+        const isDone = completedSet.has(n);
+        const isCurr = n === currentSec;
+        const canJump = i <= currentPos;
+        const showPeek = peek === n;
+        return (
+          <button
+            key={n}
+            type="button"
+            role="tab"
+            aria-selected={isCurr}
+            disabled={!canJump || isCurr}
+            className={`pwa-stepper-step ${isDone ? "done" : ""} ${isCurr ? "current" : ""} ${showPeek ? "peeking" : ""}`}
+            aria-label={`${s.name}${isDone ? " — complete, tap to revisit" : isCurr ? " — current" : ""}`}
+            onClick={() => {
+              if (!canJump || isCurr) {
+                setPeek(n);
+                return;
+              }
+              navigator.vibrate?.(8);
+              onJump?.(n);
+            }}
+            onPointerDown={() => setPeek(n)}
+          >
+            <span className="dot" aria-hidden>
+              {isDone ? <Check className="ico" /> : Icon ? <Icon className="ico" /> : (i + 1)}
+            </span>
+            <span className="peek" aria-hidden>{s.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
